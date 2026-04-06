@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Building2,
   Fuel,
@@ -21,14 +23,22 @@ import {
   FileText,
   CheckCircle,
   Clock,
-  Calendar,
   User,
+  Users,
   ChevronRight,
   TrendingUp,
   BarChart3,
   Eye,
   ClipboardList,
-  Loader2
+  Loader2,
+  Plus,
+  Settings,
+  MapPin,
+  AlertTriangle,
+  Pencil,
+  Trash2,
+  UserPlus,
+  Building
 } from 'lucide-react';
 import {
   LineChart,
@@ -196,27 +206,50 @@ function LoginPage({ onLogin, loading }) {
 }
 
 // ============== HEADER ==============
-function Header({ user, onLogout }) {
+function Header({ user, onLogout, activeTab, setActiveTab }) {
+  const tabs = user.role === 'owner' 
+    ? [{ id: 'dashboard', label: 'Dashboard' }, { id: 'sites', label: 'Sites' }, { id: 'users', label: 'Users & Access' }]
+    : user.role === 'operator'
+    ? [{ id: 'dashboard', label: 'Dashboard' }, { id: 'staff', label: 'Staff Access' }]
+    : [{ id: 'submit', label: 'Submit Report' }, { id: 'history', label: 'My Reports' }];
+
   return (
     <header className="border-b bg-card">
-      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Fuel className="w-5 h-5 text-primary" />
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <Fuel className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg">WorkflowLite</h1>
+              <p className="text-xs text-muted-foreground capitalize">{user.role} Dashboard</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-lg">WorkflowLite</h1>
-            <p className="text-xs text-muted-foreground capitalize">{user.role} Dashboard</p>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-medium">{user.name}</p>
+              <p className="text-xs text-muted-foreground">{user.email}</p>
+            </div>
+            <Button variant="outline" size="icon" onClick={onLogout}>
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-medium">{user.name}</p>
-            <p className="text-xs text-muted-foreground">{user.email}</p>
-          </div>
-          <Button variant="outline" size="icon" onClick={onLogout}>
-            <LogOut className="h-4 w-4" />
-          </Button>
+        <div className="flex gap-1 -mb-px overflow-x-auto">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === tab.id 
+                  ? 'border-primary text-primary' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
     </header>
@@ -230,7 +263,8 @@ function StatCard({ title, value, icon: Icon, subValue, color = 'primary' }) {
     green: 'bg-green-100 text-green-600',
     blue: 'bg-blue-100 text-blue-600',
     orange: 'bg-orange-100 text-orange-600',
-    purple: 'bg-purple-100 text-purple-600'
+    purple: 'bg-purple-100 text-purple-600',
+    red: 'bg-red-100 text-red-600'
   };
   
   return (
@@ -287,7 +321,7 @@ function ReportRow({ report, onClick }) {
 }
 
 // ============== REPORT DETAIL ==============
-function ReportDetail({ report, onClose, onStatusChange, canChangeStatus }) {
+function ReportDetail({ report, onClose, onStatusChange, canChangeStatus, user }) {
   if (!report) return null;
   
   const fields = [
@@ -298,7 +332,7 @@ function ReportDetail({ report, onClose, onStatusChange, canChangeStatus }) {
     { label: 'EFTPOS', value: formatCurrency(report.eftpos) },
     { label: 'Motorpass', value: formatCurrency(report.motorpass) },
     { label: 'Cash', value: formatCurrency(report.cash) },
-    { label: 'Sunstate Account', value: formatCurrency(report.sunstate_account) },
+    { label: 'Accounts', value: formatCurrency(report.accounts) },
     { label: 'Beverages', value: formatCurrency(report.beverages) },
     { label: 'Hot Food', value: formatCurrency(report.hot_food) },
     { label: 'Drive Offs', value: formatCurrency(report.drive_offs) },
@@ -346,6 +380,15 @@ function ReportDetail({ report, onClose, onStatusChange, canChangeStatus }) {
           <p className="text-3xl font-bold">{formatCurrency(report.total_revenue)}</p>
         </div>
         
+        {/* Difference/Variance Placeholder */}
+        <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+          <p className="text-sm font-medium text-orange-700 mb-1">Difference / Variance</p>
+          <p className="text-lg font-medium text-orange-600">
+            {report.difference_value !== null ? formatCurrency(report.difference_value) : 'Formula pending'}
+          </p>
+          <p className="text-xs text-orange-500 mt-1">This field will be calculated once formula is provided</p>
+        </div>
+        
         {/* Detail Fields */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {fields.map((field, i) => (
@@ -364,13 +407,22 @@ function ReportDetail({ report, onClose, onStatusChange, canChangeStatus }) {
           </div>
         )}
         
+        {/* Review Info */}
+        {report.status === 'reviewed' && report.reviewed_by_name && (
+          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <p className="text-xs text-green-700 mb-1">Reviewed By</p>
+            <p className="text-sm font-medium text-green-800">{report.reviewed_by_name}</p>
+            <p className="text-xs text-green-600">{formatDateTime(report.reviewed_at)}</p>
+          </div>
+        )}
+        
         {/* Actions */}
         <div className="flex gap-2 pt-4">
           <Button variant="outline" onClick={onClose} className="flex-1">
             Close
           </Button>
           {canChangeStatus && report.status === 'pending' && (
-            <Button onClick={() => onStatusChange(report.id, 'reviewed')} className="flex-1">
+            <Button onClick={() => onStatusChange(report.id, 'reviewed', user.id)} className="flex-1">
               <CheckCircle className="h-4 w-4 mr-2" />
               Mark as Reviewed
             </Button>
@@ -398,7 +450,7 @@ function ShiftReportForm({ user, sites, onSuccess }) {
     shop_sales: '',
     beverages: '',
     hot_food: '',
-    sunstate_account: '',
+    accounts: '',
     drive_offs: '',
     dips: '',
     notes: ''
@@ -452,7 +504,7 @@ function ShiftReportForm({ user, sites, onSuccess }) {
           shop_sales: '',
           beverages: '',
           hot_food: '',
-          sunstate_account: '',
+          accounts: '',
           drive_offs: '',
           dips: '',
           notes: ''
@@ -479,7 +531,7 @@ function ShiftReportForm({ user, sites, onSuccess }) {
     { name: 'eftpos', label: 'EFTPOS ($)' },
     { name: 'motorpass', label: 'Motorpass ($)' },
     { name: 'cash', label: 'Cash ($)' },
-    { name: 'sunstate_account', label: 'Sunstate Account ($)' },
+    { name: 'accounts', label: 'Accounts ($)' },
     { name: 'drive_offs', label: 'Drive Offs ($)' },
     { name: 'dips', label: 'Dips ($)', required: true },
   ];
@@ -538,7 +590,7 @@ function ShiftReportForm({ user, sites, onSuccess }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Morning">Morning</SelectItem>
-                  <SelectItem value="Evening">Evening</SelectItem>
+                  <SelectItem value="Afternoon">Afternoon</SelectItem>
                   <SelectItem value="Night">Night</SelectItem>
                 </SelectContent>
               </Select>
@@ -599,6 +651,693 @@ function ShiftReportForm({ user, sites, onSuccess }) {
   );
 }
 
+// ============== SITE MANAGEMENT ==============
+function SiteManagement({ user, sites, onRefresh }) {
+  const [showAddSite, setShowAddSite] = useState(false);
+  const [editingSite, setEditingSite] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({ name: '', code: '', location: '' });
+
+  const handleSubmit = async () => {
+    if (!form.name || !form.code) {
+      alert('Site name and code are required');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const url = editingSite ? `/api/sites/${editingSite.id}` : '/api/sites';
+      const method = editingSite ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          owner_id: user.id
+        })
+      });
+      
+      if (res.ok) {
+        setForm({ name: '', code: '', location: '' });
+        setShowAddSite(false);
+        setEditingSite(null);
+        onRefresh();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save site');
+      }
+    } catch (err) {
+      alert('Failed to save site: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEdit = (site) => {
+    setEditingSite(site);
+    setForm({ name: site.name, code: site.code, location: site.location || '' });
+    setShowAddSite(true);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Site Management</h2>
+          <p className="text-muted-foreground">Add and manage your fuel station sites</p>
+        </div>
+        <Dialog open={showAddSite} onOpenChange={(open) => {
+          setShowAddSite(open);
+          if (!open) {
+            setEditingSite(null);
+            setForm({ name: '', code: '', location: '' });
+          }
+        }}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Site
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editingSite ? 'Edit Site' : 'Add New Site'}</DialogTitle>
+              <DialogDescription>
+                {editingSite ? 'Update site details' : 'Create a new site for your network'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Site Name *</Label>
+                <Input
+                  placeholder="e.g., Sunstate Fuel - Brisbane"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Site Code *</Label>
+                <Input
+                  placeholder="e.g., BNE-001"
+                  value={form.code}
+                  onChange={(e) => setForm(prev => ({ ...prev, code: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Location</Label>
+                <Input
+                  placeholder="Full address"
+                  value={form.location}
+                  onChange={(e) => setForm(prev => ({ ...prev, location: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button onClick={handleSubmit} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (editingSite ? 'Update' : 'Create')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid gap-4">
+        {sites.map(site => (
+          <Card key={site.id}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <Building2 className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{site.name}</h3>
+                    <p className="text-sm text-muted-foreground">{site.code}</p>
+                    {site.location && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <MapPin className="h-3 w-3" />
+                        {site.location}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={site.status === 'active' ? 'default' : 'secondary'}>
+                    {site.status}
+                  </Badge>
+                  <Button variant="ghost" size="icon" onClick={() => startEdit(site)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        
+        {sites.length === 0 && (
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              <Building2 className="h-12 w-12 mx-auto mb-4 opacity-20" />
+              <p>No sites yet. Add your first site to get started.</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============== USER MANAGEMENT ==============
+function UserManagement({ user, sites, onRefresh }) {
+  const [users, setUsers] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [showAssignSites, setShowAssignSites] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', role: 'staff', password: 'demo123' });
+  const [selectedSites, setSelectedSites] = useState([]);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [usersRes, assignmentsRes] = await Promise.all([
+        fetch('/api/users'),
+        fetch('/api/assignments')
+      ]);
+      const [usersData, assignmentsData] = await Promise.all([
+        usersRes.json(),
+        assignmentsRes.json()
+      ]);
+      setUsers(usersData.filter(u => u.id !== user.id));
+      setAssignments(assignmentsData);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user.id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleCreateUser = async () => {
+    if (!form.name || !form.email || !form.role) {
+      alert('Name, email, and role are required');
+      return;
+    }
+    
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form)
+      });
+      
+      if (res.ok) {
+        setForm({ name: '', email: '', role: 'staff', password: 'demo123' });
+        setShowAddUser(false);
+        loadData();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to create user');
+      }
+    } catch (err) {
+      alert('Failed to create user: ' + err.message);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+    
+    try {
+      await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      loadData();
+    } catch (err) {
+      alert('Failed to delete user');
+    }
+  };
+
+  const openAssignSites = (targetUser) => {
+    const userSiteIds = assignments
+      .filter(a => a.user_id === targetUser.id)
+      .map(a => a.site_id);
+    setSelectedSites(userSiteIds);
+    setShowAssignSites(targetUser);
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!showAssignSites) return;
+    
+    const targetUserId = showAssignSites.id;
+    const currentSiteIds = assignments
+      .filter(a => a.user_id === targetUserId)
+      .map(a => a.site_id);
+    
+    // Sites to add
+    const toAdd = selectedSites.filter(id => !currentSiteIds.includes(id));
+    // Sites to remove
+    const toRemove = assignments
+      .filter(a => a.user_id === targetUserId && !selectedSites.includes(a.site_id))
+      .map(a => a.id);
+    
+    try {
+      // Add new assignments
+      for (const siteId of toAdd) {
+        await fetch('/api/assignments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: targetUserId,
+            site_id: siteId,
+            assigned_by_user_id: user.id
+          })
+        });
+      }
+      
+      // Remove old assignments
+      for (const assignmentId of toRemove) {
+        await fetch(`/api/assignments/${assignmentId}`, { method: 'DELETE' });
+      }
+      
+      setShowAssignSites(null);
+      loadData();
+      onRefresh();
+    } catch (err) {
+      alert('Failed to update assignments');
+    }
+  };
+
+  const getUserSites = (userId) => {
+    return assignments
+      .filter(a => a.user_id === userId)
+      .map(a => a.site_name || 'Unknown');
+  };
+
+  const operators = users.filter(u => u.role === 'operator');
+  const staffMembers = users.filter(u => u.role === 'staff');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Users & Site Access</h2>
+          <p className="text-muted-foreground">Manage operators, staff, and site assignments</p>
+        </div>
+        <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
+          <DialogTrigger asChild>
+            <Button>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add User
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New User</DialogTitle>
+              <DialogDescription>Create a new operator or staff member</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Name *</Label>
+                <Input
+                  placeholder="Full name"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  placeholder="email@example.com"
+                  value={form.email}
+                  onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Role *</Label>
+                <Select value={form.role} onValueChange={(v) => setForm(prev => ({ ...prev, role: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="operator">Operator</SelectItem>
+                    <SelectItem value="staff">Staff</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  placeholder="Default: demo123"
+                  value={form.password}
+                  onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button onClick={handleCreateUser}>Create User</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Site Assignment Dialog */}
+      <Dialog open={!!showAssignSites} onOpenChange={(open) => !open && setShowAssignSites(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Sites to {showAssignSites?.name}</DialogTitle>
+            <DialogDescription>Select which sites this {showAssignSites?.role} can access</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            {sites.map(site => (
+              <div key={site.id} className="flex items-center space-x-3 p-2 rounded hover:bg-muted/50">
+                <Checkbox
+                  id={site.id}
+                  checked={selectedSites.includes(site.id)}
+                  onCheckedChange={(checked) => {
+                    setSelectedSites(prev => 
+                      checked 
+                        ? [...prev, site.id]
+                        : prev.filter(id => id !== site.id)
+                    );
+                  }}
+                />
+                <label htmlFor={site.id} className="flex-1 cursor-pointer">
+                  <p className="font-medium text-sm">{site.name}</p>
+                  <p className="text-xs text-muted-foreground">{site.code}</p>
+                </label>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleSaveAssignments}>Save Assignments</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Operators */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Operators ({operators.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {operators.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">No operators yet</p>
+          ) : (
+            <div className="space-y-3">
+              {operators.map(op => (
+                <div key={op.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <User className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{op.name}</p>
+                      <p className="text-xs text-muted-foreground">{op.email}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {getUserSites(op.id).map((site, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">{site}</Badge>
+                        ))}
+                        {getUserSites(op.id).length === 0 && (
+                          <span className="text-xs text-muted-foreground">No sites assigned</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openAssignSites(op)}>
+                      <Building className="h-4 w-4 mr-1" />
+                      Sites
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(op.id)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Staff */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Staff ({staffMembers.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {staffMembers.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">No staff members yet</p>
+          ) : (
+            <div className="space-y-3">
+              {staffMembers.map(staff => (
+                <div key={staff.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <User className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{staff.name}</p>
+                      <p className="text-xs text-muted-foreground">{staff.email}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {getUserSites(staff.id).map((site, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">{site}</Badge>
+                        ))}
+                        {getUserSites(staff.id).length === 0 && (
+                          <span className="text-xs text-muted-foreground">No sites assigned</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openAssignSites(staff)}>
+                      <Building className="h-4 w-4 mr-1" />
+                      Sites
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(staff.id)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============== STAFF ACCESS (FOR OPERATOR) ==============
+function StaffAccessManagement({ user, sites }) {
+  const [staffUsers, setStaffUsers] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [showAssignSites, setShowAssignSites] = useState(null);
+  const [selectedSites, setSelectedSites] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [usersRes, assignmentsRes] = await Promise.all([
+        fetch('/api/users?role=staff'),
+        fetch('/api/assignments')
+      ]);
+      const [usersData, assignmentsData] = await Promise.all([
+        usersRes.json(),
+        assignmentsRes.json()
+      ]);
+      
+      // Filter staff that have at least one site in common with operator
+      const operatorSiteIds = sites.map(s => s.id);
+      const staffWithSharedSites = usersData.filter(staff => {
+        const staffSiteIds = assignmentsData
+          .filter(a => a.user_id === staff.id)
+          .map(a => a.site_id);
+        return staffSiteIds.some(id => operatorSiteIds.includes(id)) || staffSiteIds.length === 0;
+      });
+      
+      setStaffUsers(staffWithSharedSites);
+      setAssignments(assignmentsData);
+    } catch (err) {
+      console.error('Failed to load staff:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [sites]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const openAssignSites = (staff) => {
+    const staffSiteIds = assignments
+      .filter(a => a.user_id === staff.id)
+      .map(a => a.site_id);
+    setSelectedSites(staffSiteIds.filter(id => sites.some(s => s.id === id)));
+    setShowAssignSites(staff);
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!showAssignSites) return;
+    
+    const targetUserId = showAssignSites.id;
+    const currentSiteIds = assignments
+      .filter(a => a.user_id === targetUserId && sites.some(s => s.id === a.site_id))
+      .map(a => a.site_id);
+    
+    const toAdd = selectedSites.filter(id => !currentSiteIds.includes(id));
+    const toRemove = assignments
+      .filter(a => a.user_id === targetUserId && sites.some(s => s.id === a.site_id) && !selectedSites.includes(a.site_id))
+      .map(a => a.id);
+    
+    try {
+      for (const siteId of toAdd) {
+        await fetch('/api/assignments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: targetUserId,
+            site_id: siteId,
+            assigned_by_user_id: user.id
+          })
+        });
+      }
+      
+      for (const assignmentId of toRemove) {
+        await fetch(`/api/assignments/${assignmentId}`, { method: 'DELETE' });
+      }
+      
+      setShowAssignSites(null);
+      loadData();
+    } catch (err) {
+      alert('Failed to update assignments');
+    }
+  };
+
+  const getStaffSites = (staffId) => {
+    return assignments
+      .filter(a => a.user_id === staffId && sites.some(s => s.id === a.site_id))
+      .map(a => a.site_name || 'Unknown');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold">Staff Access Management</h2>
+        <p className="text-muted-foreground">Assign staff to your sites</p>
+      </div>
+
+      <Dialog open={!!showAssignSites} onOpenChange={(open) => !open && setShowAssignSites(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Sites to {showAssignSites?.name}</DialogTitle>
+            <DialogDescription>Select which of your sites this staff member can access</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            {sites.map(site => (
+              <div key={site.id} className="flex items-center space-x-3 p-2 rounded hover:bg-muted/50">
+                <Checkbox
+                  id={site.id}
+                  checked={selectedSites.includes(site.id)}
+                  onCheckedChange={(checked) => {
+                    setSelectedSites(prev => 
+                      checked 
+                        ? [...prev, site.id]
+                        : prev.filter(id => id !== site.id)
+                    );
+                  }}
+                />
+                <label htmlFor={site.id} className="flex-1 cursor-pointer">
+                  <p className="font-medium text-sm">{site.name}</p>
+                  <p className="text-xs text-muted-foreground">{site.code}</p>
+                </label>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleSaveAssignments}>Save Assignments</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Staff Members</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {staffUsers.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">No staff members available</p>
+          ) : (
+            <div className="space-y-3">
+              {staffUsers.map(staff => (
+                <div key={staff.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <User className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{staff.name}</p>
+                      <p className="text-xs text-muted-foreground">{staff.email}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {getStaffSites(staff.id).map((site, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">{site}</Badge>
+                        ))}
+                        {getStaffSites(staff.id).length === 0 && (
+                          <span className="text-xs text-muted-foreground">No sites assigned</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => openAssignSites(staff)}>
+                    <Building className="h-4 w-4 mr-1" />
+                    Assign Sites
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ============== STAFF DASHBOARD ==============
 function StaffDashboard({ user, sites }) {
   const [reports, setReports] = useState([]);
@@ -635,6 +1374,7 @@ function StaffDashboard({ user, sites }) {
           report={selectedReport}
           onClose={() => setSelectedReport(null)}
           canChangeStatus={false}
+          user={user}
         />
       </div>
     );
@@ -642,64 +1382,51 @@ function StaffDashboard({ user, sites }) {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="submit">
-            <ClipboardList className="h-4 w-4 mr-2" />
-            Submit Report
-          </TabsTrigger>
-          <TabsTrigger value="history">
-            <FileText className="h-4 w-4 mr-2" />
-            My Reports
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="submit">
-          <ShiftReportForm
-            user={user}
-            sites={sites}
-            onSuccess={() => {
-              loadReports();
-            }}
-          />
-        </TabsContent>
-        
-        <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle>My Submitted Reports</CardTitle>
-              <CardDescription>View your recent shift report submissions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      {activeTab === 'submit' && (
+        <ShiftReportForm
+          user={user}
+          sites={sites}
+          onSuccess={() => {
+            loadReports();
+          }}
+        />
+      )}
+      
+      {activeTab === 'history' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>My Submitted Reports</CardTitle>
+            <CardDescription>View your recent shift report submissions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : reports.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No reports submitted yet</p>
+            ) : (
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-2">
+                  {reports.map(report => (
+                    <ReportRow
+                      key={report.id}
+                      report={report}
+                      onClick={() => handleReportClick(report)}
+                    />
+                  ))}
                 </div>
-              ) : reports.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">No reports submitted yet</p>
-              ) : (
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-2">
-                    {reports.map(report => (
-                      <ReportRow
-                        key={report.id}
-                        report={report}
-                        onClick={() => handleReportClick(report)}
-                      />
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
 // ============== OPERATOR DASHBOARD ==============
-function OperatorDashboard({ user, sites }) {
+function OperatorDashboard({ user, sites, activeTab }) {
   const [reports, setReports] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -718,7 +1445,7 @@ function OperatorDashboard({ user, sites }) {
       const siteFilter = selectedSite === 'all' ? siteIds : selectedSite;
       
       const [reportsRes, statsRes] = await Promise.all([
-        fetch(`/api/reports?siteId=${selectedSite === 'all' ? '' : selectedSite}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        fetch(`/api/reports?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         fetch(`/api/dashboard/stats?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`)
       ]);
       
@@ -727,29 +1454,29 @@ function OperatorDashboard({ user, sites }) {
         statsRes.json()
       ]);
       
-      // Filter reports by user's sites
-      const filteredReports = reportsData.filter(r => sites.some(s => s.id === r.site_id));
-      setReports(filteredReports);
+      setReports(reportsData);
       setStats(statsData);
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
       setLoading(false);
     }
-  }, [selectedSite, dateRange, siteIds, sites]);
+  }, [selectedSite, dateRange, siteIds]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (activeTab === 'dashboard') {
+      loadData();
+    }
+  }, [loadData, activeTab]);
 
-  const handleStatusChange = async (reportId, status) => {
+  const handleStatusChange = async (reportId, status, reviewedBy) => {
     try {
       await fetch(`/api/reports/${reportId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, reviewed_by_user_id: reviewedBy })
       });
-      setSelectedReport(prev => prev ? { ...prev, status } : null);
+      setSelectedReport(prev => prev ? { ...prev, status, reviewed_by_user_id: reviewedBy } : null);
       loadData();
     } catch (err) {
       alert('Failed to update status');
@@ -762,6 +1489,14 @@ function OperatorDashboard({ user, sites }) {
     setSelectedReport(data);
   };
 
+  if (activeTab === 'staff') {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <StaffAccessManagement user={user} sites={sites} />
+      </div>
+    );
+  }
+
   if (selectedReport) {
     return (
       <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -770,6 +1505,7 @@ function OperatorDashboard({ user, sites }) {
           onClose={() => setSelectedReport(null)}
           onStatusChange={handleStatusChange}
           canChangeStatus={true}
+          user={user}
         />
       </div>
     );
@@ -819,31 +1555,12 @@ function OperatorDashboard({ user, sites }) {
       
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Shop Sales"
-            value={formatCurrency(stats.totalShopSales)}
-            icon={ShoppingCart}
-            color="green"
-          />
-          <StatCard
-            title="Fuel Sales"
-            value={formatCurrency(stats.totalFuelSales)}
-            icon={Fuel}
-            color="blue"
-          />
-          <StatCard
-            title="Total Revenue"
-            value={formatCurrency(stats.totalRevenue)}
-            icon={DollarSign}
-            color="primary"
-          />
-          <StatCard
-            title="Total Dips"
-            value={formatCurrency(stats.totalDips)}
-            icon={Droplets}
-            color="purple"
-          />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard title="Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} color="green" />
+          <StatCard title="Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} color="blue" />
+          <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} color="primary" />
+          <StatCard title="Total Dips" value={formatCurrency(stats.totalDips)} icon={Droplets} color="purple" />
+          <StatCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} color="red" />
         </div>
       )}
       
@@ -886,7 +1603,7 @@ function OperatorDashboard({ user, sites }) {
 }
 
 // ============== OWNER DASHBOARD ==============
-function OwnerDashboard({ user, sites }) {
+function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
   const [stats, setStats] = useState(null);
   const [siteStats, setSiteStats] = useState([]);
   const [recentReports, setRecentReports] = useState([]);
@@ -902,12 +1619,17 @@ function OwnerDashboard({ user, sites }) {
   const siteIds = sites.map(s => s.id).join(',');
 
   const loadData = useCallback(async () => {
+    if (!siteIds) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
       const [statsRes, siteStatsRes, reportsRes, chartRes] = await Promise.all([
         fetch(`/api/dashboard/stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         fetch(`/api/dashboard/site-stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        fetch(`/api/reports?startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        fetch(`/api/reports?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         fetch(`/api/dashboard/revenue-chart?siteIds=${siteIds}&days=7`)
       ]);
       
@@ -920,26 +1642,44 @@ function OwnerDashboard({ user, sites }) {
       
       setStats(statsData);
       setSiteStats(siteStatsData);
-      // Filter and limit recent reports
-      const filtered = reportsData.filter(r => sites.some(s => s.id === r.site_id)).slice(0, 10);
-      setRecentReports(filtered);
+      setRecentReports(reportsData.slice(0, 10));
       setChartData(chartDataRes);
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
       setLoading(false);
     }
-  }, [siteIds, dateRange, sites]);
+  }, [siteIds, dateRange]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (activeTab === 'dashboard') {
+      loadData();
+    }
+  }, [loadData, activeTab]);
 
   const handleReportClick = async (report) => {
     const res = await fetch(`/api/reports/${report.id}`);
     const data = await res.json();
     setSelectedReport(data);
   };
+
+  // Sites Tab
+  if (activeTab === 'sites') {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <SiteManagement user={user} sites={sites} onRefresh={onRefreshSites} />
+      </div>
+    );
+  }
+
+  // Users Tab
+  if (activeTab === 'users') {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <UserManagement user={user} sites={sites} onRefresh={onRefreshSites} />
+      </div>
+    );
+  }
 
   // Site Detail View
   if (selectedSite) {
@@ -949,6 +1689,7 @@ function OwnerDashboard({ user, sites }) {
         dateRange={dateRange}
         onBack={() => setSelectedSite(null)}
         onReportClick={handleReportClick}
+        user={user}
       />
     );
   }
@@ -961,6 +1702,7 @@ function OwnerDashboard({ user, sites }) {
           report={selectedReport}
           onClose={() => setSelectedReport(null)}
           canChangeStatus={false}
+          user={user}
         />
       </div>
     );
@@ -1005,32 +1747,12 @@ function OwnerDashboard({ user, sites }) {
         <>
           {/* Stats Cards */}
           {stats && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                title="Total Shop Sales"
-                value={formatCurrency(stats.totalShopSales)}
-                icon={ShoppingCart}
-                subValue={`${stats.totalReports} reports`}
-                color="green"
-              />
-              <StatCard
-                title="Total Fuel Sales"
-                value={formatCurrency(stats.totalFuelSales)}
-                icon={Fuel}
-                color="blue"
-              />
-              <StatCard
-                title="Total Revenue"
-                value={formatCurrency(stats.totalRevenue)}
-                icon={DollarSign}
-                color="primary"
-              />
-              <StatCard
-                title="Total Dips"
-                value={formatCurrency(stats.totalDips)}
-                icon={Droplets}
-                color="purple"
-              />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <StatCard title="Total Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} subValue={`${stats.totalReports} reports`} color="green" />
+              <StatCard title="Total Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} color="blue" />
+              <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} color="primary" />
+              <StatCard title="Total Dips" value={formatCurrency(stats.totalDips)} icon={Droplets} color="purple" />
+              <StatCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} color="red" />
             </div>
           )}
           
@@ -1107,6 +1829,7 @@ function OwnerDashboard({ user, sites }) {
                       <th className="text-right py-3 px-2 font-medium">Fuel Sales</th>
                       <th className="text-right py-3 px-2 font-medium">Total Revenue</th>
                       <th className="text-right py-3 px-2 font-medium">Dips</th>
+                      <th className="text-right py-3 px-2 font-medium">Drive Offs</th>
                       <th className="text-right py-3 px-2 font-medium">Reports</th>
                       <th className="py-3 px-2"></th>
                     </tr>
@@ -1128,6 +1851,7 @@ function OwnerDashboard({ user, sites }) {
                         <td className="text-right py-3 px-2">{formatCurrency(site.fuelSales)}</td>
                         <td className="text-right py-3 px-2 font-medium">{formatCurrency(site.totalRevenue)}</td>
                         <td className="text-right py-3 px-2">{formatCurrency(site.dips)}</td>
+                        <td className="text-right py-3 px-2">{formatCurrency(site.driveOffs)}</td>
                         <td className="text-right py-3 px-2">{site.reportCount}</td>
                         <td className="py-3 px-2">
                           <Eye className="h-4 w-4 text-muted-foreground" />
@@ -1174,7 +1898,7 @@ function OwnerDashboard({ user, sites }) {
 }
 
 // ============== SITE DETAIL VIEW ==============
-function SiteDetailView({ site, dateRange, onBack, onReportClick }) {
+function SiteDetailView({ site, dateRange, onBack, onReportClick, user }) {
   const [reports, setReports] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1253,31 +1977,12 @@ function SiteDetailView({ site, dateRange, onBack, onReportClick }) {
         <>
           {/* Stats */}
           {stats && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                title="Shop Sales"
-                value={formatCurrency(stats.totalShopSales)}
-                icon={ShoppingCart}
-                color="green"
-              />
-              <StatCard
-                title="Fuel Sales"
-                value={formatCurrency(stats.totalFuelSales)}
-                icon={Fuel}
-                color="blue"
-              />
-              <StatCard
-                title="Total Revenue"
-                value={formatCurrency(stats.totalRevenue)}
-                icon={DollarSign}
-                color="primary"
-              />
-              <StatCard
-                title="Dips"
-                value={formatCurrency(stats.totalDips)}
-                icon={Droplets}
-                color="purple"
-              />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <StatCard title="Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} color="green" />
+              <StatCard title="Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} color="blue" />
+              <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} color="primary" />
+              <StatCard title="Dips" value={formatCurrency(stats.totalDips)} icon={Droplets} color="purple" />
+              <StatCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} color="red" />
             </div>
           )}
           
@@ -1319,14 +2024,18 @@ export default function App() {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   // Check for saved session
   useEffect(() => {
     const savedUser = localStorage.getItem('workflowlite_user');
     const savedSites = localStorage.getItem('workflowlite_sites');
     if (savedUser && savedSites) {
-      setUser(JSON.parse(savedUser));
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
       setSites(JSON.parse(savedSites));
+      // Set default tab based on role
+      setActiveTab(parsedUser.role === 'staff' ? 'submit' : 'dashboard');
     }
     setInitialized(true);
   }, []);
@@ -1344,6 +2053,7 @@ export default function App() {
         const data = await res.json();
         setUser(data.user);
         setSites(data.sites);
+        setActiveTab(data.user.role === 'staff' ? 'submit' : 'dashboard');
         localStorage.setItem('workflowlite_user', JSON.stringify(data.user));
         localStorage.setItem('workflowlite_sites', JSON.stringify(data.sites));
         return true;
@@ -1364,6 +2074,18 @@ export default function App() {
     localStorage.removeItem('workflowlite_sites');
   };
 
+  const refreshSites = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`/api/sites?userId=${user.id}`);
+      const data = await res.json();
+      setSites(data);
+      localStorage.setItem('workflowlite_sites', JSON.stringify(data));
+    } catch (err) {
+      console.error('Failed to refresh sites:', err);
+    }
+  };
+
   // Show loading while checking session
   if (!initialized) {
     return (
@@ -1381,18 +2103,18 @@ export default function App() {
   // Render role-based dashboard
   return (
     <div className="min-h-screen bg-background">
-      <Header user={user} onLogout={handleLogout} />
+      <Header user={user} onLogout={handleLogout} activeTab={activeTab} setActiveTab={setActiveTab} />
       
       {user.role === 'staff' && (
-        <StaffDashboard user={user} sites={sites} />
+        <StaffDashboard user={user} sites={sites} activeTab={activeTab} />
       )}
       
       {user.role === 'operator' && (
-        <OperatorDashboard user={user} sites={sites} />
+        <OperatorDashboard user={user} sites={sites} activeTab={activeTab} />
       )}
       
       {user.role === 'owner' && (
-        <OwnerDashboard user={user} sites={sites} />
+        <OwnerDashboard user={user} sites={sites} activeTab={activeTab} onRefreshSites={refreshSites} />
       )}
     </div>
   );

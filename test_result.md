@@ -134,6 +134,45 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ Seed API working perfectly - successfully created 9 users, 3 sites, 102 reports. Database properly cleared and repopulated."
+      - working: true
+        agent: "testing"
+        comment: "✅ Updated seed API working perfectly - successfully created 9 users, 5 sites, 280 reports. Database properly cleared and repopulated with new data structure."
+
+  - task: "Users CRUD API"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ All Users CRUD operations working perfectly - GET all users (9 total), filter by role (2 operators, 6 staff), POST creates users correctly with validation, PUT updates user data, DELETE removes users and their assignments. Email uniqueness validation working."
+
+  - task: "Sites CRUD API"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Sites CRUD operations working perfectly - GET all sites (6 total), GET by user filters correctly, GET by site ID retrieves details, POST creates sites with auto-assignment to owner, PUT updates site data. All site management features functional."
+
+  - task: "Assignments API"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Assignments API fully functional - GET all assignments (20 total), filter by user/site working correctly, POST creates assignments with proper authorization checks, DELETE removes assignments. Duplicate assignment prevention working. Enriched responses include user and site details."
 
   - task: "Shift Reports CRUD API"
     implemented: true
@@ -149,6 +188,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ All CRUD operations working - GET reports (102 total), filters by user/site/date working, POST creates reports correctly, GET by ID retrieves details, PUT status updates work. Report creation includes proper validation and site authorization."
+      - working: true
+        agent: "testing"
+        comment: "✅ Updated Reports API fully functional - GET reports (280 total), all filters working, POST creates reports with updated field names (accounts instead of sunstate_account, Afternoon shift type), PUT status updates with reviewed_by_user_id working. Site authorization and validation working correctly."
 
   - task: "Dashboard Stats API"
     implemented: true
@@ -164,6 +206,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ All dashboard APIs working - stats API returns aggregated data ($659K revenue, 103 reports), site-stats returns per-site breakdowns, revenue-chart returns 8 days of data. All calculations and filtering working correctly."
+      - working: true
+        agent: "testing"
+        comment: "✅ Updated Dashboard APIs working perfectly - stats API includes totalDriveOffs field ($1.8M revenue, 281 reports, $689 drive-offs), site-stats includes driveOffs per site, revenue-chart returns 8 days of data. All new features and calculations working correctly."
 
   - task: "Sites API"
     implemented: true
@@ -179,6 +224,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ Sites API fully functional - GET all sites (3 total), GET by user ID filters correctly (owner=3, operator=2, staff=1), GET by site ID retrieves individual site details."
+      - working: true
+        agent: "testing"
+        comment: "✅ Updated Sites API fully functional - GET all sites (6 total), GET by user ID filters correctly for all roles, GET by site ID retrieves individual site details. All user role filtering working correctly."
 
 frontend:
   - task: "Login Page"
@@ -243,6 +291,8 @@ test_plan:
 
 agent_communication:
   - agent: "main"
-    message: "Built complete WorkflowLite MVP with MongoDB backend and Next.js frontend. All role-based dashboards implemented. Please test all backend APIs with various scenarios including login, report creation, status updates, and dashboard aggregations."
+    message: "Updated WorkflowLite MVP with new features: Site Management (Owner can create/edit sites), User Management (Owner can create operators/staff and assign sites), updated field names (Accounts instead of Sunstate Account, Afternoon instead of Evening), Difference/Variance placeholder field, 5 sites, 280 reports seeded. Please test all backend APIs including new user/assignment CRUD operations."
   - agent: "testing"
     message: "✅ BACKEND TESTING COMPLETE - All 25 tests passed (100% success rate). Tested all APIs: Auth (login/invalid), Seed DB, Reports CRUD (with filters), Dashboard Stats (3 endpoints), Sites API. All user roles (owner/operator/staff) working correctly. Report creation, status updates, filtering, and aggregations all functional. Backend is production-ready."
+  - agent: "testing"
+    message: "✅ UPDATED BACKEND TESTING COMPLETE - All 39 tests passed (100% success rate). Tested all NEW APIs: Users CRUD (create/read/update/delete with role filtering), Sites CRUD (create/update with auto-assignment), Assignments API (create/delete with authorization), updated Reports API (accounts field, Afternoon shift, reviewed_by_user_id), Dashboard Stats (totalDriveOffs field). All new features working perfectly. Backend fully production-ready with all new Site Management and User Management features."

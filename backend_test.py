@@ -206,8 +206,164 @@ class BackendTester:
         except Exception as e:
             self.log_result("Reports API", False, f"Request failed: {str(e)}")
     
+    def test_users_crud_api(self):
+        """Test Users CRUD API"""
+        print("\n=== Testing Users CRUD API ===")
+        
+        try:
+            # Test GET all users
+            response = self.session.get(f"{API_BASE}/users")
+            if response.status_code == 200:
+                users = response.json()
+                if isinstance(users, list) and len(users) > 0:
+                    self.log_result("Users List", True, f"Retrieved {len(users)} users")
+                    
+                    # Test filter by role
+                    response = self.session.get(f"{API_BASE}/users?role=operator")
+                    if response.status_code == 200:
+                        operators = response.json()
+                        self.log_result("Users Filter by Role", True, f"Retrieved {len(operators)} operators")
+                    
+                    response = self.session.get(f"{API_BASE}/users?role=staff")
+                    if response.status_code == 200:
+                        staff = response.json()
+                        self.log_result("Users Filter Staff", True, f"Retrieved {len(staff)} staff members")
+                else:
+                    self.log_result("Users List", False, "No users returned", users)
+            else:
+                self.log_result("Users List", False, f"HTTP {response.status_code}", response.text)
+            
+            # Test CREATE user
+            new_user_data = {
+                "name": "Test User",
+                "email": "testuser@demo.com",
+                "role": "staff",
+                "password": "demo123"
+            }
+            
+            response = self.session.post(f"{API_BASE}/users", json=new_user_data)
+            if response.status_code == 201:
+                new_user = response.json()
+                if 'id' in new_user and new_user['email'] == new_user_data['email']:
+                    self.log_result("Create User", True, f"Successfully created user: {new_user['name']}")
+                    
+                    # Test UPDATE user
+                    update_data = {"name": "Updated Test User", "status": "active"}
+                    response = self.session.put(f"{API_BASE}/users/{new_user['id']}", json=update_data)
+                    if response.status_code == 200:
+                        self.log_result("Update User", True, "Successfully updated user")
+                    else:
+                        self.log_result("Update User", False, f"HTTP {response.status_code}", response.text)
+                    
+                    # Test DELETE user
+                    response = self.session.delete(f"{API_BASE}/users/{new_user['id']}")
+                    if response.status_code == 200:
+                        self.log_result("Delete User", True, "Successfully deleted user")
+                    else:
+                        self.log_result("Delete User", False, f"HTTP {response.status_code}", response.text)
+                else:
+                    self.log_result("Create User", False, "User created but missing expected fields", new_user)
+            else:
+                self.log_result("Create User", False, f"HTTP {response.status_code}", response.text)
+                
+        except Exception as e:
+            self.log_result("Users CRUD API", False, f"Request failed: {str(e)}")
+    
+    def test_sites_crud_api(self):
+        """Test Sites CRUD API"""
+        print("\n=== Testing Sites CRUD API ===")
+        
+        try:
+            # Test CREATE site
+            new_site_data = {
+                "name": "Test Site",
+                "code": "TEST-001",
+                "location": "Test Location",
+                "owner_id": "owner-001"  # Using demo owner ID
+            }
+            
+            response = self.session.post(f"{API_BASE}/sites", json=new_site_data)
+            if response.status_code == 201:
+                new_site = response.json()
+                if 'id' in new_site and new_site['name'] == new_site_data['name']:
+                    self.log_result("Create Site", True, f"Successfully created site: {new_site['name']}")
+                    
+                    # Test UPDATE site
+                    update_data = {"name": "Updated Test Site", "location": "Updated Location"}
+                    response = self.session.put(f"{API_BASE}/sites/{new_site['id']}", json=update_data)
+                    if response.status_code == 200:
+                        self.log_result("Update Site", True, "Successfully updated site")
+                    else:
+                        self.log_result("Update Site", False, f"HTTP {response.status_code}", response.text)
+                else:
+                    self.log_result("Create Site", False, "Site created but missing expected fields", new_site)
+            else:
+                self.log_result("Create Site", False, f"HTTP {response.status_code}", response.text)
+                
+        except Exception as e:
+            self.log_result("Sites CRUD API", False, f"Request failed: {str(e)}")
+    
+    def test_assignments_api(self):
+        """Test Assignments API"""
+        print("\n=== Testing Assignments API ===")
+        
+        try:
+            # Test GET all assignments
+            response = self.session.get(f"{API_BASE}/assignments")
+            if response.status_code == 200:
+                assignments = response.json()
+                if isinstance(assignments, list):
+                    self.log_result("Assignments List", True, f"Retrieved {len(assignments)} assignments")
+                    
+                    # Test filter by user
+                    if self.current_user:
+                        response = self.session.get(f"{API_BASE}/assignments?userId={self.current_user['id']}")
+                        if response.status_code == 200:
+                            user_assignments = response.json()
+                            self.log_result("Assignments by User", True, f"Retrieved {len(user_assignments)} assignments for user")
+                    
+                    # Test filter by site
+                    if self.user_sites:
+                        site_id = self.user_sites[0]['id']
+                        response = self.session.get(f"{API_BASE}/assignments?siteId={site_id}")
+                        if response.status_code == 200:
+                            site_assignments = response.json()
+                            self.log_result("Assignments by Site", True, f"Retrieved {len(site_assignments)} assignments for site")
+                    
+                    # Test CREATE assignment
+                    if len(assignments) > 0:
+                        assignment_data = {
+                            "user_id": "staff-001",  # Using demo staff ID
+                            "site_id": self.user_sites[0]['id'] if self.user_sites else "site-001",
+                            "assigned_by_user_id": "owner-001"
+                        }
+                        
+                        response = self.session.post(f"{API_BASE}/assignments", json=assignment_data)
+                        if response.status_code == 201:
+                            new_assignment = response.json()
+                            self.log_result("Create Assignment", True, f"Successfully created assignment with ID: {new_assignment['id']}")
+                            
+                            # Test DELETE assignment
+                            response = self.session.delete(f"{API_BASE}/assignments/{new_assignment['id']}")
+                            if response.status_code == 200:
+                                self.log_result("Delete Assignment", True, "Successfully deleted assignment")
+                            else:
+                                self.log_result("Delete Assignment", False, f"HTTP {response.status_code}", response.text)
+                        elif response.status_code == 400:
+                            # Assignment might already exist
+                            self.log_result("Create Assignment", True, "Assignment already exists (expected behavior)")
+                        else:
+                            self.log_result("Create Assignment", False, f"HTTP {response.status_code}", response.text)
+                else:
+                    self.log_result("Assignments List", False, "Invalid assignments format", assignments)
+            else:
+                self.log_result("Assignments List", False, f"HTTP {response.status_code}", response.text)
+                
+        except Exception as e:
+            self.log_result("Assignments API", False, f"Request failed: {str(e)}")
+    
     def test_create_report(self):
-        """Test POST /api/reports"""
+        """Test POST /api/reports with updated field names"""
         print("\n=== Testing Create Report API ===")
         
         if not self.current_user or not self.user_sites:
@@ -215,12 +371,12 @@ class BackendTester:
             return
         
         try:
-            # Create a new report
+            # Create a new report with updated field names (accounts instead of sunstate_account)
             report_data = {
                 "site_id": self.user_sites[0]['id'],
                 "submitted_by_user_id": self.current_user['id'],
                 "date": "2026-04-06",
-                "shift_type": "Morning",
+                "shift_type": "Afternoon",  # Updated from Evening to Afternoon
                 "fuel_sales": 3500.00,
                 "shop_sales": 850.00,
                 "total_litres": 2000,
@@ -229,7 +385,7 @@ class BackendTester:
                 "cash": 350.00,
                 "beverages": 300.00,
                 "hot_food": 200.00,
-                "sunstate_account": 500.00,
+                "accounts": 500.00,  # Updated field name
                 "drive_offs": 0,
                 "dips": 15000.00,
                 "notes": "Test shift report from backend testing"
@@ -241,6 +397,15 @@ class BackendTester:
                 report = response.json()
                 if 'id' in report and report['status'] == 'pending':
                     self.log_result("Create Report", True, f"Successfully created report with ID: {report['id']}")
+                    
+                    # Test update report status with reviewed_by_user_id
+                    response = self.session.put(f"{API_BASE}/reports/{report['id']}/status", 
+                                              json={"status": "reviewed", "reviewed_by_user_id": self.current_user['id']})
+                    if response.status_code == 200:
+                        self.log_result("Update Report Status with Reviewer", True, "Successfully updated report status with reviewer")
+                    else:
+                        self.log_result("Update Report Status with Reviewer", False, f"HTTP {response.status_code}", response.text)
+                    
                     return report['id']
                 else:
                     self.log_result("Create Report", False, "Report created but missing expected fields", report)
@@ -270,12 +435,13 @@ class BackendTester:
             
             if response.status_code == 200:
                 stats = response.json()
-                expected_fields = ['totalShopSales', 'totalFuelSales', 'totalRevenue', 'totalReports']
+                expected_fields = ['totalShopSales', 'totalFuelSales', 'totalRevenue', 'totalReports', 'totalDriveOffs']
                 if all(field in stats for field in expected_fields):
                     self.log_result("Dashboard Stats", True, 
-                                  f"Retrieved stats: {stats['totalReports']} reports, ${stats['totalRevenue']} revenue")
+                                  f"Retrieved stats: {stats['totalReports']} reports, ${stats['totalRevenue']} revenue, ${stats['totalDriveOffs']} drive-offs")
                 else:
-                    self.log_result("Dashboard Stats", False, "Missing expected stats fields", stats)
+                    missing_fields = [field for field in expected_fields if field not in stats]
+                    self.log_result("Dashboard Stats", False, f"Missing expected stats fields: {missing_fields}", stats)
             else:
                 self.log_result("Dashboard Stats", False, f"HTTP {response.status_code}", response.text)
             
@@ -284,8 +450,13 @@ class BackendTester:
             
             if response.status_code == 200:
                 site_stats = response.json()
-                if isinstance(site_stats, list):
-                    self.log_result("Dashboard Site Stats", True, f"Retrieved stats for {len(site_stats)} sites")
+                if isinstance(site_stats, list) and len(site_stats) > 0:
+                    # Check if driveOffs field is included in site stats
+                    first_site = site_stats[0]
+                    if 'driveOffs' in first_site:
+                        self.log_result("Dashboard Site Stats", True, f"Retrieved stats for {len(site_stats)} sites with driveOffs field")
+                    else:
+                        self.log_result("Dashboard Site Stats", False, "Site stats missing driveOffs field", first_site)
                 else:
                     self.log_result("Dashboard Site Stats", False, "Invalid site stats format", site_stats)
             else:
@@ -322,7 +493,7 @@ class BackendTester:
     
     def run_all_tests(self):
         """Run all backend tests"""
-        print("🚀 Starting WorkflowLite Backend API Tests")
+        print("🚀 Starting WorkflowLite Backend API Tests - Updated Version")
         print(f"Base URL: {BASE_URL}")
         print("=" * 60)
         
@@ -334,19 +505,26 @@ class BackendTester:
             # 3. Test invalid login
             self.test_auth_login_invalid()
             
-            # 4. Test Sites API
+            # 4. Test Users CRUD API (NEW)
+            self.test_users_crud_api()
+            
+            # 5. Test Sites CRUD API (UPDATED)
+            self.test_sites_crud_api()
             self.test_sites_api()
             
-            # 5. Test Reports API
+            # 6. Test Assignments API (NEW)
+            self.test_assignments_api()
+            
+            # 7. Test Reports API (UPDATED)
             self.test_reports_api()
             
-            # 6. Test Create Report
+            # 8. Test Create Report with updated fields
             self.test_create_report()
             
-            # 7. Test Dashboard Stats
+            # 9. Test Dashboard Stats (UPDATED with totalDriveOffs)
             self.test_dashboard_stats()
             
-            # 8. Test different user roles
+            # 10. Test different user roles
             self.test_different_user_roles()
         
         # Print summary

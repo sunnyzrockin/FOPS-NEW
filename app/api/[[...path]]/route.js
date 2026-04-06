@@ -42,7 +42,8 @@ async function handleLogin(request) {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        status: user.status
       },
       sites: sites
     }, { headers: corsHeaders });
@@ -64,11 +65,11 @@ async function handleSeed() {
     await db.collection('shift_reports').deleteMany({});
     
     // Insert users
-    const users = demoUsers.map(u => ({ ...u, id: u.id || uuidv4() }));
+    const users = demoUsers.map(u => ({ ...u }));
     await db.collection('users').insertMany(users);
     
     // Insert sites
-    const sites = demoSites.map(s => ({ ...s, id: s.id || uuidv4() }));
+    const sites = demoSites.map(s => ({ ...s }));
     await db.collection('sites').insertMany(sites);
     
     // Insert assignments
@@ -94,6 +95,292 @@ async function handleSeed() {
   }
 }
 
+// ============== USERS MANAGEMENT ==============
+async function handleGetUsers(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const role = url.searchParams.get('role');
+    
+    let query = {};
+    if (role) query.role = role;
+    
+    const users = await db.collection('users').find(query).toArray();
+    
+    // Remove passwords from response
+    const safeUsers = users.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      status: u.status,
+      created_at: u.created_at
+    }));
+    
+    return NextResponse.json(safeUsers, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get users error:', error);
+    return NextResponse.json({ error: 'Failed to get users' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateUser(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    // Check if email exists
+    const existing = await db.collection('users').findOne({ email: data.email });
+    if (existing) {
+      return NextResponse.json({ error: 'Email already exists' }, { status: 400, headers: corsHeaders });
+    }
+    
+    const user = {
+      id: uuidv4(),
+      name: data.name,
+      email: data.email,
+      password: data.password || 'demo123',
+      role: data.role,
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('users').insertOne(user);
+    
+    return NextResponse.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status
+    }, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create user error:', error);
+    return NextResponse.json({ error: 'Failed to create user' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleUpdateUser(userId, request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const updateData = {};
+    if (data.name) updateData.name = data.name;
+    if (data.email) updateData.email = data.email;
+    if (data.status) updateData.status = data.status;
+    if (data.password) updateData.password = data.password;
+    
+    await db.collection('users').updateOne({ id: userId }, { $set: updateData });
+    
+    return NextResponse.json({ message: 'User updated' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update user error:', error);
+    return NextResponse.json({ error: 'Failed to update user' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleDeleteUser(userId) {
+  try {
+    const db = await getDb();
+    
+    // Delete user and their assignments
+    await db.collection('users').deleteOne({ id: userId });
+    await db.collection('user_site_assignments').deleteMany({ user_id: userId });
+    
+    return NextResponse.json({ message: 'User deleted' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// ============== SITES MANAGEMENT ==============
+async function handleGetSites(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const userId = url.searchParams.get('userId');
+    
+    if (userId) {
+      const assignments = await db.collection('user_site_assignments').find({ user_id: userId }).toArray();
+      const siteIds = assignments.map(a => a.site_id);
+      const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+      return NextResponse.json(sites, { headers: corsHeaders });
+    }
+    
+    const sites = await db.collection('sites').find({}).toArray();
+    return NextResponse.json(sites, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get sites error:', error);
+    return NextResponse.json({ error: 'Failed to get sites' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateSite(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const site = {
+      id: uuidv4(),
+      name: data.name,
+      code: data.code,
+      location: data.location || '',
+      owner_id: data.owner_id,
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('sites').insertOne(site);
+    
+    // Auto-assign site to owner
+    await db.collection('user_site_assignments').insertOne({
+      id: uuidv4(),
+      user_id: data.owner_id,
+      site_id: site.id,
+      assigned_by_user_id: data.owner_id,
+      created_at: new Date().toISOString()
+    });
+    
+    return NextResponse.json(site, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create site error:', error);
+    return NextResponse.json({ error: 'Failed to create site' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleUpdateSite(siteId, request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const updateData = {};
+    if (data.name) updateData.name = data.name;
+    if (data.code) updateData.code = data.code;
+    if (data.location) updateData.location = data.location;
+    if (data.status) updateData.status = data.status;
+    
+    await db.collection('sites').updateOne({ id: siteId }, { $set: updateData });
+    
+    return NextResponse.json({ message: 'Site updated' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update site error:', error);
+    return NextResponse.json({ error: 'Failed to update site' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleGetSiteById(siteId) {
+  try {
+    const db = await getDb();
+    const site = await db.collection('sites').findOne({ id: siteId });
+    
+    if (!site) {
+      return NextResponse.json({ error: 'Site not found' }, { status: 404, headers: corsHeaders });
+    }
+    
+    return NextResponse.json(site, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get site error:', error);
+    return NextResponse.json({ error: 'Failed to get site' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// ============== SITE ASSIGNMENTS ==============
+async function handleGetAssignments(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const userId = url.searchParams.get('userId');
+    const siteId = url.searchParams.get('siteId');
+    
+    let query = {};
+    if (userId) query.user_id = userId;
+    if (siteId) query.site_id = siteId;
+    
+    const assignments = await db.collection('user_site_assignments').find(query).toArray();
+    
+    // Enrich with user and site info
+    const userIds = [...new Set(assignments.map(a => a.user_id))];
+    const siteIds = [...new Set(assignments.map(a => a.site_id))];
+    
+    const users = await db.collection('users').find({ id: { $in: userIds } }).toArray();
+    const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+    
+    const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+    const siteMap = Object.fromEntries(sites.map(s => [s.id, s]));
+    
+    const enriched = assignments.map(a => ({
+      ...a,
+      user_name: userMap[a.user_id]?.name || 'Unknown',
+      user_email: userMap[a.user_id]?.email || '',
+      user_role: userMap[a.user_id]?.role || '',
+      site_name: siteMap[a.site_id]?.name || 'Unknown',
+      site_code: siteMap[a.site_id]?.code || ''
+    }));
+    
+    return NextResponse.json(enriched, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get assignments error:', error);
+    return NextResponse.json({ error: 'Failed to get assignments' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateAssignment(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    // Check if assignment already exists
+    const existing = await db.collection('user_site_assignments').findOne({
+      user_id: data.user_id,
+      site_id: data.site_id
+    });
+    
+    if (existing) {
+      return NextResponse.json({ error: 'Assignment already exists' }, { status: 400, headers: corsHeaders });
+    }
+    
+    // Verify assigner has access to the site (if not owner)
+    const assigner = await db.collection('users').findOne({ id: data.assigned_by_user_id });
+    if (assigner.role !== 'owner') {
+      const assignerAccess = await db.collection('user_site_assignments').findOne({
+        user_id: data.assigned_by_user_id,
+        site_id: data.site_id
+      });
+      if (!assignerAccess) {
+        return NextResponse.json({ error: 'You do not have access to assign this site' }, { status: 403, headers: corsHeaders });
+      }
+    }
+    
+    const assignment = {
+      id: uuidv4(),
+      user_id: data.user_id,
+      site_id: data.site_id,
+      assigned_by_user_id: data.assigned_by_user_id,
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('user_site_assignments').insertOne(assignment);
+    
+    return NextResponse.json(assignment, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create assignment error:', error);
+    return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleDeleteAssignment(assignmentId) {
+  try {
+    const db = await getDb();
+    await db.collection('user_site_assignments').deleteOne({ id: assignmentId });
+    return NextResponse.json({ message: 'Assignment deleted' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete assignment error:', error);
+    return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500, headers: corsHeaders });
+  }
+}
+
 // ============== SHIFT REPORTS ==============
 async function handleGetReports(request) {
   try {
@@ -101,6 +388,7 @@ async function handleGetReports(request) {
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
     const siteId = url.searchParams.get('siteId');
+    const siteIds = url.searchParams.get('siteIds')?.split(',').filter(Boolean);
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
     const status = url.searchParams.get('status');
@@ -109,6 +397,8 @@ async function handleGetReports(request) {
     
     if (siteId) {
       query.site_id = siteId;
+    } else if (siteIds && siteIds.length > 0) {
+      query.site_id = { $in: siteIds };
     }
     
     if (userId) {
@@ -134,10 +424,10 @@ async function handleGetReports(request) {
     
     // Enrich with user and site names
     const userIds = [...new Set(reports.map(r => r.submitted_by_user_id))];
-    const siteIds = [...new Set(reports.map(r => r.site_id))];
+    const reportSiteIds = [...new Set(reports.map(r => r.site_id))];
     
     const users = await db.collection('users').find({ id: { $in: userIds } }).toArray();
-    const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+    const sites = await db.collection('sites').find({ id: { $in: reportSiteIds } }).toArray();
     
     const userMap = Object.fromEntries(users.map(u => [u.id, u]));
     const siteMap = Object.fromEntries(sites.map(s => [s.id, s]));
@@ -179,28 +469,34 @@ async function handleCreateReport(request) {
       return NextResponse.json({ error: 'You are not authorized for this site' }, { status: 403, headers: corsHeaders });
     }
     
+    const fuelSales = parseFloat(data.fuel_sales) || 0;
+    const shopSales = parseFloat(data.shop_sales) || 0;
+    
     const report = {
       id: uuidv4(),
       site_id: data.site_id,
       submitted_by_user_id: data.submitted_by_user_id,
       date: data.date,
       shift_type: data.shift_type,
-      total_sales: parseFloat(data.total_sales) || 0,
-      fuel_sales: parseFloat(data.fuel_sales) || 0,
+      total_sales: fuelSales + shopSales,
+      fuel_sales: fuelSales,
       total_litres: parseFloat(data.total_litres) || 0,
       eftpos: parseFloat(data.eftpos) || 0,
       motorpass: parseFloat(data.motorpass) || 0,
       cash: parseFloat(data.cash) || 0,
-      shop_sales: parseFloat(data.shop_sales) || 0,
+      shop_sales: shopSales,
       beverages: parseFloat(data.beverages) || 0,
       hot_food: parseFloat(data.hot_food) || 0,
-      sunstate_account: parseFloat(data.sunstate_account) || 0,
+      accounts: parseFloat(data.accounts) || 0,
       drive_offs: parseFloat(data.drive_offs) || 0,
       dips: parseFloat(data.dips) || 0,
       notes: data.notes || '',
-      total_revenue: (parseFloat(data.fuel_sales) || 0) + (parseFloat(data.shop_sales) || 0),
+      total_revenue: fuelSales + shopSales,
+      difference_value: null, // Placeholder for future formula
       status: 'pending',
-      submitted_at: new Date().toISOString()
+      submitted_at: new Date().toISOString(),
+      reviewed_by_user_id: null,
+      reviewed_at: null
     };
     
     await db.collection('shift_reports').insertOne(report);
@@ -224,12 +520,15 @@ async function handleGetReportById(reportId) {
     // Get user and site info
     const user = await db.collection('users').findOne({ id: report.submitted_by_user_id });
     const site = await db.collection('sites').findOne({ id: report.site_id });
+    const reviewer = report.reviewed_by_user_id ? 
+      await db.collection('users').findOne({ id: report.reviewed_by_user_id }) : null;
     
     return NextResponse.json({
       ...report,
       staff_name: user?.name || 'Unknown',
       site_name: site?.name || 'Unknown',
-      site_code: site?.code || ''
+      site_code: site?.code || '',
+      reviewed_by_name: reviewer?.name || null
     }, { headers: corsHeaders });
   } catch (error) {
     console.error('Get report error:', error);
@@ -240,15 +539,24 @@ async function handleGetReportById(reportId) {
 async function handleUpdateReportStatus(reportId, request) {
   try {
     const db = await getDb();
-    const { status } = await request.json();
+    const { status, reviewed_by_user_id } = await request.json();
     
     if (!['pending', 'reviewed'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400, headers: corsHeaders });
     }
     
+    const updateData = { status };
+    if (status === 'reviewed' && reviewed_by_user_id) {
+      updateData.reviewed_by_user_id = reviewed_by_user_id;
+      updateData.reviewed_at = new Date().toISOString();
+    } else if (status === 'pending') {
+      updateData.reviewed_by_user_id = null;
+      updateData.reviewed_at = null;
+    }
+    
     const result = await db.collection('shift_reports').updateOne(
       { id: reportId },
-      { $set: { status } }
+      { $set: updateData }
     );
     
     if (result.matchedCount === 0) {
@@ -286,6 +594,7 @@ async function handleGetDashboardStats(request) {
       totalFuelSales: 0,
       totalRevenue: 0,
       totalDips: 0,
+      totalDriveOffs: 0,
       totalReports: reports.length,
       pendingReports: 0,
       reviewedReports: 0
@@ -296,6 +605,7 @@ async function handleGetDashboardStats(request) {
       stats.totalFuelSales += r.fuel_sales || 0;
       stats.totalRevenue += r.total_revenue || 0;
       stats.totalDips += r.dips || 0;
+      stats.totalDriveOffs += r.drive_offs || 0;
       if (r.status === 'pending') stats.pendingReports++;
       else stats.reviewedReports++;
     });
@@ -305,6 +615,7 @@ async function handleGetDashboardStats(request) {
     stats.totalFuelSales = Math.round(stats.totalFuelSales * 100) / 100;
     stats.totalRevenue = Math.round(stats.totalRevenue * 100) / 100;
     stats.totalDips = Math.round(stats.totalDips * 100) / 100;
+    stats.totalDriveOffs = Math.round(stats.totalDriveOffs * 100) / 100;
     
     return NextResponse.json(stats, { headers: corsHeaders });
   } catch (error) {
@@ -344,6 +655,7 @@ async function handleGetSiteStats(request) {
         fuelSales: Math.round(siteReports.reduce((sum, r) => sum + (r.fuel_sales || 0), 0) * 100) / 100,
         totalRevenue: Math.round(siteReports.reduce((sum, r) => sum + (r.total_revenue || 0), 0) * 100) / 100,
         dips: Math.round(siteReports.reduce((sum, r) => sum + (r.dips || 0), 0) * 100) / 100,
+        driveOffs: Math.round(siteReports.reduce((sum, r) => sum + (r.drive_offs || 0), 0) * 100) / 100,
         reportCount: siteReports.length
       };
     });
@@ -410,44 +722,6 @@ async function handleGetRevenueChart(request) {
   }
 }
 
-// ============== SITES ==============
-async function handleGetSites(request) {
-  try {
-    const db = await getDb();
-    const url = new URL(request.url);
-    const userId = url.searchParams.get('userId');
-    
-    if (userId) {
-      const assignments = await db.collection('user_site_assignments').find({ user_id: userId }).toArray();
-      const siteIds = assignments.map(a => a.site_id);
-      const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
-      return NextResponse.json(sites, { headers: corsHeaders });
-    }
-    
-    const sites = await db.collection('sites').find({}).toArray();
-    return NextResponse.json(sites, { headers: corsHeaders });
-  } catch (error) {
-    console.error('Get sites error:', error);
-    return NextResponse.json({ error: 'Failed to get sites' }, { status: 500, headers: corsHeaders });
-  }
-}
-
-async function handleGetSiteById(siteId) {
-  try {
-    const db = await getDb();
-    const site = await db.collection('sites').findOne({ id: siteId });
-    
-    if (!site) {
-      return NextResponse.json({ error: 'Site not found' }, { status: 404, headers: corsHeaders });
-    }
-    
-    return NextResponse.json(site, { headers: corsHeaders });
-  } catch (error) {
-    console.error('Get site error:', error);
-    return NextResponse.json({ error: 'Failed to get site' }, { status: 500, headers: corsHeaders });
-  }
-}
-
 // ============== ROUTE HANDLER ==============
 export async function GET(request) {
   const path = getPathSegments(request);
@@ -463,6 +737,12 @@ export async function GET(request) {
   }
   if (path[0] === 'sites') {
     return handleGetSites(request);
+  }
+  if (path[0] === 'users') {
+    return handleGetUsers(request);
+  }
+  if (path[0] === 'assignments') {
+    return handleGetAssignments(request);
   }
   if (path[0] === 'dashboard' && path[1] === 'stats') {
     return handleGetDashboardStats(request);
@@ -492,6 +772,15 @@ export async function POST(request) {
   if (path[0] === 'reports') {
     return handleCreateReport(request);
   }
+  if (path[0] === 'sites') {
+    return handleCreateSite(request);
+  }
+  if (path[0] === 'users') {
+    return handleCreateUser(request);
+  }
+  if (path[0] === 'assignments') {
+    return handleCreateAssignment(request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -501,6 +790,25 @@ export async function PUT(request) {
   
   if (path[0] === 'reports' && path[1] && path[2] === 'status') {
     return handleUpdateReportStatus(path[1], request);
+  }
+  if (path[0] === 'sites' && path[1]) {
+    return handleUpdateSite(path[1], request);
+  }
+  if (path[0] === 'users' && path[1]) {
+    return handleUpdateUser(path[1], request);
+  }
+  
+  return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
+}
+
+export async function DELETE(request) {
+  const path = getPathSegments(request);
+  
+  if (path[0] === 'users' && path[1]) {
+    return handleDeleteUser(path[1]);
+  }
+  if (path[0] === 'assignments' && path[1]) {
+    return handleDeleteAssignment(path[1]);
   }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
