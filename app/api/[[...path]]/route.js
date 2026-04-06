@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 import { demoUsers, demoSites, generateSiteAssignments, generateShiftReports } from '@/lib/seed';
+import * as XLSX from 'xlsx';
 
 // Helper to get path segments
 function getPathSegments(request) {
@@ -21,6 +22,28 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
+// Core locked fields that cannot be removed
+const CORE_FIELDS = [
+  'date', 'site_id', 'shift_type', 'submitted_by_user_id',
+  'total_sales', 'fuel_sales', 'shop_sales', 'dips',
+  'submitted_at', 'status'
+];
+
+// Default field configuration
+const DEFAULT_FIELD_CONFIG = [
+  { key: 'fuel_sales', label: 'Fuel Sales ($)', field_type: 'number', is_core: true, is_enabled: true, display_order: 1 },
+  { key: 'total_litres', label: 'Total Litres', field_type: 'number', is_core: false, is_enabled: true, display_order: 2 },
+  { key: 'shop_sales', label: 'Shop Sales ($)', field_type: 'number', is_core: true, is_enabled: true, display_order: 3 },
+  { key: 'beverages', label: 'Beverages ($)', field_type: 'number', is_core: false, is_enabled: true, display_order: 4 },
+  { key: 'hot_food', label: 'Hot Food ($)', field_type: 'number', is_core: false, is_enabled: true, display_order: 5 },
+  { key: 'eftpos', label: 'EFTPOS ($)', field_type: 'number', is_core: false, is_enabled: true, display_order: 6 },
+  { key: 'motorpass', label: 'Motorpass ($)', field_type: 'number', is_core: false, is_enabled: true, display_order: 7 },
+  { key: 'cash', label: 'Cash ($)', field_type: 'number', is_core: false, is_enabled: true, display_order: 8 },
+  { key: 'accounts', label: 'Accounts ($)', field_type: 'number', is_core: false, is_enabled: true, display_order: 9 },
+  { key: 'drive_offs', label: 'Drive Offs ($)', field_type: 'number', is_core: false, is_enabled: true, display_order: 10 },
+  { key: 'dips', label: 'Dips ($)', field_type: 'number', is_core: true, is_enabled: true, display_order: 11 },
+];
+
 // ============== AUTH ==============
 async function handleLogin(request) {
   try {
@@ -32,7 +55,6 @@ async function handleLogin(request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401, headers: corsHeaders });
     }
     
-    // Get user's assigned sites
     const assignments = await db.collection('user_site_assignments').find({ user_id: user.id }).toArray();
     const siteIds = assignments.map(a => a.site_id);
     const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
@@ -63,22 +85,54 @@ async function handleSeed() {
     await db.collection('sites').deleteMany({});
     await db.collection('user_site_assignments').deleteMany({});
     await db.collection('shift_reports').deleteMany({});
+    await db.collection('site_field_configs').deleteMany({});
+    await db.collection('site_banking_formulas').deleteMany({});
+    await db.collection('shift_report_custom_values').deleteMany({});
     
-    // Insert users
     const users = demoUsers.map(u => ({ ...u }));
     await db.collection('users').insertMany(users);
     
-    // Insert sites
     const sites = demoSites.map(s => ({ ...s }));
     await db.collection('sites').insertMany(sites);
     
-    // Insert assignments
     const assignments = generateSiteAssignments(users, sites);
     await db.collection('user_site_assignments').insertMany(assignments);
     
-    // Insert shift reports
     const reports = generateShiftReports(users, sites, assignments);
     await db.collection('shift_reports').insertMany(reports);
+    
+    // Create default field configs for each site
+    for (const site of sites) {
+      const fieldConfigs = DEFAULT_FIELD_CONFIG.map((f, idx) => ({
+        id: uuidv4(),
+        site_id: site.id,
+        ...f,
+        created_by_user_id: 'owner-001',
+        created_at: new Date().toISOString()
+      }));
+      await db.collection('site_field_configs').insertMany(fieldConfigs);
+    }
+    
+    // Create sample banking formula for first site
+    await db.collection('site_banking_formulas').insertOne({
+      id: uuidv4(),
+      site_id: sites[0].id,
+      name: 'Daily Banking',
+      formula_json: JSON.stringify({
+        operations: [
+          { type: 'field', value: 'cash' },
+          { type: 'operator', value: '+' },
+          { type: 'field', value: 'eftpos' },
+          { type: 'operator', value: '+' },
+          { type: 'field', value: 'accounts' }
+        ]
+      }),
+      result_label: 'Total Banking',
+      is_active: true,
+      created_by_user_id: 'owner-001',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
     
     return NextResponse.json({
       message: 'Database seeded successfully',
@@ -107,7 +161,6 @@ async function handleGetUsers(request) {
     
     const users = await db.collection('users').find(query).toArray();
     
-    // Remove passwords from response
     const safeUsers = users.map(u => ({
       id: u.id,
       name: u.name,
@@ -129,7 +182,6 @@ async function handleCreateUser(request) {
     const db = await getDb();
     const data = await request.json();
     
-    // Check if email exists
     const existing = await db.collection('users').findOne({ email: data.email });
     if (existing) {
       return NextResponse.json({ error: 'Email already exists' }, { status: 400, headers: corsHeaders });
@@ -184,7 +236,6 @@ async function handleDeleteUser(userId) {
   try {
     const db = await getDb();
     
-    // Delete user and their assignments
     await db.collection('users').deleteOne({ id: userId });
     await db.collection('user_site_assignments').deleteMany({ user_id: userId });
     
@@ -243,6 +294,16 @@ async function handleCreateSite(request) {
       created_at: new Date().toISOString()
     });
     
+    // Create default field configs for new site
+    const fieldConfigs = DEFAULT_FIELD_CONFIG.map((f, idx) => ({
+      id: uuidv4(),
+      site_id: site.id,
+      ...f,
+      created_by_user_id: data.owner_id,
+      created_at: new Date().toISOString()
+    }));
+    await db.collection('site_field_configs').insertMany(fieldConfigs);
+    
     return NextResponse.json(site, { status: 201, headers: corsHeaders });
   } catch (error) {
     console.error('Create site error:', error);
@@ -286,6 +347,234 @@ async function handleGetSiteById(siteId) {
   }
 }
 
+// ============== SITE FIELD CONFIGS ==============
+async function handleGetFieldConfigs(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const siteId = url.searchParams.get('siteId');
+    
+    if (!siteId) {
+      return NextResponse.json({ error: 'siteId required' }, { status: 400, headers: corsHeaders });
+    }
+    
+    const configs = await db.collection('site_field_configs')
+      .find({ site_id: siteId })
+      .sort({ display_order: 1 })
+      .toArray();
+    
+    return NextResponse.json(configs, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get field configs error:', error);
+    return NextResponse.json({ error: 'Failed to get field configs' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateFieldConfig(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const config = {
+      id: uuidv4(),
+      site_id: data.site_id,
+      key: data.key || `custom_${Date.now()}`,
+      label: data.label,
+      field_type: data.field_type || 'number',
+      is_core: false,
+      is_enabled: true,
+      display_order: data.display_order || 99,
+      created_by_user_id: data.created_by_user_id,
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('site_field_configs').insertOne(config);
+    
+    return NextResponse.json(config, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create field config error:', error);
+    return NextResponse.json({ error: 'Failed to create field config' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleUpdateFieldConfig(configId, request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    // Prevent updating core field properties
+    const config = await db.collection('site_field_configs').findOne({ id: configId });
+    if (config?.is_core && data.is_enabled === false) {
+      return NextResponse.json({ error: 'Cannot disable core fields' }, { status: 400, headers: corsHeaders });
+    }
+    
+    const updateData = {};
+    if (data.label !== undefined) updateData.label = data.label;
+    if (data.is_enabled !== undefined && !config?.is_core) updateData.is_enabled = data.is_enabled;
+    if (data.display_order !== undefined) updateData.display_order = data.display_order;
+    
+    await db.collection('site_field_configs').updateOne({ id: configId }, { $set: updateData });
+    
+    return NextResponse.json({ message: 'Field config updated' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update field config error:', error);
+    return NextResponse.json({ error: 'Failed to update field config' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleDeleteFieldConfig(configId) {
+  try {
+    const db = await getDb();
+    
+    const config = await db.collection('site_field_configs').findOne({ id: configId });
+    if (config?.is_core) {
+      return NextResponse.json({ error: 'Cannot delete core fields' }, { status: 400, headers: corsHeaders });
+    }
+    
+    await db.collection('site_field_configs').deleteOne({ id: configId });
+    
+    return NextResponse.json({ message: 'Field config deleted' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete field config error:', error);
+    return NextResponse.json({ error: 'Failed to delete field config' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleBulkUpdateFieldConfigs(request) {
+  try {
+    const db = await getDb();
+    const { configs } = await request.json();
+    
+    for (const config of configs) {
+      const existing = await db.collection('site_field_configs').findOne({ id: config.id });
+      if (existing?.is_core && config.is_enabled === false) continue;
+      
+      await db.collection('site_field_configs').updateOne(
+        { id: config.id },
+        { $set: { label: config.label, is_enabled: config.is_enabled, display_order: config.display_order } }
+      );
+    }
+    
+    return NextResponse.json({ message: 'Field configs updated' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Bulk update field configs error:', error);
+    return NextResponse.json({ error: 'Failed to update field configs' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// ============== BANKING FORMULAS ==============
+async function handleGetBankingFormulas(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const siteId = url.searchParams.get('siteId');
+    
+    let query = {};
+    if (siteId) query.site_id = siteId;
+    
+    const formulas = await db.collection('site_banking_formulas').find(query).toArray();
+    
+    return NextResponse.json(formulas, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get banking formulas error:', error);
+    return NextResponse.json({ error: 'Failed to get banking formulas' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateBankingFormula(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const formula = {
+      id: uuidv4(),
+      site_id: data.site_id,
+      name: data.name,
+      formula_json: data.formula_json,
+      result_label: data.result_label || 'Banking Result',
+      is_active: true,
+      created_by_user_id: data.created_by_user_id,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    await db.collection('site_banking_formulas').insertOne(formula);
+    
+    return NextResponse.json(formula, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create banking formula error:', error);
+    return NextResponse.json({ error: 'Failed to create banking formula' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleUpdateBankingFormula(formulaId, request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const updateData = { updated_at: new Date().toISOString() };
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.formula_json !== undefined) updateData.formula_json = data.formula_json;
+    if (data.result_label !== undefined) updateData.result_label = data.result_label;
+    if (data.is_active !== undefined) updateData.is_active = data.is_active;
+    
+    await db.collection('site_banking_formulas').updateOne({ id: formulaId }, { $set: updateData });
+    
+    return NextResponse.json({ message: 'Banking formula updated' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update banking formula error:', error);
+    return NextResponse.json({ error: 'Failed to update banking formula' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleDeleteBankingFormula(formulaId) {
+  try {
+    const db = await getDb();
+    await db.collection('site_banking_formulas').deleteOne({ id: formulaId });
+    return NextResponse.json({ message: 'Banking formula deleted' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete banking formula error:', error);
+    return NextResponse.json({ error: 'Failed to delete banking formula' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// Calculate banking value from formula
+function calculateBankingValue(formula, reportData) {
+  try {
+    const parsed = JSON.parse(formula.formula_json);
+    const operations = parsed.operations || [];
+    
+    let result = 0;
+    let currentOp = '+';
+    
+    for (const op of operations) {
+      if (op.type === 'operator') {
+        currentOp = op.value;
+      } else if (op.type === 'field') {
+        const value = parseFloat(reportData[op.value]) || 0;
+        switch (currentOp) {
+          case '+': result += value; break;
+          case '-': result -= value; break;
+          case '*': result *= value; break;
+          case '/': result = value !== 0 ? result / value : result; break;
+        }
+      } else if (op.type === 'number') {
+        const value = parseFloat(op.value) || 0;
+        switch (currentOp) {
+          case '+': result += value; break;
+          case '-': result -= value; break;
+          case '*': result *= value; break;
+          case '/': result = value !== 0 ? result / value : result; break;
+        }
+      }
+    }
+    
+    return Math.round(result * 100) / 100;
+  } catch (e) {
+    return 0;
+  }
+}
+
 // ============== SITE ASSIGNMENTS ==============
 async function handleGetAssignments(request) {
   try {
@@ -300,7 +589,6 @@ async function handleGetAssignments(request) {
     
     const assignments = await db.collection('user_site_assignments').find(query).toArray();
     
-    // Enrich with user and site info
     const userIds = [...new Set(assignments.map(a => a.user_id))];
     const siteIds = [...new Set(assignments.map(a => a.site_id))];
     
@@ -331,7 +619,6 @@ async function handleCreateAssignment(request) {
     const db = await getDb();
     const data = await request.json();
     
-    // Check if assignment already exists
     const existing = await db.collection('user_site_assignments').findOne({
       user_id: data.user_id,
       site_id: data.site_id
@@ -341,7 +628,6 @@ async function handleCreateAssignment(request) {
       return NextResponse.json({ error: 'Assignment already exists' }, { status: 400, headers: corsHeaders });
     }
     
-    // Verify assigner has access to the site (if not owner)
     const assigner = await db.collection('users').findOne({ id: data.assigned_by_user_id });
     if (assigner.role !== 'owner') {
       const assignerAccess = await db.collection('user_site_assignments').findOne({
@@ -422,22 +708,41 @@ async function handleGetReports(request) {
       .sort({ submitted_at: -1 })
       .toArray();
     
-    // Enrich with user and site names
     const userIds = [...new Set(reports.map(r => r.submitted_by_user_id))];
     const reportSiteIds = [...new Set(reports.map(r => r.site_id))];
     
     const users = await db.collection('users').find({ id: { $in: userIds } }).toArray();
     const sites = await db.collection('sites').find({ id: { $in: reportSiteIds } }).toArray();
     
+    // Get banking formulas for all sites
+    const bankingFormulas = await db.collection('site_banking_formulas')
+      .find({ site_id: { $in: reportSiteIds }, is_active: true })
+      .toArray();
+    const formulaMap = {};
+    bankingFormulas.forEach(f => {
+      if (!formulaMap[f.site_id]) formulaMap[f.site_id] = [];
+      formulaMap[f.site_id].push(f);
+    });
+    
     const userMap = Object.fromEntries(users.map(u => [u.id, u]));
     const siteMap = Object.fromEntries(sites.map(s => [s.id, s]));
     
-    const enrichedReports = reports.map(r => ({
-      ...r,
-      staff_name: userMap[r.submitted_by_user_id]?.name || 'Unknown',
-      site_name: siteMap[r.site_id]?.name || 'Unknown',
-      site_code: siteMap[r.site_id]?.code || ''
-    }));
+    const enrichedReports = reports.map(r => {
+      // Calculate banking for this report
+      let banking_value = 0;
+      const siteFormulas = formulaMap[r.site_id] || [];
+      siteFormulas.forEach(f => {
+        banking_value += calculateBankingValue(f, r);
+      });
+      
+      return {
+        ...r,
+        staff_name: userMap[r.submitted_by_user_id]?.name || 'Unknown',
+        site_name: siteMap[r.site_id]?.name || 'Unknown',
+        site_code: siteMap[r.site_id]?.code || '',
+        banking_value: Math.round(banking_value * 100) / 100
+      };
+    });
     
     return NextResponse.json(enrichedReports, { headers: corsHeaders });
   } catch (error) {
@@ -446,12 +751,142 @@ async function handleGetReports(request) {
   }
 }
 
+// ============== DAILY ROLLUPS ==============
+async function handleGetDailyRollups(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const siteIds = url.searchParams.get('siteIds')?.split(',').filter(Boolean) || [];
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+    
+    let query = {};
+    if (siteIds.length > 0) {
+      query.site_id = { $in: siteIds };
+    }
+    if (startDate && endDate) {
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+    
+    const reports = await db.collection('shift_reports').find(query).toArray();
+    const sites = await db.collection('sites').find(
+      siteIds.length > 0 ? { id: { $in: siteIds } } : {}
+    ).toArray();
+    const siteMap = Object.fromEntries(sites.map(s => [s.id, s]));
+    
+    // Get banking formulas
+    const bankingFormulas = await db.collection('site_banking_formulas')
+      .find({ site_id: { $in: siteIds }, is_active: true })
+      .toArray();
+    const formulaMap = {};
+    bankingFormulas.forEach(f => {
+      if (!formulaMap[f.site_id]) formulaMap[f.site_id] = [];
+      formulaMap[f.site_id].push(f);
+    });
+    
+    // Group by site_id + date
+    const rollupMap = {};
+    
+    reports.forEach(r => {
+      const key = `${r.site_id}_${r.date}`;
+      if (!rollupMap[key]) {
+        rollupMap[key] = {
+          site_id: r.site_id,
+          site_name: siteMap[r.site_id]?.name || 'Unknown',
+          site_code: siteMap[r.site_id]?.code || '',
+          date: r.date,
+          total_sales: 0,
+          fuel_sales: 0,
+          total_litres: 0,
+          eftpos: 0,
+          motorpass: 0,
+          cash: 0,
+          shop_sales: 0,
+          beverages: 0,
+          hot_food: 0,
+          accounts: 0,
+          drive_offs: 0,
+          dips: 0,
+          total_revenue: 0,
+          banking_value: 0,
+          shift_count: 0,
+          shifts: [],
+          pending_count: 0,
+          reviewed_count: 0
+        };
+      }
+      
+      const rollup = rollupMap[key];
+      rollup.total_sales += r.total_sales || 0;
+      rollup.fuel_sales += r.fuel_sales || 0;
+      rollup.total_litres += r.total_litres || 0;
+      rollup.eftpos += r.eftpos || 0;
+      rollup.motorpass += r.motorpass || 0;
+      rollup.cash += r.cash || 0;
+      rollup.shop_sales += r.shop_sales || 0;
+      rollup.beverages += r.beverages || 0;
+      rollup.hot_food += r.hot_food || 0;
+      rollup.accounts += r.accounts || 0;
+      rollup.drive_offs += r.drive_offs || 0;
+      rollup.dips += r.dips || 0;
+      rollup.total_revenue += r.total_revenue || 0;
+      rollup.shift_count++;
+      rollup.shifts.push({
+        id: r.id,
+        shift_type: r.shift_type,
+        total_revenue: r.total_revenue,
+        status: r.status,
+        submitted_at: r.submitted_at
+      });
+      if (r.status === 'pending') rollup.pending_count++;
+      else rollup.reviewed_count++;
+    });
+    
+    // Calculate banking for rollups
+    const rollups = Object.values(rollupMap).map(r => {
+      const siteFormulas = formulaMap[r.site_id] || [];
+      let bankingValue = 0;
+      siteFormulas.forEach(f => {
+        bankingValue += calculateBankingValue(f, r);
+      });
+      
+      return {
+        ...r,
+        total_sales: Math.round(r.total_sales * 100) / 100,
+        fuel_sales: Math.round(r.fuel_sales * 100) / 100,
+        total_litres: Math.round(r.total_litres * 100) / 100,
+        eftpos: Math.round(r.eftpos * 100) / 100,
+        motorpass: Math.round(r.motorpass * 100) / 100,
+        cash: Math.round(r.cash * 100) / 100,
+        shop_sales: Math.round(r.shop_sales * 100) / 100,
+        beverages: Math.round(r.beverages * 100) / 100,
+        hot_food: Math.round(r.hot_food * 100) / 100,
+        accounts: Math.round(r.accounts * 100) / 100,
+        drive_offs: Math.round(r.drive_offs * 100) / 100,
+        dips: Math.round(r.dips * 100) / 100,
+        total_revenue: Math.round(r.total_revenue * 100) / 100,
+        banking_value: Math.round(bankingValue * 100) / 100
+      };
+    });
+    
+    // Sort by date descending, then by site
+    rollups.sort((a, b) => {
+      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      return a.site_name.localeCompare(b.site_name);
+    });
+    
+    return NextResponse.json(rollups, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get daily rollups error:', error);
+    return NextResponse.json({ error: 'Failed to get daily rollups' }, { status: 500, headers: corsHeaders });
+  }
+}
+
 async function handleCreateReport(request) {
   try {
     const db = await getDb();
     const data = await request.json();
     
-    // Validate required fields
     const requiredFields = ['site_id', 'submitted_by_user_id', 'date', 'shift_type'];
     for (const field of requiredFields) {
       if (!data[field]) {
@@ -459,7 +894,6 @@ async function handleCreateReport(request) {
       }
     }
     
-    // Check if user is assigned to this site
     const assignment = await db.collection('user_site_assignments').findOne({
       user_id: data.submitted_by_user_id,
       site_id: data.site_id
@@ -492,11 +926,12 @@ async function handleCreateReport(request) {
       dips: parseFloat(data.dips) || 0,
       notes: data.notes || '',
       total_revenue: fuelSales + shopSales,
-      difference_value: null, // Placeholder for future formula
+      difference_value: null,
       status: 'pending',
       submitted_at: new Date().toISOString(),
       reviewed_by_user_id: null,
-      reviewed_at: null
+      reviewed_at: null,
+      custom_values: data.custom_values || {}
     };
     
     await db.collection('shift_reports').insertOne(report);
@@ -517,18 +952,28 @@ async function handleGetReportById(reportId) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404, headers: corsHeaders });
     }
     
-    // Get user and site info
     const user = await db.collection('users').findOne({ id: report.submitted_by_user_id });
     const site = await db.collection('sites').findOne({ id: report.site_id });
     const reviewer = report.reviewed_by_user_id ? 
       await db.collection('users').findOne({ id: report.reviewed_by_user_id }) : null;
+    
+    // Get banking formulas and calculate
+    const formulas = await db.collection('site_banking_formulas')
+      .find({ site_id: report.site_id, is_active: true })
+      .toArray();
+    
+    let banking_value = 0;
+    formulas.forEach(f => {
+      banking_value += calculateBankingValue(f, report);
+    });
     
     return NextResponse.json({
       ...report,
       staff_name: user?.name || 'Unknown',
       site_name: site?.name || 'Unknown',
       site_code: site?.code || '',
-      reviewed_by_name: reviewer?.name || null
+      reviewed_by_name: reviewer?.name || null,
+      banking_value: Math.round(banking_value * 100) / 100
     }, { headers: corsHeaders });
   } catch (error) {
     console.error('Get report error:', error);
@@ -589,12 +1034,23 @@ async function handleGetDashboardStats(request) {
     
     const reports = await db.collection('shift_reports').find(query).toArray();
     
+    // Get banking formulas
+    const bankingFormulas = await db.collection('site_banking_formulas')
+      .find({ site_id: { $in: siteIds }, is_active: true })
+      .toArray();
+    const formulaMap = {};
+    bankingFormulas.forEach(f => {
+      if (!formulaMap[f.site_id]) formulaMap[f.site_id] = [];
+      formulaMap[f.site_id].push(f);
+    });
+    
     const stats = {
       totalShopSales: 0,
       totalFuelSales: 0,
       totalRevenue: 0,
       totalDips: 0,
       totalDriveOffs: 0,
+      totalBanking: 0,
       totalReports: reports.length,
       pendingReports: 0,
       reviewedReports: 0
@@ -606,16 +1062,23 @@ async function handleGetDashboardStats(request) {
       stats.totalRevenue += r.total_revenue || 0;
       stats.totalDips += r.dips || 0;
       stats.totalDriveOffs += r.drive_offs || 0;
+      
+      // Calculate banking
+      const siteFormulas = formulaMap[r.site_id] || [];
+      siteFormulas.forEach(f => {
+        stats.totalBanking += calculateBankingValue(f, r);
+      });
+      
       if (r.status === 'pending') stats.pendingReports++;
       else stats.reviewedReports++;
     });
     
-    // Round to 2 decimal places
     stats.totalShopSales = Math.round(stats.totalShopSales * 100) / 100;
     stats.totalFuelSales = Math.round(stats.totalFuelSales * 100) / 100;
     stats.totalRevenue = Math.round(stats.totalRevenue * 100) / 100;
     stats.totalDips = Math.round(stats.totalDips * 100) / 100;
     stats.totalDriveOffs = Math.round(stats.totalDriveOffs * 100) / 100;
+    stats.totalBanking = Math.round(stats.totalBanking * 100) / 100;
     
     return NextResponse.json(stats, { headers: corsHeaders });
   } catch (error) {
@@ -679,7 +1142,6 @@ async function handleGetRevenueChart(request) {
       query.site_id = { $in: siteIds };
     }
     
-    // Get date range
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
@@ -691,7 +1153,6 @@ async function handleGetRevenueChart(request) {
     
     const reports = await db.collection('shift_reports').find(query).toArray();
     
-    // Group by date
     const dateMap = {};
     for (let i = 0; i <= days; i++) {
       const d = new Date();
@@ -722,6 +1183,140 @@ async function handleGetRevenueChart(request) {
   }
 }
 
+// ============== EXPORT ==============
+async function handleExport(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const format = url.searchParams.get('format') || 'xlsx';
+    const siteIds = url.searchParams.get('siteIds')?.split(',').filter(Boolean) || [];
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+    const viewType = url.searchParams.get('viewType') || 'daily';
+    
+    let query = {};
+    if (siteIds.length > 0) {
+      query.site_id = { $in: siteIds };
+    }
+    if (startDate && endDate) {
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+    
+    const reports = await db.collection('shift_reports').find(query).sort({ date: -1 }).toArray();
+    const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+    const users = await db.collection('users').find({}).toArray();
+    
+    const siteMap = Object.fromEntries(sites.map(s => [s.id, s]));
+    const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+    
+    let exportData = [];
+    
+    if (viewType === 'daily') {
+      // Group by site + date for daily view
+      const rollupMap = {};
+      reports.forEach(r => {
+        const key = `${r.site_id}_${r.date}`;
+        if (!rollupMap[key]) {
+          rollupMap[key] = {
+            Site: siteMap[r.site_id]?.name || 'Unknown',
+            'Site Code': siteMap[r.site_id]?.code || '',
+            Date: r.date,
+            'Total Revenue': 0,
+            'Fuel Sales': 0,
+            'Shop Sales': 0,
+            'Total Litres': 0,
+            'EFTPOS': 0,
+            'Motorpass': 0,
+            'Cash': 0,
+            'Accounts': 0,
+            'Beverages': 0,
+            'Hot Food': 0,
+            'Drive Offs': 0,
+            'Dips': 0,
+            'Shift Count': 0
+          };
+        }
+        const rollup = rollupMap[key];
+        rollup['Total Revenue'] += r.total_revenue || 0;
+        rollup['Fuel Sales'] += r.fuel_sales || 0;
+        rollup['Shop Sales'] += r.shop_sales || 0;
+        rollup['Total Litres'] += r.total_litres || 0;
+        rollup['EFTPOS'] += r.eftpos || 0;
+        rollup['Motorpass'] += r.motorpass || 0;
+        rollup['Cash'] += r.cash || 0;
+        rollup['Accounts'] += r.accounts || 0;
+        rollup['Beverages'] += r.beverages || 0;
+        rollup['Hot Food'] += r.hot_food || 0;
+        rollup['Drive Offs'] += r.drive_offs || 0;
+        rollup['Dips'] += r.dips || 0;
+        rollup['Shift Count']++;
+      });
+      
+      exportData = Object.values(rollupMap).map(r => ({
+        ...r,
+        'Total Revenue': Math.round(r['Total Revenue'] * 100) / 100,
+        'Fuel Sales': Math.round(r['Fuel Sales'] * 100) / 100,
+        'Shop Sales': Math.round(r['Shop Sales'] * 100) / 100,
+        'Total Litres': Math.round(r['Total Litres'] * 100) / 100,
+        'EFTPOS': Math.round(r['EFTPOS'] * 100) / 100,
+        'Motorpass': Math.round(r['Motorpass'] * 100) / 100,
+        'Cash': Math.round(r['Cash'] * 100) / 100,
+        'Accounts': Math.round(r['Accounts'] * 100) / 100,
+        'Beverages': Math.round(r['Beverages'] * 100) / 100,
+        'Hot Food': Math.round(r['Hot Food'] * 100) / 100,
+        'Drive Offs': Math.round(r['Drive Offs'] * 100) / 100,
+        'Dips': Math.round(r['Dips'] * 100) / 100
+      }));
+    } else {
+      // Shift view
+      exportData = reports.map(r => ({
+        Site: siteMap[r.site_id]?.name || 'Unknown',
+        'Site Code': siteMap[r.site_id]?.code || '',
+        Date: r.date,
+        Shift: r.shift_type,
+        'Staff Name': userMap[r.submitted_by_user_id]?.name || 'Unknown',
+        'Total Revenue': r.total_revenue || 0,
+        'Fuel Sales': r.fuel_sales || 0,
+        'Shop Sales': r.shop_sales || 0,
+        'Total Litres': r.total_litres || 0,
+        'EFTPOS': r.eftpos || 0,
+        'Motorpass': r.motorpass || 0,
+        'Cash': r.cash || 0,
+        'Accounts': r.accounts || 0,
+        'Beverages': r.beverages || 0,
+        'Hot Food': r.hot_food || 0,
+        'Drive Offs': r.drive_offs || 0,
+        'Dips': r.dips || 0,
+        'Status': r.status,
+        'Submitted At': r.submitted_at
+      }));
+    }
+    
+    if (format === 'xlsx') {
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, viewType === 'daily' ? 'Daily Summary' : 'Shift Reports');
+      
+      const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      
+      return new NextResponse(buffer, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="workflowlite_export_${new Date().toISOString().split('T')[0]}.xlsx"`
+        }
+      });
+    } else if (format === 'json') {
+      return NextResponse.json(exportData, { headers: corsHeaders });
+    }
+    
+    return NextResponse.json({ error: 'Unsupported format' }, { status: 400, headers: corsHeaders });
+  } catch (error) {
+    console.error('Export error:', error);
+    return NextResponse.json({ error: 'Failed to export: ' + error.message }, { status: 500, headers: corsHeaders });
+  }
+}
+
 // ============== ROUTE HANDLER ==============
 export async function GET(request) {
   const path = getPathSegments(request);
@@ -731,6 +1326,9 @@ export async function GET(request) {
   }
   if (path[0] === 'reports') {
     return handleGetReports(request);
+  }
+  if (path[0] === 'daily-rollups') {
+    return handleGetDailyRollups(request);
   }
   if (path[0] === 'sites' && path[1]) {
     return handleGetSiteById(path[1]);
@@ -744,6 +1342,12 @@ export async function GET(request) {
   if (path[0] === 'assignments') {
     return handleGetAssignments(request);
   }
+  if (path[0] === 'field-configs') {
+    return handleGetFieldConfigs(request);
+  }
+  if (path[0] === 'banking-formulas') {
+    return handleGetBankingFormulas(request);
+  }
   if (path[0] === 'dashboard' && path[1] === 'stats') {
     return handleGetDashboardStats(request);
   }
@@ -752,6 +1356,9 @@ export async function GET(request) {
   }
   if (path[0] === 'dashboard' && path[1] === 'revenue-chart') {
     return handleGetRevenueChart(request);
+  }
+  if (path[0] === 'export') {
+    return handleExport(request);
   }
   if (path[0] === 'health') {
     return NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() }, { headers: corsHeaders });
@@ -781,6 +1388,15 @@ export async function POST(request) {
   if (path[0] === 'assignments') {
     return handleCreateAssignment(request);
   }
+  if (path[0] === 'field-configs') {
+    return handleCreateFieldConfig(request);
+  }
+  if (path[0] === 'field-configs' && path[1] === 'bulk') {
+    return handleBulkUpdateFieldConfigs(request);
+  }
+  if (path[0] === 'banking-formulas') {
+    return handleCreateBankingFormula(request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -797,6 +1413,12 @@ export async function PUT(request) {
   if (path[0] === 'users' && path[1]) {
     return handleUpdateUser(path[1], request);
   }
+  if (path[0] === 'field-configs' && path[1]) {
+    return handleUpdateFieldConfig(path[1], request);
+  }
+  if (path[0] === 'banking-formulas' && path[1]) {
+    return handleUpdateBankingFormula(path[1], request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -809,6 +1431,12 @@ export async function DELETE(request) {
   }
   if (path[0] === 'assignments' && path[1]) {
     return handleDeleteAssignment(path[1]);
+  }
+  if (path[0] === 'field-configs' && path[1]) {
+    return handleDeleteFieldConfig(path[1]);
+  }
+  if (path[0] === 'banking-formulas' && path[1]) {
+    return handleDeleteBankingFormula(path[1]);
   }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
