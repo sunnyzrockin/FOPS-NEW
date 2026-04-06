@@ -352,7 +352,7 @@ async function handleGetFieldConfigs(request) {
   try {
     const db = await getDb();
     const url = new URL(request.url);
-    const siteId = url.searchParams.get('siteId');
+    const siteId = url.searchParams.get('siteId') || url.searchParams.get('site_id');
     
     if (!siteId) {
       return NextResponse.json({ error: 'siteId required' }, { status: 400, headers: corsHeaders });
@@ -375,13 +375,18 @@ async function handleCreateFieldConfig(request) {
     const db = await getDb();
     const data = await request.json();
     
+    // Security: Prevent creating core fields - only custom fields allowed
+    if (data.is_core === true || CORE_FIELDS.includes(data.key)) {
+      return NextResponse.json({ error: 'Cannot create core fields via API' }, { status: 403, headers: corsHeaders });
+    }
+    
     const config = {
       id: uuidv4(),
       site_id: data.site_id,
       key: data.key || `custom_${Date.now()}`,
       label: data.label,
       field_type: data.field_type || 'number',
-      is_core: false,
+      is_core: false, // Always false for API-created fields
       is_enabled: true,
       display_order: data.display_order || 99,
       created_by_user_id: data.created_by_user_id,
@@ -467,7 +472,7 @@ async function handleGetBankingFormulas(request) {
   try {
     const db = await getDb();
     const url = new URL(request.url);
-    const siteId = url.searchParams.get('siteId');
+    const siteId = url.searchParams.get('siteId') || url.searchParams.get('site_id');
     
     let query = {};
     if (siteId) query.site_id = siteId;
@@ -572,6 +577,55 @@ function calculateBankingValue(formula, reportData) {
     return Math.round(result * 100) / 100;
   } catch (e) {
     return 0;
+  }
+}
+
+// ============== BANKING CALCULATOR ==============
+async function handleBankingCalculate(request) {
+  try {
+    const { formula_json } = await request.json();
+    
+    if (!formula_json) {
+      return NextResponse.json({ error: 'formula_json required' }, { status: 400, headers: corsHeaders });
+    }
+    
+    // Parse and evaluate the formula
+    const parsed = typeof formula_json === 'string' ? JSON.parse(formula_json) : formula_json;
+    
+    // Support simple {operator, value1, value2} format
+    if (parsed.operator && parsed.value1 !== undefined && parsed.value2 !== undefined) {
+      const v1 = parseFloat(parsed.value1) || 0;
+      const v2 = parseFloat(parsed.value2) || 0;
+      let result = 0;
+      
+      switch (parsed.operator) {
+        case '+': result = v1 + v2; break;
+        case '-': result = v1 - v2; break;
+        case '*': result = v1 * v2; break;
+        case '/': 
+          if (v2 === 0) {
+            return NextResponse.json({ error: 'Division by zero' }, { status: 400, headers: corsHeaders });
+          }
+          result = v1 / v2; 
+          break;
+        default:
+          return NextResponse.json({ error: 'Invalid operator. Use: +, -, *, /' }, { status: 400, headers: corsHeaders });
+      }
+      
+      return NextResponse.json({ result: Math.round(result * 100) / 100 }, { headers: corsHeaders });
+    }
+    
+    // Support complex operations array format
+    if (parsed.operations && Array.isArray(parsed.operations)) {
+      const mockData = {}; // For complex formulas with fields, pass empty object
+      const result = calculateBankingValue({ formula_json: JSON.stringify(parsed) }, mockData);
+      return NextResponse.json({ result }, { headers: corsHeaders });
+    }
+    
+    return NextResponse.json({ error: 'Invalid formula format' }, { status: 400, headers: corsHeaders });
+  } catch (error) {
+    console.error('Banking calculate error:', error);
+    return NextResponse.json({ error: 'Calculation failed: ' + error.message }, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -1321,12 +1375,16 @@ async function handleExport(request) {
 export async function GET(request) {
   const path = getPathSegments(request);
   
+  if (path[0] === 'reports' && path[1] === 'daily-rollup') {
+    return handleGetDailyRollups(request);
+  }
   if (path[0] === 'reports' && path[1]) {
     return handleGetReportById(path[1]);
   }
   if (path[0] === 'reports') {
     return handleGetReports(request);
   }
+  // Backward compatibility with old path
   if (path[0] === 'daily-rollups') {
     return handleGetDailyRollups(request);
   }
@@ -1342,9 +1400,19 @@ export async function GET(request) {
   if (path[0] === 'assignments') {
     return handleGetAssignments(request);
   }
+  // New correct path
+  if (path[0] === 'site-field-configs') {
+    return handleGetFieldConfigs(request);
+  }
+  // Backward compatibility
   if (path[0] === 'field-configs') {
     return handleGetFieldConfigs(request);
   }
+  // New correct path
+  if (path[0] === 'site-banking-formulas') {
+    return handleGetBankingFormulas(request);
+  }
+  // Backward compatibility
   if (path[0] === 'banking-formulas') {
     return handleGetBankingFormulas(request);
   }
@@ -1388,14 +1456,31 @@ export async function POST(request) {
   if (path[0] === 'assignments') {
     return handleCreateAssignment(request);
   }
-  if (path[0] === 'field-configs') {
+  // New correct path
+  if (path[0] === 'site-field-configs') {
+    if (path[1] === 'bulk') {
+      return handleBulkUpdateFieldConfigs(request);
+    }
     return handleCreateFieldConfig(request);
   }
-  if (path[0] === 'field-configs' && path[1] === 'bulk') {
-    return handleBulkUpdateFieldConfigs(request);
+  // Backward compatibility
+  if (path[0] === 'field-configs') {
+    if (path[1] === 'bulk') {
+      return handleBulkUpdateFieldConfigs(request);
+    }
+    return handleCreateFieldConfig(request);
   }
+  // New correct path
+  if (path[0] === 'site-banking-formulas') {
+    return handleCreateBankingFormula(request);
+  }
+  // Backward compatibility
   if (path[0] === 'banking-formulas') {
     return handleCreateBankingFormula(request);
+  }
+  // New banking calculate endpoint
+  if (path[0] === 'banking' && path[1] === 'calculate') {
+    return handleBankingCalculate(request);
   }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
@@ -1413,9 +1498,19 @@ export async function PUT(request) {
   if (path[0] === 'users' && path[1]) {
     return handleUpdateUser(path[1], request);
   }
+  // New correct path
+  if (path[0] === 'site-field-configs' && path[1]) {
+    return handleUpdateFieldConfig(path[1], request);
+  }
+  // Backward compatibility
   if (path[0] === 'field-configs' && path[1]) {
     return handleUpdateFieldConfig(path[1], request);
   }
+  // New correct path
+  if (path[0] === 'site-banking-formulas' && path[1]) {
+    return handleUpdateBankingFormula(path[1], request);
+  }
+  // Backward compatibility
   if (path[0] === 'banking-formulas' && path[1]) {
     return handleUpdateBankingFormula(path[1], request);
   }
@@ -1432,9 +1527,19 @@ export async function DELETE(request) {
   if (path[0] === 'assignments' && path[1]) {
     return handleDeleteAssignment(path[1]);
   }
+  // New correct path
+  if (path[0] === 'site-field-configs' && path[1]) {
+    return handleDeleteFieldConfig(path[1]);
+  }
+  // Backward compatibility
   if (path[0] === 'field-configs' && path[1]) {
     return handleDeleteFieldConfig(path[1]);
   }
+  // New correct path
+  if (path[0] === 'site-banking-formulas' && path[1]) {
+    return handleDeleteBankingFormula(path[1]);
+  }
+  // Backward compatibility
   if (path[0] === 'banking-formulas' && path[1]) {
     return handleDeleteBankingFormula(path[1]);
   }

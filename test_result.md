@@ -212,7 +212,7 @@ backend:
 
   - task: "Daily Rollup API with Multi-Shift View"
     implemented: true
-    working: false
+    working: true
     file: "/app/app/api/[[...path]]/route.js"
     stuck_count: 1
     priority: "high"
@@ -224,10 +224,13 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL ROUTING ISSUE: Expected endpoint /api/reports/daily-rollup not found (404). Alternative endpoint /api/daily-rollups works correctly with proper aggregation (16 rollups returned, all required fields present including banking_value). Main agent implemented wrong route path."
+      - working: true
+        agent: "testing"
+        comment: "✅ FIXED: Daily Rollup API now working with correct path /api/reports/daily-rollup. Both Day view (100 rollups) and Shift view (100 rollups) returning proper aggregated data. Routing issue resolved, aggregation logic working correctly."
 
   - task: "Dynamic Field Configuration API"
     implemented: true
-    working: false
+    working: true
     file: "/app/app/api/[[...path]]/route.js"
     stuck_count: 1
     priority: "high"
@@ -239,6 +242,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL ROUTING ISSUE: Expected endpoint /api/site-field-configs not found (404). Alternative endpoint /api/field-configs works correctly (11 configs retrieved, proper structure, valid field types). SECURITY ISSUE: Core field protection not working - core fields can be created when they shouldn't be."
+      - working: true
+        agent: "testing"
+        comment: "✅ FIXED: Site Field Configs API now working with correct path /api/site-field-configs. GET returns 11 configs, POST creates custom fields successfully. SECURITY FIXED: Core field protection working - correctly rejects is_core=true (403) and core field keys like 'date', 'site_id', 'shift_type' (403). Valid custom fields created successfully."
 
   - task: "Shift Report Custom Values API"
     implemented: true
@@ -257,7 +263,7 @@ backend:
 
   - task: "Banking Formula Management API"
     implemented: true
-    working: false
+    working: true
     file: "/app/app/api/[[...path]]/route.js"
     stuck_count: 1
     priority: "high"
@@ -269,10 +275,13 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL ROUTING ISSUE: Expected endpoint /api/site-banking-formulas not found (404). Alternative endpoint /api/banking-formulas works correctly (1 formula retrieved, proper structure with operations array, CRUD operations functional including DELETE). Main agent implemented wrong route path."
+      - working: true
+        agent: "testing"
+        comment: "✅ FIXED: Site Banking Formulas API now working with correct path /api/site-banking-formulas. GET returns 1 formula, POST creates formulas successfully with JSON structure, DELETE removes formulas correctly. All CRUD operations functional on correct endpoint path."
 
   - task: "Banking Formula Calculate API"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "/app/app/api/[[...path]]/route.js"
     stuck_count: 1
     priority: "high"
@@ -284,6 +293,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL: FEATURE NOT IMPLEMENTED - Endpoint /api/banking/calculate completely missing (404). No route handler exists for this endpoint in the code. All calculation tests failed (addition, subtraction, multiplication, division, division by zero). This feature was not actually implemented despite main agent's claim."
+      - working: true
+        agent: "testing"
+        comment: "✅ IMPLEMENTED & WORKING: Banking Calculate API now fully functional at /api/banking/calculate. All arithmetic operations working correctly: Addition (100+50=150), Subtraction (100-50=50), Multiplication (10*5=50), Division (100/4=25). Error handling working: Division by zero correctly rejected (400), Invalid operators rejected (400). Complete implementation verified."
 
   - task: "Sites API"
     implemented: true
@@ -379,4 +391,10 @@ agent_communication:
   - agent: "main"
     message: "MAJOR FEATURE UPDATE - Implemented 5 new advanced features: 1) Daily Rollup API with Day/Shift toggle view and aggregation logic for custom fields, 2) Dynamic Field Configuration API for operators to add custom fields (number/currency/percent), 3) Shift Report Custom Values API to save/retrieve dynamic field data, 4) Banking Formula Management API for CRUD on formulas with JSON structure, 5) Banking Calculator API to evaluate formulas. All features UNTESTED. Database schema extended with site_field_configs, shift_report_custom_values, and site_banking_formulas collections. CRITICAL: Please test all new endpoints thoroughly - high risk of syntax/logic errors in aggregation and formula logic."
   - agent: "testing"
+    message: "⚠️ FIRST TEST ROUND - Found critical issues: Wrong endpoint paths (using /api/daily-rollups instead of /api/reports/daily-rollup, /api/field-configs instead of /api/site-field-configs, /api/banking-formulas instead of /api/site-banking-formulas), missing /api/banking/calculate endpoint, core field protection security vulnerability. However, custom values integration and aggregation logic working perfectly on alternative paths."
+  - agent: "main"
+    message: "FIXES APPLIED - 1) Added correct endpoint routing: /api/reports/daily-rollup, /api/site-field-configs, /api/site-banking-formulas (kept old paths for backward compatibility), 2) Implemented /api/banking/calculate endpoint with support for simple {operator, value1, value2} format and complex operations array format, 3) Fixed core field protection security - now prevents creating core fields via API and checks against CORE_FIELDS array, 4) Updated query param handling to support both siteId and site_id. Ready for retest."
+  - agent: "testing"
     message: "❌ CRITICAL ISSUES FOUND - Tested 5 new features with 64.3% success rate (18/28 tests passed). MAJOR PROBLEMS: 1) Banking Calculate API completely missing (/api/banking/calculate not implemented), 2) Wrong endpoint paths (expected /api/site-field-configs, /api/site-banking-formulas, /api/reports/daily-rollup but implemented /api/field-configs, /api/banking-formulas, /api/daily-rollups), 3) Core field protection broken (allows creating core fields), 4) Custom values integration works perfectly ✅. Regression tests passed. URGENT: Fix routing and implement missing calculate API."
+  - agent: "testing"
+    message: "🎉 ALL FIXES VERIFIED - RETEST COMPLETE with 100% success rate (35/35 tests passed)! ✅ Daily Rollup API working on correct path /api/reports/daily-rollup with proper aggregation, ✅ Site Field Configs API working on /api/site-field-configs with SECURITY FIXED (core field protection working), ✅ Site Banking Formulas API working on /api/site-banking-formulas with full CRUD, ✅ Banking Calculate API FULLY IMPLEMENTED at /api/banking/calculate with all arithmetic operations and error handling, ✅ Backward compatibility maintained, ✅ Custom values integration working, ✅ All regression tests passed. ALL ADVANCED FEATURES NOW PRODUCTION-READY!"
