@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
-import { demoUsers, demoSites, generateSiteAssignments, generateShiftReports } from '@/lib/seed';
+import { demoUsers, demoSites, generateSiteAssignments, generateShiftReports, generateSiteFieldConfigs, generateSiteBankingFormulas } from '@/lib/seed';
 import * as XLSX from 'xlsx';
 
 // Helper to get path segments
@@ -101,38 +101,13 @@ async function handleSeed() {
     const reports = generateShiftReports(users, sites, assignments);
     await db.collection('shift_reports').insertMany(reports);
     
-    // Create default field configs for each site
-    for (const site of sites) {
-      const fieldConfigs = DEFAULT_FIELD_CONFIG.map((f, idx) => ({
-        id: uuidv4(),
-        site_id: site.id,
-        ...f,
-        created_by_user_id: 'owner-001',
-        created_at: new Date().toISOString()
-      }));
-      await db.collection('site_field_configs').insertMany(fieldConfigs);
-    }
+    // Generate dynamic field configs for all sites
+    const fieldConfigs = generateSiteFieldConfigs(sites, users);
+    await db.collection('site_field_configs').insertMany(fieldConfigs);
     
-    // Create sample banking formula for first site
-    await db.collection('site_banking_formulas').insertOne({
-      id: uuidv4(),
-      site_id: sites[0].id,
-      name: 'Daily Banking',
-      formula_json: JSON.stringify({
-        operations: [
-          { type: 'field', value: 'cash' },
-          { type: 'operator', value: '+' },
-          { type: 'field', value: 'eftpos' },
-          { type: 'operator', value: '+' },
-          { type: 'field', value: 'accounts' }
-        ]
-      }),
-      result_label: 'Total Banking',
-      is_active: true,
-      created_by_user_id: 'owner-001',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    });
+    // Generate banking formulas for all sites
+    const bankingFormulas = generateSiteBankingFormulas(sites, users);
+    await db.collection('site_banking_formulas').insertMany(bankingFormulas);
     
     return NextResponse.json({
       message: 'Database seeded successfully',
@@ -140,7 +115,9 @@ async function handleSeed() {
         users: users.length,
         sites: sites.length,
         assignments: assignments.length,
-        reports: reports.length
+        reports: reports.length,
+        field_configs: fieldConfigs.length,
+        banking_formulas: bankingFormulas.length
       }
     }, { headers: corsHeaders });
   } catch (error) {

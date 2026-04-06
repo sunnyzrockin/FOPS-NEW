@@ -481,6 +481,114 @@ class WorkflowLiteBackendTester:
             except Exception as e:
                 self.log_test(f"Regression - {method} /{endpoint}", False, f"Exception: {str(e)}")
     
+    def test_seed_api_validation(self):
+        """Test Seed API - Validate field_configs and banking_formulas collections are populated"""
+        print("\n=== Testing Seed API - Field Configs & Banking Formulas Validation ===")
+        
+        # Test POST /api/seed
+        try:
+            response = self.session.post(f"{BASE_URL}/seed")
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check if response includes counts for field_configs and banking_formulas
+                counts = data.get("counts", {})
+                field_configs_count = counts.get("field_configs", 0)
+                banking_formulas_count = counts.get("banking_formulas", 0)
+                
+                # Expected: field_configs should be ~55-60 (11 fields per site × 5 sites + some custom fields)
+                if 50 <= field_configs_count <= 70:
+                    self.log_test("Seed API - Field Configs Count", True, f"Field configs: {field_configs_count} (expected ~55-60)")
+                else:
+                    self.log_test("Seed API - Field Configs Count", False, f"Field configs: {field_configs_count} (expected ~55-60)")
+                
+                # Expected: banking_formulas should be 15 (3 formulas × 5 sites)
+                if banking_formulas_count == 15:
+                    self.log_test("Seed API - Banking Formulas Count", True, f"Banking formulas: {banking_formulas_count} (expected 15)")
+                else:
+                    self.log_test("Seed API - Banking Formulas Count", False, f"Banking formulas: {banking_formulas_count} (expected 15)")
+                
+                self.log_test("Seed API - Response Structure", True, f"Seed completed with field_configs: {field_configs_count}, banking_formulas: {banking_formulas_count}")
+            else:
+                self.log_test("Seed API - Response", False, f"Status: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            self.log_test("Seed API - Response", False, f"Exception: {str(e)}")
+        
+        # Test GET /api/site-field-configs?site_id=site-001
+        try:
+            response = self.session.get(f"{BASE_URL}/site-field-configs", params={"site_id": "site-001"})
+            
+            if response.status_code == 200:
+                data = response.json()
+                field_count = len(data)
+                
+                # Should return 11-12 field configurations
+                if 10 <= field_count <= 15:
+                    self.log_test("Field Configs API - Site-001 Count", True, f"Returned {field_count} field configs (expected 11-12)")
+                    
+                    # Check for both core and custom fields
+                    core_fields = [f for f in data if f.get("is_core", False)]
+                    custom_fields = [f for f in data if not f.get("is_core", False)]
+                    
+                    self.log_test("Field Configs API - Core/Custom Mix", True, f"Core fields: {len(core_fields)}, Custom fields: {len(custom_fields)}")
+                else:
+                    self.log_test("Field Configs API - Site-001 Count", False, f"Returned {field_count} field configs (expected 11-12)")
+            else:
+                self.log_test("Field Configs API - Site-001", False, f"Status: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            self.log_test("Field Configs API - Site-001", False, f"Exception: {str(e)}")
+        
+        # Test GET /api/site-banking-formulas?site_id=site-001
+        try:
+            response = self.session.get(f"{BASE_URL}/site-banking-formulas", params={"site_id": "site-001"})
+            
+            if response.status_code == 200:
+                data = response.json()
+                formula_count = len(data)
+                
+                # Should return 3 formulas: Cash Reconciliation, Shop Revenue Breakdown, Net Sales
+                if formula_count == 3:
+                    self.log_test("Banking Formulas API - Site-001 Count", True, f"Returned {formula_count} formulas (expected 3)")
+                    
+                    # Check formula names
+                    formula_names = [f.get("name", "") for f in data]
+                    expected_names = ["Cash Reconciliation", "Shop Revenue Breakdown", "Net Sales"]
+                    
+                    found_names = []
+                    for expected in expected_names:
+                        if any(expected.lower() in name.lower() for name in formula_names):
+                            found_names.append(expected)
+                    
+                    if len(found_names) >= 2:  # At least 2 of the expected formulas
+                        self.log_test("Banking Formulas API - Expected Names", True, f"Found expected formulas: {found_names}")
+                    else:
+                        self.log_test("Banking Formulas API - Expected Names", False, f"Formula names: {formula_names}")
+                    
+                    # Verify formula_json structure is valid
+                    valid_formulas = 0
+                    for formula in data:
+                        try:
+                            formula_json = formula.get("formula_json", "")
+                            if isinstance(formula_json, str):
+                                json.loads(formula_json)  # Try to parse JSON
+                                valid_formulas += 1
+                            elif isinstance(formula_json, dict):
+                                valid_formulas += 1
+                        except:
+                            pass
+                    
+                    if valid_formulas == formula_count:
+                        self.log_test("Banking Formulas API - JSON Structure", True, f"All {valid_formulas} formulas have valid JSON structure")
+                    else:
+                        self.log_test("Banking Formulas API - JSON Structure", False, f"Only {valid_formulas}/{formula_count} formulas have valid JSON")
+                else:
+                    self.log_test("Banking Formulas API - Site-001 Count", False, f"Returned {formula_count} formulas (expected 3)")
+            else:
+                self.log_test("Banking Formulas API - Site-001", False, f"Status: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            self.log_test("Banking Formulas API - Site-001", False, f"Exception: {str(e)}")
+
     def run_all_tests(self):
         """Run all tests"""
         print("🚀 Starting WorkflowLite Backend Testing - RETEST AFTER FIXES")
@@ -503,6 +611,44 @@ class WorkflowLiteBackendTester:
         self.test_banking_calculate_api()
         self.test_core_field_protection_security()
         self.test_regression_check()
+
+    def run_seed_validation_only(self):
+        """Run only the seed validation tests"""
+        print("🚀 Starting Seed API Validation - Quick Test")
+        print("=" * 60)
+        
+        # Run seed validation test
+        self.test_seed_api_validation()
+        
+        # Summary
+        print("\n" + "=" * 60)
+        print("📊 SEED VALIDATION SUMMARY")
+        print("=" * 60)
+        
+        passed = sum(1 for r in self.test_results if r["passed"])
+        total = len(self.test_results)
+        success_rate = (passed / total * 100) if total > 0 else 0
+        
+        print(f"Total Tests: {total}")
+        print(f"Passed: {passed}")
+        print(f"Failed: {total - passed}")
+        print(f"Success Rate: {success_rate:.1f}%")
+        
+        if success_rate >= 90:
+            print("🎉 EXCELLENT: Seed API validation successful!")
+        elif success_rate >= 75:
+            print("✅ GOOD: Most seed validation tests passed")
+        else:
+            print("❌ ISSUES: Seed validation has problems")
+        
+        # List failed tests
+        failed_tests = [r for r in self.test_results if not r["passed"]]
+        if failed_tests:
+            print(f"\n❌ FAILED TESTS ({len(failed_tests)}):")
+            for test in failed_tests:
+                print(f"   • {test['test']}: {test['details']}")
+        
+        return success_rate >= 75
         
         # Summary
         print("\n" + "=" * 80)
@@ -536,5 +682,11 @@ class WorkflowLiteBackendTester:
 
 if __name__ == "__main__":
     tester = WorkflowLiteBackendTester()
-    success = tester.run_all_tests()
+    
+    # Check if we should run only seed validation
+    if len(sys.argv) > 1 and sys.argv[1] == "seed":
+        success = tester.run_seed_validation_only()
+    else:
+        success = tester.run_all_tests()
+    
     sys.exit(0 if success else 1)

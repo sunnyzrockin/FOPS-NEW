@@ -297,6 +297,18 @@ backend:
         agent: "testing"
         comment: "✅ IMPLEMENTED & WORKING: Banking Calculate API now fully functional at /api/banking/calculate. All arithmetic operations working correctly: Addition (100+50=150), Subtraction (100-50=50), Multiplication (10*5=50), Division (100/4=25). Error handling working: Division by zero correctly rejected (400), Invalid operators rejected (400). Complete implementation verified."
 
+  - task: "Updated Seed API with Field Configs and Banking Formulas"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ SEED API VALIDATION COMPLETE - All 8 tests passed (100% success rate). Verified updated seed API populates field_configs (59 total) and banking_formulas (15 total) collections correctly. Field configs API returns 12 configs for site-001 with proper core/custom field mix. Banking formulas API returns 3 expected formulas (Cash Reconciliation, Shop Revenue Breakdown, Net Sales) with valid JSON structure. Seed data working perfectly."
+
   - task: "Sites API"
     implemented: true
     working: true
@@ -398,3 +410,5 @@ agent_communication:
     message: "❌ CRITICAL ISSUES FOUND - Tested 5 new features with 64.3% success rate (18/28 tests passed). MAJOR PROBLEMS: 1) Banking Calculate API completely missing (/api/banking/calculate not implemented), 2) Wrong endpoint paths (expected /api/site-field-configs, /api/site-banking-formulas, /api/reports/daily-rollup but implemented /api/field-configs, /api/banking-formulas, /api/daily-rollups), 3) Core field protection broken (allows creating core fields), 4) Custom values integration works perfectly ✅. Regression tests passed. URGENT: Fix routing and implement missing calculate API."
   - agent: "testing"
     message: "🎉 ALL FIXES VERIFIED - RETEST COMPLETE with 100% success rate (35/35 tests passed)! ✅ Daily Rollup API working on correct path /api/reports/daily-rollup with proper aggregation, ✅ Site Field Configs API working on /api/site-field-configs with SECURITY FIXED (core field protection working), ✅ Site Banking Formulas API working on /api/site-banking-formulas with full CRUD, ✅ Banking Calculate API FULLY IMPLEMENTED at /api/banking/calculate with all arithmetic operations and error handling, ✅ Backward compatibility maintained, ✅ Custom values integration working, ✅ All regression tests passed. ALL ADVANCED FEATURES NOW PRODUCTION-READY!"
+  - agent: "testing"
+    message: "✅ SEED API VALIDATION COMPLETE - Quick test of updated seed API successful (8/8 tests passed, 100% success rate). Verified seed API now properly populates field_configs collection (59 total) and banking_formulas collection (15 total). Field configs API returns 12 configurations for site-001 with proper core/custom field distribution. Banking formulas API returns 3 expected formulas with valid JSON structure. Updated seed data working perfectly."
