@@ -55,9 +55,23 @@ async function handleLogin(request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401, headers: corsHeaders });
     }
     
-    const assignments = await db.collection('user_site_assignments').find({ user_id: user.id }).toArray();
-    const siteIds = assignments.map(a => a.site_id);
-    const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+    let sites = [];
+    
+    // Role-based site access
+    if (user.role === 'owner') {
+      // Owner sees all sites they own
+      sites = await db.collection('sites').find({ owner_id: user.id }).toArray();
+    } else if (user.role === 'operator') {
+      // Operator sees only assigned sites
+      const assignments = await db.collection('operator_site_assignments').find({ operator_user_id: user.id }).toArray();
+      const siteIds = assignments.map(a => a.site_id);
+      sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+    } else if (user.role === 'staff') {
+      // Staff sees only assigned sites
+      const assignments = await db.collection('staff_site_assignments').find({ staff_user_id: user.id }).toArray();
+      const siteIds = assignments.map(a => a.site_id);
+      sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+    }
     
     return NextResponse.json({
       user: {
@@ -83,7 +97,8 @@ async function handleSeed() {
     // Clear existing data
     await db.collection('users').deleteMany({});
     await db.collection('sites').deleteMany({});
-    await db.collection('user_site_assignments').deleteMany({});
+    await db.collection('operator_site_assignments').deleteMany({});
+    await db.collection('staff_site_assignments').deleteMany({});
     await db.collection('shift_reports').deleteMany({});
     await db.collection('site_field_configs').deleteMany({});
     await db.collection('site_banking_formulas').deleteMany({});
@@ -95,10 +110,11 @@ async function handleSeed() {
     const sites = demoSites.map(s => ({ ...s }));
     await db.collection('sites').insertMany(sites);
     
-    const assignments = generateSiteAssignments(users, sites);
-    await db.collection('user_site_assignments').insertMany(assignments);
+    const { operatorAssignments, staffAssignments } = generateSiteAssignments(users, sites);
+    await db.collection('operator_site_assignments').insertMany(operatorAssignments);
+    await db.collection('staff_site_assignments').insertMany(staffAssignments);
     
-    const reports = generateShiftReports(users, sites, assignments);
+    const reports = generateShiftReports(users, sites, staffAssignments);
     await db.collection('shift_reports').insertMany(reports);
     
     // Generate dynamic field configs for all sites
@@ -114,7 +130,8 @@ async function handleSeed() {
       counts: {
         users: users.length,
         sites: sites.length,
-        assignments: assignments.length,
+        operator_assignments: operatorAssignments.length,
+        staff_assignments: staffAssignments.length,
         reports: reports.length,
         field_configs: fieldConfigs.length,
         banking_formulas: bankingFormulas.length
@@ -127,11 +144,14 @@ async function handleSeed() {
 }
 
 // ============== USERS MANAGEMENT ==============
+// Owner: Get only operators
+// Operator: Get only staff
 async function handleGetUsers(request) {
   try {
     const db = await getDb();
     const url = new URL(request.url);
     const role = url.searchParams.get('role');
+    const requesterId = url.searchParams.get('requesterId'); // For permission checking
     
     let query = {};
     if (role) query.role = role;
@@ -154,10 +174,20 @@ async function handleGetUsers(request) {
   }
 }
 
+// Owner creates operators only
+// Operator creates staff only
 async function handleCreateUser(request) {
   try {
     const db = await getDb();
     const data = await request.json();
+    
+    // Permission check: Owner can only create operators, Operator can only create staff
+    if (data.creatorRole === 'owner' && data.role !== 'operator') {
+      return NextResponse.json({ error: 'Owner can only create operators' }, { status: 403, headers: corsHeaders });
+    }
+    if (data.creatorRole === 'operator' && data.role !== 'staff') {
+      return NextResponse.json({ error: 'Operator can only create staff' }, { status: 403, headers: corsHeaders });
+    }
     
     const existing = await db.collection('users').findOne({ email: data.email });
     if (existing) {
@@ -213,13 +243,217 @@ async function handleDeleteUser(userId) {
   try {
     const db = await getDb();
     
+    // Check user role to delete from correct assignment table
+    const user = await db.collection('users').findOne({ id: userId });
+    
+    if (user) {
+      if (user.role === 'operator') {
+        await db.collection('operator_site_assignments').deleteMany({ operator_user_id: userId });
+      } else if (user.role === 'staff') {
+        await db.collection('staff_site_assignments').deleteMany({ staff_user_id: userId });
+      }
+    }
+    
     await db.collection('users').deleteOne({ id: userId });
-    await db.collection('user_site_assignments').deleteMany({ user_id: userId });
     
     return NextResponse.json({ message: 'User deleted' }, { headers: corsHeaders });
   } catch (error) {
     console.error('Delete user error:', error);
     return NextResponse.json({ error: 'Failed to delete user' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// ============== OPERATOR ASSIGNMENTS (Owner → Operator) ==============
+async function handleGetOperatorAssignments(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const operatorId = url.searchParams.get('operatorId');
+    const ownerId = url.searchParams.get('ownerId');
+    
+    let query = {};
+    if (operatorId) query.operator_user_id = operatorId;
+    if (ownerId) query.assigned_by_owner_id = ownerId;
+    
+    const assignments = await db.collection('operator_site_assignments').find(query).toArray();
+    
+    // Enrich with user and site details
+    const operatorIds = [...new Set(assignments.map(a => a.operator_user_id))];
+    const siteIds = [...new Set(assignments.map(a => a.site_id))];
+    
+    const operators = await db.collection('users').find({ id: { $in: operatorIds } }).toArray();
+    const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+    
+    const operatorMap = Object.fromEntries(operators.map(u => [u.id, u]));
+    const siteMap = Object.fromEntries(sites.map(s => [s.id, s]));
+    
+    const enriched = assignments.map(a => ({
+      ...a,
+      operator: operatorMap[a.operator_user_id] ? {
+        id: operatorMap[a.operator_user_id].id,
+        name: operatorMap[a.operator_user_id].name,
+        email: operatorMap[a.operator_user_id].email
+      } : null,
+      site: siteMap[a.site_id] || null
+    }));
+    
+    return NextResponse.json(enriched, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get operator assignments error:', error);
+    return NextResponse.json({ error: 'Failed to get assignments' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateOperatorAssignment(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    // Verify operator exists and is actually an operator
+    const operator = await db.collection('users').findOne({ id: data.operator_user_id });
+    if (!operator || operator.role !== 'operator') {
+      return NextResponse.json({ error: 'Invalid operator' }, { status: 400, headers: corsHeaders });
+    }
+    
+    // Check for duplicate assignment
+    const existing = await db.collection('operator_site_assignments').findOne({
+      operator_user_id: data.operator_user_id,
+      site_id: data.site_id
+    });
+    
+    if (existing) {
+      return NextResponse.json({ error: 'Assignment already exists' }, { status: 400, headers: corsHeaders });
+    }
+    
+    const assignment = {
+      id: uuidv4(),
+      operator_user_id: data.operator_user_id,
+      site_id: data.site_id,
+      assigned_by_owner_id: data.assigned_by_owner_id,
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('operator_site_assignments').insertOne(assignment);
+    
+    return NextResponse.json(assignment, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create operator assignment error:', error);
+    return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleDeleteOperatorAssignment(assignmentId) {
+  try {
+    const db = await getDb();
+    await db.collection('operator_site_assignments').deleteOne({ id: assignmentId });
+    return NextResponse.json({ message: 'Assignment deleted' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete operator assignment error:', error);
+    return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// ============== STAFF ASSIGNMENTS (Operator → Staff) ==============
+async function handleGetStaffAssignments(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const staffId = url.searchParams.get('staffId');
+    const operatorId = url.searchParams.get('operatorId');
+    const siteId = url.searchParams.get('siteId');
+    
+    let query = {};
+    if (staffId) query.staff_user_id = staffId;
+    if (operatorId) query.assigned_by_operator_id = operatorId;
+    if (siteId) query.site_id = siteId;
+    
+    const assignments = await db.collection('staff_site_assignments').find(query).toArray();
+    
+    // Enrich with user and site details
+    const staffIds = [...new Set(assignments.map(a => a.staff_user_id))];
+    const siteIds = [...new Set(assignments.map(a => a.site_id))];
+    
+    const staffUsers = await db.collection('users').find({ id: { $in: staffIds } }).toArray();
+    const sites = await db.collection('sites').find({ id: { $in: siteIds } }).toArray();
+    
+    const staffMap = Object.fromEntries(staffUsers.map(u => [u.id, u]));
+    const siteMap = Object.fromEntries(sites.map(s => [s.id, s]));
+    
+    const enriched = assignments.map(a => ({
+      ...a,
+      staff: staffMap[a.staff_user_id] ? {
+        id: staffMap[a.staff_user_id].id,
+        name: staffMap[a.staff_user_id].name,
+        email: staffMap[a.staff_user_id].email
+      } : null,
+      site: siteMap[a.site_id] || null
+    }));
+    
+    return NextResponse.json(enriched, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get staff assignments error:', error);
+    return NextResponse.json({ error: 'Failed to get assignments' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateStaffAssignment(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    // Verify staff exists and is actually a staff member
+    const staff = await db.collection('users').findOne({ id: data.staff_user_id });
+    if (!staff || staff.role !== 'staff') {
+      return NextResponse.json({ error: 'Invalid staff user' }, { status: 400, headers: corsHeaders });
+    }
+    
+    // CRITICAL: Verify operator has access to this site
+    const operatorHasAccess = await db.collection('operator_site_assignments').findOne({
+      operator_user_id: data.assigned_by_operator_id,
+      site_id: data.site_id
+    });
+    
+    if (!operatorHasAccess) {
+      return NextResponse.json({ 
+        error: 'Operator does not have access to this site' 
+      }, { status: 403, headers: corsHeaders });
+    }
+    
+    // Check for duplicate assignment
+    const existing = await db.collection('staff_site_assignments').findOne({
+      staff_user_id: data.staff_user_id,
+      site_id: data.site_id
+    });
+    
+    if (existing) {
+      return NextResponse.json({ error: 'Assignment already exists' }, { status: 400, headers: corsHeaders });
+    }
+    
+    const assignment = {
+      id: uuidv4(),
+      staff_user_id: data.staff_user_id,
+      site_id: data.site_id,
+      assigned_by_operator_id: data.assigned_by_operator_id,
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('staff_site_assignments').insertOne(assignment);
+    
+    return NextResponse.json(assignment, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create staff assignment error:', error);
+    return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleDeleteStaffAssignment(assignmentId) {
+  try {
+    const db = await getDb();
+    await db.collection('staff_site_assignments').deleteOne({ id: assignmentId });
+    return NextResponse.json({ message: 'Assignment deleted' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete staff assignment error:', error);
+    return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -352,6 +586,11 @@ async function handleCreateFieldConfig(request) {
     const db = await getDb();
     const data = await request.json();
     
+    // PERMISSION CHECK: Only operators can create field configs
+    if (data.creatorRole && data.creatorRole !== 'operator') {
+      return NextResponse.json({ error: 'Only operators can manage field configurations' }, { status: 403, headers: corsHeaders });
+    }
+    
     // Security: Prevent creating core fields - only custom fields allowed
     if (data.is_core === true || CORE_FIELDS.includes(data.key)) {
       return NextResponse.json({ error: 'Cannot create core fields via API' }, { status: 403, headers: corsHeaders });
@@ -467,6 +706,11 @@ async function handleCreateBankingFormula(request) {
   try {
     const db = await getDb();
     const data = await request.json();
+    
+    // PERMISSION CHECK: Only operators can create banking formulas
+    if (data.creatorRole && data.creatorRole !== 'operator') {
+      return NextResponse.json({ error: 'Only operators can manage banking formulas' }, { status: 403, headers: corsHeaders });
+    }
     
     const formula = {
       id: uuidv4(),
@@ -1111,6 +1355,36 @@ async function handleGetDashboardStats(request) {
     stats.totalDriveOffs = Math.round(stats.totalDriveOffs * 100) / 100;
     stats.totalBanking = Math.round(stats.totalBanking * 100) / 100;
     
+    // Calculate top and lowest performing sites
+    // Calculate per-site revenue for top/lowest performers
+    const siteRevenue = {};
+    reports.forEach(r => {
+      if (!siteRevenue[r.site_id]) {
+        siteRevenue[r.site_id] = 0;
+      }
+      siteRevenue[r.site_id] += r.total_revenue || 0;
+    });
+    
+    if (Object.keys(siteRevenue).length > 0) {
+      const sites = await db.collection('sites').find({ id: { $in: Object.keys(siteRevenue) } }).toArray();
+      const siteMap = Object.fromEntries(sites.map(s => [s.id, s]));
+      
+      const sitesWithRevenue = Object.entries(siteRevenue).map(([siteId, revenue]) => ({
+        siteId,
+        siteName: siteMap[siteId]?.name || 'Unknown Site',
+        siteCode: siteMap[siteId]?.code || '',
+        revenue: Math.round(revenue * 100) / 100
+      }));
+      
+      sitesWithRevenue.sort((a, b) => b.revenue - a.revenue);
+      
+      stats.topPerformingSite = sitesWithRevenue[0] || null;
+      stats.lowestPerformingSite = sitesWithRevenue[sitesWithRevenue.length - 1] || null;
+    } else {
+      stats.topPerformingSite = null;
+      stats.lowestPerformingSite = null;
+    }
+    
     return NextResponse.json(stats, { headers: corsHeaders });
   } catch (error) {
     console.error('Dashboard stats error:', error);
@@ -1374,6 +1648,12 @@ export async function GET(request) {
   if (path[0] === 'users') {
     return handleGetUsers(request);
   }
+  if (path[0] === 'operator-assignments') {
+    return handleGetOperatorAssignments(request);
+  }
+  if (path[0] === 'staff-assignments') {
+    return handleGetStaffAssignments(request);
+  }
   if (path[0] === 'assignments') {
     return handleGetAssignments(request);
   }
@@ -1429,6 +1709,12 @@ export async function POST(request) {
   }
   if (path[0] === 'users') {
     return handleCreateUser(request);
+  }
+  if (path[0] === 'operator-assignments') {
+    return handleCreateOperatorAssignment(request);
+  }
+  if (path[0] === 'staff-assignments') {
+    return handleCreateStaffAssignment(request);
   }
   if (path[0] === 'assignments') {
     return handleCreateAssignment(request);
@@ -1500,6 +1786,12 @@ export async function DELETE(request) {
   
   if (path[0] === 'users' && path[1]) {
     return handleDeleteUser(path[1]);
+  }
+  if (path[0] === 'operator-assignments' && path[1]) {
+    return handleDeleteOperatorAssignment(path[1]);
+  }
+  if (path[0] === 'staff-assignments' && path[1]) {
+    return handleDeleteStaffAssignment(path[1]);
   }
   if (path[0] === 'assignments' && path[1]) {
     return handleDeleteAssignment(path[1]);
