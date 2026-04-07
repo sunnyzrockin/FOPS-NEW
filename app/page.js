@@ -1426,6 +1426,238 @@ function SiteManagement({ user, sites, onRefresh }) {
 }
 
 // ============== USER MANAGEMENT ==============
+// ============== OPERATOR MANAGEMENT (Owner manages operators) ==============
+function OperatorManagement({ user, sites, onRefresh }) {
+  const [operators, setOperators] = useState([]);
+  const [operatorAssignments, setOperatorAssignments] = useState([]);
+  const [showAddOperator, setShowAddOperator] = useState(false);
+  const [showAssignSites, setShowAssignSites] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: 'demo123' });
+  const [selectedSites, setSelectedSites] = useState([]);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [operatorsRes, assignmentsRes] = await Promise.all([
+        fetch('/api/users?role=operator'),
+        fetch(`/api/operator-assignments?ownerId=${user.id}`)
+      ]);
+      const [operatorsData, assignmentsData] = await Promise.all([operatorsRes.json(), assignmentsRes.json()]);
+      setOperators(operatorsData);
+      setOperatorAssignments(assignmentsData);
+    } catch (err) { console.error('Failed to load operators:', err); }
+    finally { setLoading(false); }
+  }, [user.id]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleCreateOperator = async () => {
+    if (!form.name || !form.email) { alert('Name and email are required'); return; }
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, role: 'operator', creatorRole: 'owner' })
+      });
+      if (res.ok) {
+        setForm({ name: '', email: '', password: 'demo123' });
+        setShowAddOperator(false);
+        loadData();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to create operator');
+      }
+    } catch (err) { alert('Failed to create operator: ' + err.message); }
+  };
+
+  const handleDeleteOperator = async (operatorId) => {
+    if (!confirm('Are you sure? This will remove all site assignments for this operator.')) return;
+    await fetch(`/api/users/${operatorId}`, { method: 'DELETE' });
+    loadData();
+  };
+
+  const openAssignSites = (operator) => {
+    const operatorSiteIds = operatorAssignments
+      .filter(a => a.operator_user_id === operator.id)
+      .map(a => a.site_id);
+    setSelectedSites(operatorSiteIds);
+    setShowAssignSites(operator);
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!showAssignSites) return;
+    const operatorId = showAssignSites.id;
+    const currentSiteIds = operatorAssignments
+      .filter(a => a.operator_user_id === operatorId)
+      .map(a => a.site_id);
+    const toAdd = selectedSites.filter(id => !currentSiteIds.includes(id));
+    const toRemove = operatorAssignments
+      .filter(a => a.operator_user_id === operatorId && !selectedSites.includes(a.site_id))
+      .map(a => a.id);
+
+    try {
+      for (const siteId of toAdd) {
+        await fetch('/api/operator-assignments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operator_user_id: operatorId,
+            site_id: siteId,
+            assigned_by_owner_id: user.id
+          })
+        });
+      }
+      for (const assignmentId of toRemove) {
+        await fetch(`/api/operator-assignments/${assignmentId}`, { method: 'DELETE' });
+      }
+      setShowAssignSites(null);
+      loadData();
+      onRefresh();
+    } catch (err) { alert('Failed to update assignments'); }
+  };
+
+  const getOperatorSites = (operatorId) =>
+    operatorAssignments
+      .filter(a => a.operator_user_id === operatorId)
+      .map(a => a.site?.name || 'Unknown');
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Operator Management</h2>
+          <p className="text-muted-foreground">Create operators and assign sites to them</p>
+        </div>
+        <Dialog open={showAddOperator} onOpenChange={setShowAddOperator}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-to-r from-blue-500 to-indigo-600">
+              <UserPlus className="h-4 w-4 mr-2" /> Add Operator
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Add New Operator</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>Name *</Label>
+                <Input
+                  placeholder="Full name"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  placeholder="email@example.com"
+                  value={form.email}
+                  onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+              <Button onClick={handleCreateOperator}>Create Operator</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Dialog open={!!showAssignSites} onOpenChange={(open) => !open && setShowAssignSites(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Sites to {showAssignSites?.name}</DialogTitle>
+            <DialogDescription>Select which sites this operator can manage</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3 max-h-[400px] overflow-y-auto">
+            {sites.map(site => (
+              <div key={site.id} className="flex items-center space-x-3 p-3 rounded-xl hover:bg-slate-50">
+                <Checkbox
+                  id={site.id}
+                  checked={selectedSites.includes(site.id)}
+                  onCheckedChange={(checked) =>
+                    setSelectedSites(prev =>
+                      checked ? [...prev, site.id] : prev.filter(id => id !== site.id)
+                    )
+                  }
+                />
+                <label htmlFor={site.id} className="flex-1 cursor-pointer">
+                  <p className="font-medium">{site.name}</p>
+                  <p className="text-xs text-muted-foreground">{site.code} • {site.location}</p>
+                </label>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+            <Button onClick={handleSaveAssignments}>Save Assignments</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card className="border-0 shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5" /> Operators ({operators.length})
+          </CardTitle>
+          <CardDescription>Operators manage staff and operations for assigned sites</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {operators.length === 0 ? (
+            <div className="text-center py-8">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+              <p className="text-muted-foreground">No operators yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Create an operator to get started</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {operators.map(operator => (
+                <div key={operator.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl border border-slate-100">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                      <User className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{operator.name}</p>
+                      <p className="text-xs text-muted-foreground">{operator.email}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {getOperatorSites(operator.id).length > 0 ? (
+                          getOperatorSites(operator.id).map((site, i) => (
+                            <Badge key={i} variant="secondary" className="text-xs">
+                              <Building2 className="h-3 w-3 mr-1" />{site}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="outline" className="text-xs text-orange-600">No sites assigned</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openAssignSites(operator)}>
+                      <Building className="h-4 w-4 mr-1" /> Assign Sites
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteOperator(operator.id)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============== USER MANAGEMENT (Legacy - now only for reference) ==============
 function UserManagement({ user, sites, onRefresh }) {
   const [users, setUsers] = useState([]);
   const [assignments, setAssignments] = useState([]);
@@ -1686,80 +1918,228 @@ function OperatorDashboard({ user, sites, activeTab }) {
 // ============== STAFF ACCESS MANAGEMENT ==============
 function StaffAccessManagement({ user, sites }) {
   const [staffUsers, setStaffUsers] = useState([]);
-  const [assignments, setAssignments] = useState([]);
+  const [staffAssignments, setStaffAssignments] = useState([]);
+  const [showAddStaff, setShowAddStaff] = useState(false);
   const [showAssignSites, setShowAssignSites] = useState(null);
   const [selectedSites, setSelectedSites] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: 'demo123' });
 
   const loadData = useCallback(async () => {
     try {
-      const [usersRes, assignmentsRes] = await Promise.all([fetch('/api/users?role=staff'), fetch('/api/assignments')]);
+      const [usersRes, assignmentsRes] = await Promise.all([
+        fetch('/api/users?role=staff'),
+        fetch(`/api/staff-assignments?operatorId=${user.id}`)
+      ]);
       const [usersData, assignmentsData] = await Promise.all([usersRes.json(), assignmentsRes.json()]);
       setStaffUsers(usersData);
-      setAssignments(assignmentsData);
+      setStaffAssignments(assignmentsData);
     } catch (err) { console.error('Failed to load staff:', err); }
     finally { setLoading(false); }
-  }, []);
+  }, [user.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const handleCreateStaff = async () => {
+    if (!form.name || !form.email) { alert('Name and email are required'); return; }
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, role: 'staff', creatorRole: 'operator' })
+      });
+      if (res.ok) {
+        setForm({ name: '', email: '', password: 'demo123' });
+        setShowAddStaff(false);
+        loadData();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to create staff member');
+      }
+    } catch (err) { alert('Failed to create staff: ' + err.message); }
+  };
+
+  const handleDeleteStaff = async (staffId) => {
+    if (!confirm('Are you sure? This will remove all site assignments for this staff member.')) return;
+    await fetch(`/api/users/${staffId}`, { method: 'DELETE' });
+    loadData();
+  };
+
   const openAssignSites = (staff) => {
-    const staffSiteIds = assignments.filter(a => a.user_id === staff.id).map(a => a.site_id);
-    setSelectedSites(staffSiteIds.filter(id => sites.some(s => s.id === id)));
+    const staffSiteIds = staffAssignments
+      .filter(a => a.staff_user_id === staff.id)
+      .map(a => a.site_id);
+    setSelectedSites(staffSiteIds);
     setShowAssignSites(staff);
   };
 
   const handleSaveAssignments = async () => {
     if (!showAssignSites) return;
-    const targetUserId = showAssignSites.id;
-    const currentSiteIds = assignments.filter(a => a.user_id === targetUserId && sites.some(s => s.id === a.site_id)).map(a => a.site_id);
+    const staffId = showAssignSites.id;
+    const currentSiteIds = staffAssignments
+      .filter(a => a.staff_user_id === staffId)
+      .map(a => a.site_id);
     const toAdd = selectedSites.filter(id => !currentSiteIds.includes(id));
-    const toRemove = assignments.filter(a => a.user_id === targetUserId && sites.some(s => s.id === a.site_id) && !selectedSites.includes(a.site_id)).map(a => a.id);
+    const toRemove = staffAssignments
+      .filter(a => a.staff_user_id === staffId && !selectedSites.includes(a.site_id))
+      .map(a => a.id);
+
     try {
-      for (const siteId of toAdd) { await fetch('/api/assignments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: targetUserId, site_id: siteId, assigned_by_user_id: user.id }) }); }
-      for (const assignmentId of toRemove) { await fetch(`/api/assignments/${assignmentId}`, { method: 'DELETE' }); }
+      for (const siteId of toAdd) {
+        const res = await fetch('/api/staff-assignments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            staff_user_id: staffId,
+            site_id: siteId,
+            assigned_by_operator_id: user.id
+          })
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          alert(data.error || 'Failed to assign site');
+          return;
+        }
+      }
+      for (const assignmentId of toRemove) {
+        await fetch(`/api/staff-assignments/${assignmentId}`, { method: 'DELETE' });
+      }
       setShowAssignSites(null);
       loadData();
     } catch (err) { alert('Failed to update assignments'); }
   };
 
-  const getStaffSites = (staffId) => assignments.filter(a => a.user_id === staffId && sites.some(s => s.id === a.site_id)).map(a => a.site_name || 'Unknown');
+  const getStaffSites = (staffId) =>
+    staffAssignments
+      .filter(a => a.staff_user_id === staffId)
+      .map(a => a.site?.name || 'Unknown');
 
-  if (loading) { return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>; }
+  if (loading) {
+    return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
+  }
 
   return (
     <div className="space-y-6">
-      <div><h2 className="text-xl font-bold">Staff Access Management</h2><p className="text-muted-foreground">Assign staff to your sites</p></div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Staff Management</h2>
+          <p className="text-muted-foreground">Create staff members and assign them to your sites</p>
+        </div>
+        <Dialog open={showAddStaff} onOpenChange={setShowAddStaff}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-to-r from-green-500 to-emerald-600">
+              <UserPlus className="h-4 w-4 mr-2" /> Add Staff Member
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Add New Staff Member</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>Name *</Label>
+                <Input
+                  placeholder="Full name"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  placeholder="email@example.com"
+                  value={form.email}
+                  onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+              <Button onClick={handleCreateStaff}>Create Staff Member</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
       <Dialog open={!!showAssignSites} onOpenChange={(open) => !open && setShowAssignSites(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Assign Sites to {showAssignSites?.name}</DialogTitle></DialogHeader>
-          <div className="py-4 space-y-3">
+          <DialogHeader>
+            <DialogTitle>Assign Sites to {showAssignSites?.name}</DialogTitle>
+            <DialogDescription>Select which sites this staff member can access (from your assigned sites only)</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3 max-h-[400px] overflow-y-auto">
             {sites.map(site => (
               <div key={site.id} className="flex items-center space-x-3 p-3 rounded-xl hover:bg-slate-50">
-                <Checkbox id={site.id} checked={selectedSites.includes(site.id)} onCheckedChange={(checked) => setSelectedSites(prev => checked ? [...prev, site.id] : prev.filter(id => id !== site.id))} />
-                <label htmlFor={site.id} className="flex-1 cursor-pointer"><p className="font-medium">{site.name}</p></label>
+                <Checkbox
+                  id={site.id}
+                  checked={selectedSites.includes(site.id)}
+                  onCheckedChange={(checked) =>
+                    setSelectedSites(prev =>
+                      checked ? [...prev, site.id] : prev.filter(id => id !== site.id)
+                    )
+                  }
+                />
+                <label htmlFor={site.id} className="flex-1 cursor-pointer">
+                  <p className="font-medium">{site.name}</p>
+                  <p className="text-xs text-muted-foreground">{site.code} • {site.location}</p>
+                </label>
               </div>
             ))}
           </div>
-          <DialogFooter><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose><Button onClick={handleSaveAssignments}>Save</Button></DialogFooter>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+            <Button onClick={handleSaveAssignments}>Save Assignments</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <Card className="border-0 shadow-lg">
-        <CardHeader><CardTitle>Staff Members</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5" /> Staff Members ({staffUsers.length})
+          </CardTitle>
+          <CardDescription>Staff members can submit shift reports for assigned sites</CardDescription>
+        </CardHeader>
         <CardContent>
-          {staffUsers.length === 0 ? <p className="text-muted-foreground text-center py-4">No staff members</p> : (
+          {staffUsers.length === 0 ? (
+            <div className="text-center py-8">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+              <p className="text-muted-foreground">No staff members yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Create a staff member to get started</p>
+            </div>
+          ) : (
             <div className="space-y-3">
               {staffUsers.map(staff => (
-                <div key={staff.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center"><User className="h-5 w-5 text-green-600" /></div>
-                    <div>
+                <div key={staff.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-green-50 rounded-xl border border-slate-100">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                      <User className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1">
                       <p className="font-medium">{staff.name}</p>
                       <p className="text-xs text-muted-foreground">{staff.email}</p>
-                      <div className="flex flex-wrap gap-1 mt-1">{getStaffSites(staff.id).map((site, i) => <Badge key={i} variant="outline" className="text-xs">{site}</Badge>)}</div>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {getStaffSites(staff.id).length > 0 ? (
+                          getStaffSites(staff.id).map((site, i) => (
+                            <Badge key={i} variant="secondary" className="text-xs">
+                              <Building2 className="h-3 w-3 mr-1" />{site}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="outline" className="text-xs text-orange-600">No sites assigned</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => openAssignSites(staff)}><Building className="h-4 w-4 mr-1" /> Assign Sites</Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openAssignSites(staff)}>
+                      <Building className="h-4 w-4 mr-1" /> Assign Sites
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteStaff(staff.id)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
