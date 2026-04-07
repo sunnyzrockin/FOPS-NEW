@@ -327,6 +327,126 @@ backend:
         agent: "testing"
         comment: "✅ Updated Sites API fully functional - GET all sites (6 total), GET by user ID filters correctly for all roles, GET by site ID retrieves individual site details. All user role filtering working correctly."
 
+  - task: "Access Control Refactoring - Login API with 3-Tier Hierarchy"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented strict 3-tier hierarchy (Owner → Operator → Staff) with role-based site access. Owner sees all 5 owned sites, Operator sees only assigned sites via operator_site_assignments, Staff sees only assigned sites via staff_site_assignments."
+      - working: true
+        agent: "testing"
+        comment: "✅ Login hierarchy working perfectly - Owner login returns all 5 sites (role: owner), Operator login returns only 3 assigned sites (BNE-001, GC-002, SC-003), Staff login returns only 1 assigned site. Role-based site filtering implemented correctly with separate assignment tables."
+
+  - task: "Access Control Refactoring - Operator Assignments API"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET/POST/DELETE /api/operator-assignments for Owner → Operator site assignments. Includes enriched responses with operator and site details, duplicate prevention, and role validation."
+      - working: true
+        agent: "testing"
+        comment: "✅ Operator Assignments API fully functional - GET returns correct counts (operator-001: 3 assignments, operator-002: 2 assignments, owner-001: 5 total), enriched data includes operator and site details, POST creates assignments successfully, DELETE removes assignments, duplicate prevention working, invalid operator role rejected (400)."
+
+  - task: "Access Control Refactoring - Staff Assignments API"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET/POST/DELETE /api/staff-assignments for Operator → Staff site assignments. CRITICAL: Includes permission check - operators can only assign staff to sites they have access to."
+      - working: true
+        agent: "testing"
+        comment: "✅ Staff Assignments API fully functional with CRITICAL SECURITY - GET returns correct counts (operator-001: 5 staff assignments, operator-002: 4 staff assignments), enriched data working, POST creates valid assignments, CRITICAL PERMISSION CHECK WORKING: operator cannot assign staff to sites they don't have access to (403 error), duplicate prevention working, invalid staff role rejected (400)."
+
+  - task: "Access Control Refactoring - User Creation Role Enforcement"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented strict role-based user creation: Owner can ONLY create operators, Operator can ONLY create staff. Includes creatorRole validation and email uniqueness checks."
+      - working: true
+        agent: "testing"
+        comment: "✅ User Creation Role Enforcement working perfectly - Owner can create operators (201), Owner CANNOT create staff (403: 'Owner can only create operators'), Operator can create staff (201), Operator CANNOT create operator (403: 'Operator can only create staff'), email uniqueness validation working (400 for duplicates)."
+
+  - task: "Access Control Refactoring - Field Config Permission Enforcement"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented permission enforcement for field configurations: ONLY operators can create/manage field configs. Owner and Staff are blocked with 403 errors."
+      - working: true
+        agent: "testing"
+        comment: "✅ Field Config Permission Enforcement working perfectly - Operator can create field configs (201), Owner CANNOT create field configs (403: 'Only operators can manage field configurations'), Staff CANNOT create field configs (403: same error). Permission checks working correctly."
+
+  - task: "Access Control Refactoring - Banking Formula Permission Enforcement"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented permission enforcement for banking formulas: ONLY operators can create/manage banking formulas. Owner and Staff are blocked with 403 errors."
+      - working: true
+        agent: "testing"
+        comment: "✅ Banking Formula Permission Enforcement working perfectly - Operator can create banking formulas (201), Owner CANNOT create banking formulas (403: 'Only operators can manage banking formulas'), Staff CANNOT create banking formulas (403: same error). Permission checks working correctly."
+
+  - task: "Access Control Refactoring - Dashboard Stats with Top/Lowest Performers"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Enhanced dashboard stats API to include topPerformingSite and lowestPerformingSite with siteId, siteName, siteCode, and revenue fields. Calculates per-site revenue and ranks sites by performance."
+      - working: true
+        agent: "testing"
+        comment: "✅ Dashboard Stats with Performers working perfectly - API returns topPerformingSite and lowestPerformingSite with all required fields (siteId, siteName, siteCode, revenue), revenue comparison valid (top >= lowest), single site returns same site for both top and lowest. Performance ranking working correctly."
+
+  - task: "Access Control Refactoring - Seed API with New Structure"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Updated seed API to populate new access control structure: operator_site_assignments (5 total), staff_site_assignments (9 total), plus existing reports, field_configs, and banking_formulas collections."
+      - working: true
+        agent: "testing"
+        comment: "✅ Seed API with New Structure working perfectly - Returns correct counts: operator_assignments=5, staff_assignments=9, reports=280, field_configs=59, banking_formulas=15. All collections properly populated with new access control data structure."
+
 frontend:
   - task: "Login Page"
     implemented: true
@@ -487,3 +607,7 @@ agent_communication:
     message: "✅ SEED API VALIDATION COMPLETE - Quick test of updated seed API successful (8/8 tests passed, 100% success rate). Verified seed API now properly populates field_configs collection (59 total) and banking_formulas collection (15 total). Field configs API returns 12 configurations for site-001 with proper core/custom field distribution. Banking formulas API returns 3 expected formulas with valid JSON structure. Updated seed data working perfectly."
   - agent: "testing"
     message: "🎉 COMPREHENSIVE FRONTEND TESTING COMPLETE - ALL P0 ADVANCED FEATURES WORKING PERFECTLY! ✅ Daily Rollup UI: Day/Shift toggle functional, data switches correctly between views (Daily Summary shows 18 pending/82 reviewed, Shift Details shows 100 reports), ✅ Export Functionality: Export dialog working with date range/format selection, ✅ Banking Formula Calculator UI: PREMIUM CALCULATOR-STYLE CONFIRMED with visual formula builder, live preview, operator buttons, field selection grid, ✅ Dynamic Field Management UI: 12 field configurations, Add Field working, core field protection, enable/disable toggles, ✅ Staff Dashboard: Complete shift report form with custom fields (including Lottery Sales), My Reports history, ✅ Owner/Operator Dashboards: All base features working (stats cards, charts, filters, navigation). ALL ROLE DASHBOARDS FUNCTIONAL. NO CRITICAL ERRORS FOUND. UI/UX QUALITY EXCELLENT. FRONTEND IS PRODUCTION-READY!"
+  - agent: "main"
+    message: "MAJOR ACCESS CONTROL REFACTORING COMPLETE - Implemented strict 3-tier hierarchy (Owner → Operator → Staff) with comprehensive permission enforcement. NEW FEATURES: 1) Login API with role-based site filtering (Owner sees all 5 sites, Operator sees assigned sites only, Staff sees assigned sites only), 2) Operator Assignments API (Owner → Operator) with enriched responses, 3) Staff Assignments API (Operator → Staff) with CRITICAL permission check (operators can only assign staff to sites they have access to), 4) User Creation Role Enforcement (Owner creates operators ONLY, Operator creates staff ONLY), 5) Field Config Permission Enforcement (ONLY operators can manage), 6) Banking Formula Permission Enforcement (ONLY operators can manage), 7) Dashboard Stats with Top/Lowest Performers, 8) Updated Seed API with new assignment structure. ALL UNTESTED - requires comprehensive validation of permission boundaries and security enforcement."
+  - agent: "testing"
+    message: "🎉 ACCESS CONTROL REFACTORING VALIDATION COMPLETE - ALL CRITICAL SECURITY FEATURES WORKING PERFECTLY! ✅ Login Hierarchy: Owner sees all 5 sites, Operator sees only 3 assigned sites, Staff sees only 1 assigned site - role-based filtering working, ✅ Operator Assignments API: GET returns correct counts (3, 2, 5), enriched data working, CRUD operations functional, ✅ Staff Assignments API: GET returns correct counts (5, 4), CRITICAL SECURITY WORKING - operator cannot assign staff to unauthorized sites (403), ✅ User Creation Role Enforcement: Owner can ONLY create operators (403 for staff), Operator can ONLY create staff (403 for operator), ✅ Field Config Permissions: ONLY operators can create (403 for owner/staff), ✅ Banking Formula Permissions: ONLY operators can create (403 for owner/staff), ✅ Dashboard Stats: Top/lowest performers working with all required fields, ✅ Seed API: New structure populating correctly (5 operator assignments, 9 staff assignments). ALL PERMISSION BOUNDARIES ENFORCED. SECURITY MODEL IS PRODUCTION-READY!"

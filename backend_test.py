@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Comprehensive Backend Testing - Access Control Refactoring
+Testing new 3-tier hierarchy (Owner → Operator → Staff) with strict permission enforcement
+"""
 
 import requests
 import json
@@ -8,685 +12,631 @@ from datetime import datetime, timedelta
 # Configuration
 BASE_URL = "https://fuel-ops-simple.preview.emergentagent.com/api"
 
-# Test credentials
-CREDENTIALS = {
-    "owner": {"email": "owner@demo.com", "password": "demo123"},
-    "operator": {"email": "operator@demo.com", "password": "demo123"},
-    "staff": {"email": "staff@demo.com", "password": "demo123"}
+# Test credentials from review request
+TEST_CREDENTIALS = {
+    'owner': {'email': 'owner@demo.com', 'password': 'demo123'},
+    'operator': {'email': 'operator@demo.com', 'password': 'demo123'},
+    'staff': {'email': 'staff@demo.com', 'password': 'demo123'}
 }
 
-class WorkflowLiteBackendTester:
+class AccessControlTester:
     def __init__(self):
-        self.session = requests.Session()
         self.test_results = []
-        self.current_user = None
-        self.user_sites = []
+        self.total_tests = 0
+        self.passed_tests = 0
         
     def log_test(self, test_name, passed, details=""):
         """Log test result"""
-        status = "✅ PASS" if passed else "❌ FAIL"
-        print(f"{status}: {test_name}")
+        self.total_tests += 1
+        if passed:
+            self.passed_tests += 1
+            status = "✅ PASS"
+        else:
+            status = "❌ FAIL"
+        
+        result = f"{status}: {test_name}"
         if details:
-            print(f"   Details: {details}")
+            result += f" - {details}"
+        
+        print(result)
         self.test_results.append({
-            "test": test_name,
-            "passed": passed,
-            "details": details
+            'name': test_name,
+            'passed': passed,
+            'details': details
         })
         
-    def login(self, role="owner"):
-        """Login with specified role"""
+    def make_request(self, method, endpoint, data=None, expected_status=200):
+        """Make HTTP request and return response"""
+        url = f"{BASE_URL}{endpoint}"
         try:
-            creds = CREDENTIALS[role]
-            response = self.session.post(f"{BASE_URL}/auth/login", json=creds)
+            if method == 'GET':
+                response = requests.get(url)
+            elif method == 'POST':
+                response = requests.post(url, json=data)
+            elif method == 'PUT':
+                response = requests.put(url, json=data)
+            elif method == 'DELETE':
+                response = requests.delete(url)
             
-            if response.status_code == 200:
-                data = response.json()
-                self.current_user = data["user"]
-                self.user_sites = data["sites"]
-                self.log_test(f"Login as {role}", True, f"User: {self.current_user['name']}, Sites: {len(self.user_sites)}")
-                return True
-            else:
-                self.log_test(f"Login as {role}", False, f"Status: {response.status_code}, Response: {response.text}")
-                return False
+            return response
         except Exception as e:
-            self.log_test(f"Login as {role}", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_daily_rollup_api_correct_path(self):
-        """Test Daily Rollup API with correct path /api/reports/daily-rollup"""
-        print("\n=== Testing Daily Rollup API with Correct Path ===")
+            print(f"Request failed: {e}")
+            return None
+
+    def test_login_hierarchy(self):
+        """Test P0-1: Login API with New Hierarchy"""
+        print("\n=== P0-1: LOGIN API WITH NEW HIERARCHY ===")
         
-        if not self.login("owner"):
-            return
-            
-        site_id = "site-001"
-        test_date = "2026-04-01"
+        # Test Owner login - should return ALL sites (5 sites owned)
+        response = self.make_request('POST', '/auth/login', TEST_CREDENTIALS['owner'])
+        if response and response.status_code == 200:
+            data = response.json()
+            sites_count = len(data.get('sites', []))
+            user_role = data.get('user', {}).get('role')
+            self.log_test("Owner login returns user+sites", 
+                         user_role == 'owner' and sites_count == 5,
+                         f"Role: {user_role}, Sites: {sites_count}")
+        else:
+            self.log_test("Owner login", False, f"Status: {response.status_code if response else 'No response'}")
         
-        # Test Day view
-        try:
-            response = self.session.get(f"{BASE_URL}/reports/daily-rollup", params={
-                "site_id": site_id,
-                "date": test_date,
-                "view": "Day"
-            })
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.log_test("Daily Rollup API - Day View", True, f"Returned {len(data)} rollups")
-            else:
-                self.log_test("Daily Rollup API - Day View", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Daily Rollup API - Day View", False, f"Exception: {str(e)}")
+        # Test Operator login - should return only assigned sites
+        response = self.make_request('POST', '/auth/login', TEST_CREDENTIALS['operator'])
+        if response and response.status_code == 200:
+            data = response.json()
+            sites_count = len(data.get('sites', []))
+            user_role = data.get('user', {}).get('role')
+            # operator@demo.com is operator-001 who should have 3 sites (BNE-001, GC-002, SC-003)
+            self.log_test("Operator login returns assigned sites only", 
+                         user_role == 'operator' and sites_count == 3,
+                         f"Role: {user_role}, Sites: {sites_count}")
+        else:
+            self.log_test("Operator login", False, f"Status: {response.status_code if response else 'No response'}")
         
-        # Test Shift view
-        try:
-            response = self.session.get(f"{BASE_URL}/reports/daily-rollup", params={
-                "site_id": site_id,
-                "date": test_date,
-                "view": "Shift"
-            })
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.log_test("Daily Rollup API - Shift View", True, f"Returned {len(data)} rollups")
-            else:
-                self.log_test("Daily Rollup API - Shift View", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Daily Rollup API - Shift View", False, f"Exception: {str(e)}")
-    
-    def test_site_field_configs_api_correct_path(self):
-        """Test Site Field Configs API with correct path /api/site-field-configs"""
-        print("\n=== Testing Site Field Configs API with Correct Path ===")
+        # Test Staff login - should return only assigned sites
+        response = self.make_request('POST', '/auth/login', TEST_CREDENTIALS['staff'])
+        if response and response.status_code == 200:
+            data = response.json()
+            sites_count = len(data.get('sites', []))
+            user_role = data.get('user', {}).get('role')
+            # staff@demo.com is staff-001 who should have 1 site (BNE-001)
+            self.log_test("Staff login returns assigned sites only", 
+                         user_role == 'staff' and sites_count >= 1,
+                         f"Role: {user_role}, Sites: {sites_count}")
+        else:
+            self.log_test("Staff login", False, f"Status: {response.status_code if response else 'No response'}")
+
+    def test_operator_assignments_api(self):
+        """Test P0-2: Operator Assignments API (Owner → Operator)"""
+        print("\n=== P0-2: OPERATOR ASSIGNMENTS API ===")
         
-        if not self.login("operator"):
-            return
-            
-        site_id = "site-001"
+        # GET Tests
+        # Test: GET assignments for operator-001 (should return 3 assignments)
+        response = self.make_request('GET', '/operator-assignments?operatorId=operator-001')
+        if response and response.status_code == 200:
+            data = response.json()
+            assignments_count = len(data)
+            has_enriched_data = all('operator' in item and 'site' in item for item in data)
+            self.log_test("GET operator-001 assignments", 
+                         assignments_count == 3 and has_enriched_data,
+                         f"Count: {assignments_count}, Enriched: {has_enriched_data}")
+        else:
+            self.log_test("GET operator-001 assignments", False, f"Status: {response.status_code if response else 'No response'}")
         
-        # Test GET with correct path
-        try:
-            response = self.session.get(f"{BASE_URL}/site-field-configs", params={"site_id": site_id})
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.log_test("Site Field Configs GET - Correct Path", True, f"Returned {len(data)} configs")
-            else:
-                self.log_test("Site Field Configs GET - Correct Path", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Site Field Configs GET - Correct Path", False, f"Exception: {str(e)}")
+        # Test: GET assignments for operator-002 (should return 2 assignments)
+        response = self.make_request('GET', '/operator-assignments?operatorId=operator-002')
+        if response and response.status_code == 200:
+            data = response.json()
+            assignments_count = len(data)
+            self.log_test("GET operator-002 assignments", 
+                         assignments_count == 2,
+                         f"Count: {assignments_count}")
+        else:
+            self.log_test("GET operator-002 assignments", False, f"Status: {response.status_code if response else 'No response'}")
         
-        # Test POST with valid custom field
-        try:
-            custom_field = {
-                "site_id": site_id,
-                "key": f"test_field_{int(datetime.now().timestamp())}",
-                "label": "Test Custom Field",
-                "field_type": "number",
-                "created_by_user_id": self.current_user["id"]
-            }
-            
-            response = self.session.post(f"{BASE_URL}/site-field-configs", json=custom_field)
-            
-            if response.status_code == 201:
-                data = response.json()
-                self.log_test("Site Field Configs POST - Valid Custom Field", True, f"Created field: {data['key']}")
-            else:
-                self.log_test("Site Field Configs POST - Valid Custom Field", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Site Field Configs POST - Valid Custom Field", False, f"Exception: {str(e)}")
+        # Test: GET assignments by owner (should return all 5 assignments)
+        response = self.make_request('GET', '/operator-assignments?ownerId=owner-001')
+        if response and response.status_code == 200:
+            data = response.json()
+            assignments_count = len(data)
+            self.log_test("GET assignments by owner", 
+                         assignments_count == 5,
+                         f"Count: {assignments_count}")
+        else:
+            self.log_test("GET assignments by owner", False, f"Status: {response.status_code if response else 'No response'}")
         
-        # Test POST with is_core=true (should reject with 403)
-        try:
-            core_field_attempt = {
-                "site_id": site_id,
-                "key": "test_core_field",
-                "label": "Test Core Field",
-                "field_type": "number",
-                "is_core": True,
-                "created_by_user_id": self.current_user["id"]
-            }
-            
-            response = self.session.post(f"{BASE_URL}/site-field-configs", json=core_field_attempt)
-            
-            if response.status_code == 403:
-                self.log_test("Site Field Configs POST - Core Field Rejection", True, "Correctly rejected core field creation")
-            else:
-                self.log_test("Site Field Configs POST - Core Field Rejection", False, f"Status: {response.status_code}, Expected 403")
-        except Exception as e:
-            self.log_test("Site Field Configs POST - Core Field Rejection", False, f"Exception: {str(e)}")
+        # POST Tests
+        # Test: Create new operator assignment (should succeed)
+        new_assignment = {
+            "operator_user_id": "operator-001",
+            "site_id": "site-004",  # Try to assign operator-001 to site-004 (normally operator-002's)
+            "assigned_by_owner_id": "owner-001"
+        }
+        response = self.make_request('POST', '/operator-assignments', new_assignment)
+        created_assignment_id = None
+        if response and response.status_code == 201:
+            data = response.json()
+            created_assignment_id = data.get('id')
+            self.log_test("POST create operator assignment", True, "Assignment created successfully")
+        else:
+            self.log_test("POST create operator assignment", False, f"Status: {response.status_code if response else 'No response'}")
         
-        # Test POST with core field key like "date" (should reject)
-        try:
-            core_key_attempt = {
-                "site_id": site_id,
-                "key": "date",
-                "label": "Date Field",
-                "field_type": "text",
-                "created_by_user_id": self.current_user["id"]
-            }
-            
-            response = self.session.post(f"{BASE_URL}/site-field-configs", json=core_key_attempt)
-            
-            if response.status_code == 403:
-                self.log_test("Site Field Configs POST - Core Key Rejection", True, "Correctly rejected core field key")
-            else:
-                self.log_test("Site Field Configs POST - Core Key Rejection", False, f"Status: {response.status_code}, Expected 403")
-        except Exception as e:
-            self.log_test("Site Field Configs POST - Core Key Rejection", False, f"Exception: {str(e)}")
-    
-    def test_site_banking_formulas_api_correct_path(self):
-        """Test Site Banking Formulas API with correct path /api/site-banking-formulas"""
-        print("\n=== Testing Site Banking Formulas API with Correct Path ===")
+        # Test: Try to create duplicate assignment (should fail with 400)
+        if created_assignment_id:
+            response = self.make_request('POST', '/operator-assignments', new_assignment)
+            self.log_test("POST duplicate assignment prevention", 
+                         response and response.status_code == 400,
+                         f"Status: {response.status_code if response else 'No response'}")
         
-        if not self.login("owner"):
-            return
-            
-        site_id = "site-001"
+        # Test: Try to assign to non-operator user (should fail with 400)
+        invalid_assignment = {
+            "operator_user_id": "staff-001",  # Staff user, not operator
+            "site_id": "site-001",
+            "assigned_by_owner_id": "owner-001"
+        }
+        response = self.make_request('POST', '/operator-assignments', invalid_assignment)
+        self.log_test("POST invalid operator assignment", 
+                     response and response.status_code == 400,
+                     f"Status: {response.status_code if response else 'No response'}")
         
-        # Test GET with correct path
-        try:
-            response = self.session.get(f"{BASE_URL}/site-banking-formulas", params={"site_id": site_id})
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.log_test("Site Banking Formulas GET - Correct Path", True, f"Returned {len(data)} formulas")
-            else:
-                self.log_test("Site Banking Formulas GET - Correct Path", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Site Banking Formulas GET - Correct Path", False, f"Exception: {str(e)}")
+        # DELETE Tests
+        # Test: Delete the created assignment (should succeed)
+        if created_assignment_id:
+            response = self.make_request('DELETE', f'/operator-assignments/{created_assignment_id}')
+            self.log_test("DELETE operator assignment", 
+                         response and response.status_code == 200,
+                         f"Status: {response.status_code if response else 'No response'}")
+
+    def test_staff_assignments_api(self):
+        """Test P0-3: Staff Assignments API (Operator → Staff)"""
+        print("\n=== P0-3: STAFF ASSIGNMENTS API ===")
         
-        # Test POST with correct path
-        try:
-            formula_data = {
-                "site_id": site_id,
-                "name": f"Test Formula {int(datetime.now().timestamp())}",
-                "formula_json": json.dumps({
-                    "operations": [
-                        {"type": "field", "value": "cash"},
-                        {"type": "operator", "value": "+"},
-                        {"type": "field", "value": "eftpos"}
-                    ]
-                }),
-                "result_label": "Test Banking Total",
-                "created_by_user_id": self.current_user["id"]
-            }
+        # GET Tests
+        # Test: GET assignments for operator-001 (should return 5 staff assignments)
+        response = self.make_request('GET', '/staff-assignments?operatorId=operator-001')
+        if response and response.status_code == 200:
+            data = response.json()
+            assignments_count = len(data)
+            has_enriched_data = all('staff' in item and 'site' in item for item in data)
+            self.log_test("GET staff assignments for operator-001", 
+                         assignments_count == 5 and has_enriched_data,
+                         f"Count: {assignments_count}, Enriched: {has_enriched_data}")
+        else:
+            self.log_test("GET staff assignments for operator-001", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: GET assignments for operator-002 (should return 4 staff assignments)
+        response = self.make_request('GET', '/staff-assignments?operatorId=operator-002')
+        if response and response.status_code == 200:
+            data = response.json()
+            assignments_count = len(data)
+            self.log_test("GET staff assignments for operator-002", 
+                         assignments_count == 4,
+                         f"Count: {assignments_count}")
+        else:
+            self.log_test("GET staff assignments for operator-002", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: GET assignments for staff-001 (should return their assignments)
+        response = self.make_request('GET', '/staff-assignments?staffId=staff-001')
+        if response and response.status_code == 200:
+            data = response.json()
+            assignments_count = len(data)
+            self.log_test("GET assignments for staff-001", 
+                         assignments_count >= 1,
+                         f"Count: {assignments_count}")
+        else:
+            self.log_test("GET assignments for staff-001", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # POST Tests
+        # Test: Create staff assignment where operator HAS access to site (should succeed)
+        valid_assignment = {
+            "staff_user_id": "staff-001",
+            "site_id": "site-002",  # operator-001 has access to site-002
+            "assigned_by_operator_id": "operator-001"
+        }
+        response = self.make_request('POST', '/staff-assignments', valid_assignment)
+        created_assignment_id = None
+        if response and response.status_code == 201:
+            data = response.json()
+            created_assignment_id = data.get('id')
+            self.log_test("POST valid staff assignment", True, "Assignment created successfully")
+        else:
+            self.log_test("POST valid staff assignment", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # CRITICAL Test: Try to create staff assignment where operator does NOT have access to site (should fail with 403)
+        invalid_assignment = {
+            "staff_user_id": "staff-001",
+            "site_id": "site-005",  # operator-001 does NOT have access to site-005 (operator-002's site)
+            "assigned_by_operator_id": "operator-001"
+        }
+        response = self.make_request('POST', '/staff-assignments', invalid_assignment)
+        self.log_test("POST staff assignment - operator lacks site access", 
+                     response and response.status_code == 403,
+                     f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: Try to create duplicate assignment (should fail with 400)
+        if created_assignment_id:
+            response = self.make_request('POST', '/staff-assignments', valid_assignment)
+            self.log_test("POST duplicate staff assignment prevention", 
+                         response and response.status_code == 400,
+                         f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: Try to assign non-staff user (should fail with 400)
+        invalid_user_assignment = {
+            "staff_user_id": "operator-001",  # Operator user, not staff
+            "site_id": "site-001",
+            "assigned_by_operator_id": "operator-001"
+        }
+        response = self.make_request('POST', '/staff-assignments', invalid_user_assignment)
+        self.log_test("POST invalid staff user assignment", 
+                     response and response.status_code == 400,
+                     f"Status: {response.status_code if response else 'No response'}")
+        
+        # DELETE Tests
+        # Test: Delete the created assignment (should succeed)
+        if created_assignment_id:
+            response = self.make_request('DELETE', f'/staff-assignments/{created_assignment_id}')
+            self.log_test("DELETE staff assignment", 
+                         response and response.status_code == 200,
+                         f"Status: {response.status_code if response else 'No response'}")
+
+    def test_user_creation_role_enforcement(self):
+        """Test P0-4: User Creation with Role Enforcement"""
+        print("\n=== P0-4: USER CREATION WITH ROLE ENFORCEMENT ===")
+        
+        # Test: Owner creates operator (should succeed)
+        operator_data = {
+            "name": "Test Operator",
+            "email": "test.operator@demo.com",
+            "password": "demo123",
+            "role": "operator",
+            "creatorRole": "owner"
+        }
+        response = self.make_request('POST', '/users', operator_data)
+        created_operator_id = None
+        if response and response.status_code == 201:
+            data = response.json()
+            created_operator_id = data.get('id')
+            self.log_test("Owner creates operator", True, "Operator created successfully")
+        else:
+            self.log_test("Owner creates operator", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # CRITICAL Test: Owner tries to create staff (should fail with 403)
+        staff_data = {
+            "name": "Test Staff",
+            "email": "test.staff@demo.com",
+            "password": "demo123",
+            "role": "staff",
+            "creatorRole": "owner"
+        }
+        response = self.make_request('POST', '/users', staff_data)
+        self.log_test("Owner tries to create staff (should fail)", 
+                     response and response.status_code == 403,
+                     f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: Operator creates staff (should succeed)
+        staff_data_valid = {
+            "name": "Test Staff Valid",
+            "email": "test.staff.valid@demo.com",
+            "password": "demo123",
+            "role": "staff",
+            "creatorRole": "operator"
+        }
+        response = self.make_request('POST', '/users', staff_data_valid)
+        created_staff_id = None
+        if response and response.status_code == 201:
+            data = response.json()
+            created_staff_id = data.get('id')
+            self.log_test("Operator creates staff", True, "Staff created successfully")
+        else:
+            self.log_test("Operator creates staff", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # CRITICAL Test: Operator tries to create operator (should fail with 403)
+        operator_data_invalid = {
+            "name": "Test Operator Invalid",
+            "email": "test.operator.invalid@demo.com",
+            "password": "demo123",
+            "role": "operator",
+            "creatorRole": "operator"
+        }
+        response = self.make_request('POST', '/users', operator_data_invalid)
+        self.log_test("Operator tries to create operator (should fail)", 
+                     response and response.status_code == 403,
+                     f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: Try to create user with existing email (should fail with 400)
+        duplicate_email_data = {
+            "name": "Duplicate Email",
+            "email": "owner@demo.com",  # Existing email
+            "password": "demo123",
+            "role": "operator",
+            "creatorRole": "owner"
+        }
+        response = self.make_request('POST', '/users', duplicate_email_data)
+        self.log_test("Create user with existing email (should fail)", 
+                     response and response.status_code == 400,
+                     f"Status: {response.status_code if response else 'No response'}")
+
+    def test_field_config_permission_enforcement(self):
+        """Test P0-5: Field Config Permission Enforcement"""
+        print("\n=== P0-5: FIELD CONFIG PERMISSION ENFORCEMENT ===")
+        
+        # Test: Operator creates field config (should succeed)
+        field_config_data = {
+            "site_id": "site-001",
+            "key": "test_field",
+            "label": "Test Field",
+            "field_type": "number",
+            "created_by_user_id": "operator-001",
+            "creatorRole": "operator"
+        }
+        response = self.make_request('POST', '/site-field-configs', field_config_data)
+        created_config_id = None
+        if response and response.status_code == 201:
+            data = response.json()
+            created_config_id = data.get('id')
+            self.log_test("Operator creates field config", True, "Field config created successfully")
+        else:
+            self.log_test("Operator creates field config", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # CRITICAL Test: Owner tries to create field config (should fail with 403)
+        owner_field_config = {
+            "site_id": "site-001",
+            "key": "owner_test_field",
+            "label": "Owner Test Field",
+            "field_type": "number",
+            "created_by_user_id": "owner-001",
+            "creatorRole": "owner"
+        }
+        response = self.make_request('POST', '/site-field-configs', owner_field_config)
+        self.log_test("Owner tries to create field config (should fail)", 
+                     response and response.status_code == 403,
+                     f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: Staff tries to create field config (should fail with 403)
+        staff_field_config = {
+            "site_id": "site-001",
+            "key": "staff_test_field",
+            "label": "Staff Test Field",
+            "field_type": "number",
+            "created_by_user_id": "staff-001",
+            "creatorRole": "staff"
+        }
+        response = self.make_request('POST', '/site-field-configs', staff_field_config)
+        self.log_test("Staff tries to create field config (should fail)", 
+                     response and response.status_code == 403,
+                     f"Status: {response.status_code if response else 'No response'}")
+
+    def test_banking_formula_permission_enforcement(self):
+        """Test P0-6: Banking Formula Permission Enforcement"""
+        print("\n=== P0-6: BANKING FORMULA PERMISSION ENFORCEMENT ===")
+        
+        # Test: Operator creates formula (should succeed)
+        formula_data = {
+            "site_id": "site-001",
+            "name": "Test Formula",
+            "formula_json": '{"operations": [{"type": "field", "value": "fuel_sales"}, {"type": "operator", "value": "+"}, {"type": "field", "value": "shop_sales"}]}',
+            "result_label": "Test Result",
+            "created_by_user_id": "operator-001",
+            "creatorRole": "operator"
+        }
+        response = self.make_request('POST', '/site-banking-formulas', formula_data)
+        created_formula_id = None
+        if response and response.status_code == 201:
+            data = response.json()
+            created_formula_id = data.get('id')
+            self.log_test("Operator creates banking formula", True, "Formula created successfully")
+        else:
+            self.log_test("Operator creates banking formula", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # CRITICAL Test: Owner tries to create formula (should fail with 403)
+        owner_formula = {
+            "site_id": "site-001",
+            "name": "Owner Test Formula",
+            "formula_json": '{"operations": [{"type": "field", "value": "fuel_sales"}]}',
+            "result_label": "Owner Result",
+            "created_by_user_id": "owner-001",
+            "creatorRole": "owner"
+        }
+        response = self.make_request('POST', '/site-banking-formulas', owner_formula)
+        self.log_test("Owner tries to create banking formula (should fail)", 
+                     response and response.status_code == 403,
+                     f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: Staff tries to create formula (should fail with 403)
+        staff_formula = {
+            "site_id": "site-001",
+            "name": "Staff Test Formula",
+            "formula_json": '{"operations": [{"type": "field", "value": "shop_sales"}]}',
+            "result_label": "Staff Result",
+            "created_by_user_id": "staff-001",
+            "creatorRole": "staff"
+        }
+        response = self.make_request('POST', '/site-banking-formulas', staff_formula)
+        self.log_test("Staff tries to create banking formula (should fail)", 
+                     response and response.status_code == 403,
+                     f"Status: {response.status_code if response else 'No response'}")
+
+    def test_dashboard_stats_with_performers(self):
+        """Test P0-7: Dashboard Stats with Top/Lowest Performers"""
+        print("\n=== P0-7: DASHBOARD STATS WITH TOP/LOWEST PERFORMERS ===")
+        
+        # Test: Get stats with date range (should include topPerformingSite and lowestPerformingSite)
+        start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        
+        response = self.make_request('GET', f'/dashboard/stats?siteIds=site-001,site-002,site-003&startDate={start_date}&endDate={end_date}')
+        if response and response.status_code == 200:
+            data = response.json()
+            has_top_performer = 'topPerformingSite' in data and data['topPerformingSite'] is not None
+            has_lowest_performer = 'lowestPerformingSite' in data and data['lowestPerformingSite'] is not None
             
-            response = self.session.post(f"{BASE_URL}/site-banking-formulas", json=formula_data)
-            
-            if response.status_code == 201:
-                data = response.json()
-                formula_id = data["id"]
-                self.log_test("Site Banking Formulas POST - Correct Path", True, f"Created formula: {data['name']}")
+            if has_top_performer and has_lowest_performer:
+                top_revenue = data['topPerformingSite'].get('revenue', 0)
+                lowest_revenue = data['lowestPerformingSite'].get('revenue', 0)
+                revenue_comparison_valid = top_revenue >= lowest_revenue
                 
-                # Test DELETE
-                delete_response = self.session.delete(f"{BASE_URL}/site-banking-formulas/{formula_id}")
-                if delete_response.status_code == 200:
-                    self.log_test("Site Banking Formulas DELETE - Correct Path", True, "Successfully deleted formula")
-                else:
-                    self.log_test("Site Banking Formulas DELETE - Correct Path", False, f"Delete failed: {delete_response.status_code}")
-            else:
-                self.log_test("Site Banking Formulas POST - Correct Path", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Site Banking Formulas POST - Correct Path", False, f"Exception: {str(e)}")
-    
-    def test_banking_calculate_api(self):
-        """Test Banking Calculate API - NEW ENDPOINT"""
-        print("\n=== Testing Banking Calculate API (NEW ENDPOINT) ===")
-        
-        # Test simple addition
-        try:
-            formula = {"operator": "+", "value1": 100, "value2": 50}
-            response = self.session.post(f"{BASE_URL}/banking/calculate", json={"formula_json": formula})
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("result") == 150:
-                    self.log_test("Banking Calculate - Addition", True, f"100 + 50 = {data['result']}")
-                else:
-                    self.log_test("Banking Calculate - Addition", False, f"Expected 150, got {data.get('result')}")
-            else:
-                self.log_test("Banking Calculate - Addition", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Banking Calculate - Addition", False, f"Exception: {str(e)}")
-        
-        # Test subtraction
-        try:
-            formula = {"operator": "-", "value1": 100, "value2": 50}
-            response = self.session.post(f"{BASE_URL}/banking/calculate", json={"formula_json": formula})
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("result") == 50:
-                    self.log_test("Banking Calculate - Subtraction", True, f"100 - 50 = {data['result']}")
-                else:
-                    self.log_test("Banking Calculate - Subtraction", False, f"Expected 50, got {data.get('result')}")
-            else:
-                self.log_test("Banking Calculate - Subtraction", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Banking Calculate - Subtraction", False, f"Exception: {str(e)}")
-        
-        # Test multiplication
-        try:
-            formula = {"operator": "*", "value1": 10, "value2": 5}
-            response = self.session.post(f"{BASE_URL}/banking/calculate", json={"formula_json": formula})
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("result") == 50:
-                    self.log_test("Banking Calculate - Multiplication", True, f"10 * 5 = {data['result']}")
-                else:
-                    self.log_test("Banking Calculate - Multiplication", False, f"Expected 50, got {data.get('result')}")
-            else:
-                self.log_test("Banking Calculate - Multiplication", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Banking Calculate - Multiplication", False, f"Exception: {str(e)}")
-        
-        # Test division
-        try:
-            formula = {"operator": "/", "value1": 100, "value2": 4}
-            response = self.session.post(f"{BASE_URL}/banking/calculate", json={"formula_json": formula})
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("result") == 25:
-                    self.log_test("Banking Calculate - Division", True, f"100 / 4 = {data['result']}")
-                else:
-                    self.log_test("Banking Calculate - Division", False, f"Expected 25, got {data.get('result')}")
-            else:
-                self.log_test("Banking Calculate - Division", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Banking Calculate - Division", False, f"Exception: {str(e)}")
-        
-        # Test division by zero (should error)
-        try:
-            formula = {"operator": "/", "value1": 100, "value2": 0}
-            response = self.session.post(f"{BASE_URL}/banking/calculate", json={"formula_json": formula})
-            
-            if response.status_code == 400:
-                self.log_test("Banking Calculate - Division by Zero", True, "Correctly rejected division by zero")
-            else:
-                self.log_test("Banking Calculate - Division by Zero", False, f"Expected 400 error, got {response.status_code}")
-        except Exception as e:
-            self.log_test("Banking Calculate - Division by Zero", False, f"Exception: {str(e)}")
-        
-        # Test invalid operator (should error)
-        try:
-            formula = {"operator": "^", "value1": 100, "value2": 2}
-            response = self.session.post(f"{BASE_URL}/banking/calculate", json={"formula_json": formula})
-            
-            if response.status_code == 400:
-                self.log_test("Banking Calculate - Invalid Operator", True, "Correctly rejected invalid operator")
-            else:
-                self.log_test("Banking Calculate - Invalid Operator", False, f"Expected 400 error, got {response.status_code}")
-        except Exception as e:
-            self.log_test("Banking Calculate - Invalid Operator", False, f"Exception: {str(e)}")
-    
-    def test_core_field_protection_security(self):
-        """Test Core Field Protection Security - CRITICAL"""
-        print("\n=== Testing Core Field Protection Security (CRITICAL) ===")
-        
-        if not self.login("operator"):
-            return
-            
-        site_id = "site-001"
-        
-        # Attempt to create field with is_core: true
-        try:
-            core_field = {
-                "site_id": site_id,
-                "key": "test_core_security",
-                "label": "Test Core Security",
-                "field_type": "number",
-                "is_core": True,
-                "created_by_user_id": self.current_user["id"]
-            }
-            
-            response = self.session.post(f"{BASE_URL}/site-field-configs", json=core_field)
-            
-            if response.status_code == 403:
-                self.log_test("Core Field Protection - is_core=true", True, "✅ SECURITY: Correctly blocked is_core=true")
-            else:
-                self.log_test("Core Field Protection - is_core=true", False, f"❌ SECURITY BREACH: Status {response.status_code}, should be 403")
-        except Exception as e:
-            self.log_test("Core Field Protection - is_core=true", False, f"Exception: {str(e)}")
-        
-        # Attempt to create field with core field key
-        core_field_keys = ["date", "site_id", "shift_type", "total_sales", "fuel_sales", "shop_sales", "dips", "status"]
-        
-        for core_key in core_field_keys[:3]:  # Test first 3 core keys
-            try:
-                core_key_field = {
-                    "site_id": site_id,
-                    "key": core_key,
-                    "label": f"Test {core_key.title()}",
-                    "field_type": "number",
-                    "created_by_user_id": self.current_user["id"]
-                }
+                # Check required fields
+                top_has_fields = all(field in data['topPerformingSite'] for field in ['siteId', 'siteName', 'siteCode', 'revenue'])
+                lowest_has_fields = all(field in data['lowestPerformingSite'] for field in ['siteId', 'siteName', 'siteCode', 'revenue'])
                 
-                response = self.session.post(f"{BASE_URL}/site-field-configs", json=core_key_field)
-                
-                if response.status_code == 403:
-                    self.log_test(f"Core Field Protection - key='{core_key}'", True, f"✅ SECURITY: Correctly blocked core key '{core_key}'")
-                else:
-                    self.log_test(f"Core Field Protection - key='{core_key}'", False, f"❌ SECURITY BREACH: Status {response.status_code}, should be 403")
-            except Exception as e:
-                self.log_test(f"Core Field Protection - key='{core_key}'", False, f"Exception: {str(e)}")
-        
-        # Create valid custom field (should succeed)
-        try:
-            valid_field = {
-                "site_id": site_id,
-                "key": f"valid_custom_{int(datetime.now().timestamp())}",
-                "label": "Valid Custom Field",
-                "field_type": "currency",
-                "created_by_user_id": self.current_user["id"]
-            }
-            
-            response = self.session.post(f"{BASE_URL}/site-field-configs", json=valid_field)
-            
-            if response.status_code == 201:
-                data = response.json()
-                self.log_test("Core Field Protection - Valid Custom Field", True, f"✅ Successfully created custom field: {data['key']}")
+                self.log_test("Dashboard stats with top/lowest performers", 
+                             revenue_comparison_valid and top_has_fields and lowest_has_fields,
+                             f"Top: ${top_revenue}, Lowest: ${lowest_revenue}")
             else:
-                self.log_test("Core Field Protection - Valid Custom Field", False, f"Failed to create valid field: {response.status_code}")
-        except Exception as e:
-            self.log_test("Core Field Protection - Valid Custom Field", False, f"Exception: {str(e)}")
-    
-    def test_regression_check(self):
-        """Test backward compatibility and existing functionality"""
-        print("\n=== Testing Regression Check (Backward Compatibility) ===")
+                self.log_test("Dashboard stats with top/lowest performers", False, "Missing performer data")
+        else:
+            self.log_test("Dashboard stats with top/lowest performers", False, f"Status: {response.status_code if response else 'No response'}")
         
-        if not self.login("owner"):
-            return
-        
-        # Test old paths still work
-        old_paths = [
-            ("field-configs", "site_id=site-001"),
-            ("banking-formulas", "site_id=site-001"),
-            ("daily-rollups", "siteIds=site-001&startDate=2026-04-01&endDate=2026-04-02")
-        ]
-        
-        for path, params in old_paths:
-            try:
-                response = self.session.get(f"{BASE_URL}/{path}?{params}")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    self.log_test(f"Backward Compatibility - /{path}", True, f"Old path works, returned {len(data)} items")
-                else:
-                    self.log_test(f"Backward Compatibility - /{path}", False, f"Status: {response.status_code}")
-            except Exception as e:
-                self.log_test(f"Backward Compatibility - /{path}", False, f"Exception: {str(e)}")
-        
-        # Test custom values integration still works
-        try:
-            report_data = {
-                "site_id": "site-001",
-                "submitted_by_user_id": self.current_user["id"],
-                "date": "2026-04-15",
-                "shift_type": "Morning",
-                "fuel_sales": 1500.00,
-                "shop_sales": 300.00,
-                "total_litres": 1200,
-                "eftpos": 800.00,
-                "cash": 200.00,
-                "custom_values": {
-                    "test_field": 123.45,
-                    "another_field": "test_value"
-                }
-            }
-            
-            response = self.session.post(f"{BASE_URL}/reports", json=report_data)
-            
-            if response.status_code == 201:
-                data = response.json()
-                report_id = data["id"]
-                self.log_test("Regression - Custom Values Integration", True, f"Report created with custom values: {report_id}")
-                
-                # Verify custom values are saved
-                get_response = self.session.get(f"{BASE_URL}/reports/{report_id}")
-                if get_response.status_code == 200:
-                    report_data = get_response.json()
-                    if "custom_values" in report_data and report_data["custom_values"]:
-                        self.log_test("Regression - Custom Values Retrieval", True, "Custom values properly saved and retrieved")
-                    else:
-                        self.log_test("Regression - Custom Values Retrieval", False, "Custom values not found in retrieved report")
-                else:
-                    self.log_test("Regression - Custom Values Retrieval", False, f"Failed to retrieve report: {get_response.status_code}")
+        # Test: Get stats for single site (top and lowest should be the same site)
+        response = self.make_request('GET', f'/dashboard/stats?siteIds=site-001&startDate={start_date}&endDate={end_date}')
+        if response and response.status_code == 200:
+            data = response.json()
+            has_performers = 'topPerformingSite' in data and 'lowestPerformingSite' in data
+            if has_performers and data['topPerformingSite'] and data['lowestPerformingSite']:
+                same_site = data['topPerformingSite']['siteId'] == data['lowestPerformingSite']['siteId']
+                self.log_test("Single site stats - top equals lowest", same_site, 
+                             f"Top: {data['topPerformingSite']['siteId']}, Lowest: {data['lowestPerformingSite']['siteId']}")
             else:
-                self.log_test("Regression - Custom Values Integration", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Regression - Custom Values Integration", False, f"Exception: {str(e)}")
+                self.log_test("Single site stats - top equals lowest", False, "Missing performer data")
+        else:
+            self.log_test("Single site stats - top equals lowest", False, f"Status: {response.status_code if response else 'No response'}")
+
+    def test_seed_api_new_structure(self):
+        """Test P0-8: Seed API with New Structure"""
+        print("\n=== P0-8: SEED API WITH NEW STRUCTURE ===")
         
-        # Test existing CRUD endpoints still functional
-        crud_tests = [
-            ("GET", "users", {}),
-            ("GET", "sites", {}),
-            ("GET", "assignments", {}),
-            ("GET", "reports", {"siteIds": "site-001"}),
-            ("GET", "dashboard/stats", {"siteIds": "site-001"})
-        ]
-        
-        for method, endpoint, params in crud_tests:
-            try:
-                if method == "GET":
-                    response = self.session.get(f"{BASE_URL}/{endpoint}", params=params)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    self.log_test(f"Regression - {method} /{endpoint}", True, f"Endpoint functional, returned data")
-                else:
-                    self.log_test(f"Regression - {method} /{endpoint}", False, f"Status: {response.status_code}")
-            except Exception as e:
-                self.log_test(f"Regression - {method} /{endpoint}", False, f"Exception: {str(e)}")
-    
-    def test_seed_api_validation(self):
-        """Test Seed API - Validate field_configs and banking_formulas collections are populated"""
-        print("\n=== Testing Seed API - Field Configs & Banking Formulas Validation ===")
-        
-        # Test POST /api/seed
-        try:
-            response = self.session.post(f"{BASE_URL}/seed")
+        # Test: Run seed (should return counts for operator_assignments and staff_assignments)
+        response = self.make_request('POST', '/seed')
+        if response and response.status_code == 200:
+            data = response.json()
+            counts = data.get('counts', {})
             
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Check if response includes counts for field_configs and banking_formulas
-                counts = data.get("counts", {})
-                field_configs_count = counts.get("field_configs", 0)
-                banking_formulas_count = counts.get("banking_formulas", 0)
-                
-                # Expected: field_configs should be ~55-60 (11 fields per site × 5 sites + some custom fields)
-                if 50 <= field_configs_count <= 70:
-                    self.log_test("Seed API - Field Configs Count", True, f"Field configs: {field_configs_count} (expected ~55-60)")
-                else:
-                    self.log_test("Seed API - Field Configs Count", False, f"Field configs: {field_configs_count} (expected ~55-60)")
-                
-                # Expected: banking_formulas should be 15 (3 formulas × 5 sites)
-                if banking_formulas_count == 15:
-                    self.log_test("Seed API - Banking Formulas Count", True, f"Banking formulas: {banking_formulas_count} (expected 15)")
-                else:
-                    self.log_test("Seed API - Banking Formulas Count", False, f"Banking formulas: {banking_formulas_count} (expected 15)")
-                
-                self.log_test("Seed API - Response Structure", True, f"Seed completed with field_configs: {field_configs_count}, banking_formulas: {banking_formulas_count}")
-            else:
-                self.log_test("Seed API - Response", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Seed API - Response", False, f"Exception: {str(e)}")
-        
-        # Test GET /api/site-field-configs?site_id=site-001
-        try:
-            response = self.session.get(f"{BASE_URL}/site-field-configs", params={"site_id": "site-001"})
+            operator_assignments = counts.get('operator_assignments', 0)
+            staff_assignments = counts.get('staff_assignments', 0)
+            reports = counts.get('reports', 0)
+            field_configs = counts.get('field_configs', 0)
+            banking_formulas = counts.get('banking_formulas', 0)
             
-            if response.status_code == 200:
-                data = response.json()
-                field_count = len(data)
-                
-                # Should return 11-12 field configurations
-                if 10 <= field_count <= 15:
-                    self.log_test("Field Configs API - Site-001 Count", True, f"Returned {field_count} field configs (expected 11-12)")
-                    
-                    # Check for both core and custom fields
-                    core_fields = [f for f in data if f.get("is_core", False)]
-                    custom_fields = [f for f in data if not f.get("is_core", False)]
-                    
-                    self.log_test("Field Configs API - Core/Custom Mix", True, f"Core fields: {len(core_fields)}, Custom fields: {len(custom_fields)}")
-                else:
-                    self.log_test("Field Configs API - Site-001 Count", False, f"Returned {field_count} field configs (expected 11-12)")
-            else:
-                self.log_test("Field Configs API - Site-001", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Field Configs API - Site-001", False, f"Exception: {str(e)}")
-        
-        # Test GET /api/site-banking-formulas?site_id=site-001
-        try:
-            response = self.session.get(f"{BASE_URL}/site-banking-formulas", params={"site_id": "site-001"})
+            # Verify expected counts
+            operator_assignments_valid = operator_assignments == 5
+            staff_assignments_valid = staff_assignments == 9
+            has_reports = reports > 0
+            has_field_configs = field_configs > 0
+            has_banking_formulas = banking_formulas > 0
             
-            if response.status_code == 200:
-                data = response.json()
-                formula_count = len(data)
-                
-                # Should return 3 formulas: Cash Reconciliation, Shop Revenue Breakdown, Net Sales
-                if formula_count == 3:
-                    self.log_test("Banking Formulas API - Site-001 Count", True, f"Returned {formula_count} formulas (expected 3)")
-                    
-                    # Check formula names
-                    formula_names = [f.get("name", "") for f in data]
-                    expected_names = ["Cash Reconciliation", "Shop Revenue Breakdown", "Net Sales"]
-                    
-                    found_names = []
-                    for expected in expected_names:
-                        if any(expected.lower() in name.lower() for name in formula_names):
-                            found_names.append(expected)
-                    
-                    if len(found_names) >= 2:  # At least 2 of the expected formulas
-                        self.log_test("Banking Formulas API - Expected Names", True, f"Found expected formulas: {found_names}")
-                    else:
-                        self.log_test("Banking Formulas API - Expected Names", False, f"Formula names: {formula_names}")
-                    
-                    # Verify formula_json structure is valid
-                    valid_formulas = 0
-                    for formula in data:
-                        try:
-                            formula_json = formula.get("formula_json", "")
-                            if isinstance(formula_json, str):
-                                json.loads(formula_json)  # Try to parse JSON
-                                valid_formulas += 1
-                            elif isinstance(formula_json, dict):
-                                valid_formulas += 1
-                        except:
-                            pass
-                    
-                    if valid_formulas == formula_count:
-                        self.log_test("Banking Formulas API - JSON Structure", True, f"All {valid_formulas} formulas have valid JSON structure")
-                    else:
-                        self.log_test("Banking Formulas API - JSON Structure", False, f"Only {valid_formulas}/{formula_count} formulas have valid JSON")
-                else:
-                    self.log_test("Banking Formulas API - Site-001 Count", False, f"Returned {formula_count} formulas (expected 3)")
-            else:
-                self.log_test("Banking Formulas API - Site-001", False, f"Status: {response.status_code}, Response: {response.text}")
-        except Exception as e:
-            self.log_test("Banking Formulas API - Site-001", False, f"Exception: {str(e)}")
+            self.log_test("Seed API returns correct counts", 
+                         operator_assignments_valid and staff_assignments_valid,
+                         f"Operator: {operator_assignments}, Staff: {staff_assignments}")
+            
+            self.log_test("Seed API populates all collections", 
+                         has_reports and has_field_configs and has_banking_formulas,
+                         f"Reports: {reports}, Configs: {field_configs}, Formulas: {banking_formulas}")
+        else:
+            self.log_test("Seed API execution", False, f"Status: {response.status_code if response else 'No response'}")
+
+    def test_regression_existing_apis(self):
+        """Test P1-9: Regression Tests - Existing APIs Still Work"""
+        print("\n=== P1-9: REGRESSION TESTS ===")
+        
+        # Test: GET /api/reports (should still return reports)
+        response = self.make_request('GET', '/reports')
+        if response and response.status_code == 200:
+            data = response.json()
+            reports_count = len(data)
+            self.log_test("GET /api/reports still works", 
+                         reports_count > 0,
+                         f"Reports count: {reports_count}")
+        else:
+            self.log_test("GET /api/reports still works", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: GET /api/sites (should still return sites)
+        response = self.make_request('GET', '/sites')
+        if response and response.status_code == 200:
+            data = response.json()
+            sites_count = len(data)
+            self.log_test("GET /api/sites still works", 
+                         sites_count > 0,
+                         f"Sites count: {sites_count}")
+        else:
+            self.log_test("GET /api/sites still works", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: GET /api/dashboard/site-stats (should still work)
+        response = self.make_request('GET', '/dashboard/site-stats')
+        if response and response.status_code == 200:
+            data = response.json()
+            stats_count = len(data)
+            self.log_test("GET /api/dashboard/site-stats still works", 
+                         stats_count > 0,
+                         f"Stats count: {stats_count}")
+        else:
+            self.log_test("GET /api/dashboard/site-stats still works", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: GET /api/site-field-configs (should still work)
+        response = self.make_request('GET', '/site-field-configs?site_id=site-001')
+        if response and response.status_code == 200:
+            data = response.json()
+            configs_count = len(data)
+            self.log_test("GET /api/site-field-configs still works", 
+                         configs_count > 0,
+                         f"Configs count: {configs_count}")
+        else:
+            self.log_test("GET /api/site-field-configs still works", False, f"Status: {response.status_code if response else 'No response'}")
+        
+        # Test: GET /api/site-banking-formulas (should still work)
+        response = self.make_request('GET', '/site-banking-formulas?site_id=site-001')
+        if response and response.status_code == 200:
+            data = response.json()
+            formulas_count = len(data)
+            self.log_test("GET /api/site-banking-formulas still works", 
+                         formulas_count > 0,
+                         f"Formulas count: {formulas_count}")
+        else:
+            self.log_test("GET /api/site-banking-formulas still works", False, f"Status: {response.status_code if response else 'No response'}")
 
     def run_all_tests(self):
-        """Run all tests"""
-        print("🚀 Starting WorkflowLite Backend Testing - RETEST AFTER FIXES")
-        print("=" * 80)
+        """Run all access control tests"""
+        print("🚀 STARTING COMPREHENSIVE ACCESS CONTROL TESTING")
+        print("=" * 60)
         
-        # Seed database first
-        try:
-            response = self.session.post(f"{BASE_URL}/seed")
-            if response.status_code == 200:
-                print("✅ Database seeded successfully")
-            else:
-                print(f"❌ Database seeding failed: {response.status_code}")
-        except Exception as e:
-            print(f"❌ Database seeding error: {str(e)}")
+        # First, seed the database to ensure clean state
+        print("Seeding database for clean test state...")
+        seed_response = self.make_request('POST', '/seed')
+        if seed_response and seed_response.status_code == 200:
+            print("✅ Database seeded successfully")
+        else:
+            print("❌ Database seeding failed - tests may be unreliable")
         
         # Run all test suites
-        self.test_daily_rollup_api_correct_path()
-        self.test_site_field_configs_api_correct_path()
-        self.test_site_banking_formulas_api_correct_path()
-        self.test_banking_calculate_api()
-        self.test_core_field_protection_security()
-        self.test_regression_check()
-
-    def run_seed_validation_only(self):
-        """Run only the seed validation tests"""
-        print("🚀 Starting Seed API Validation - Quick Test")
-        print("=" * 60)
+        self.test_login_hierarchy()
+        self.test_operator_assignments_api()
+        self.test_staff_assignments_api()
+        self.test_user_creation_role_enforcement()
+        self.test_field_config_permission_enforcement()
+        self.test_banking_formula_permission_enforcement()
+        self.test_dashboard_stats_with_performers()
+        self.test_seed_api_new_structure()
+        self.test_regression_existing_apis()
         
-        # Run seed validation test
-        self.test_seed_api_validation()
-        
-        # Summary
+        # Print final results
         print("\n" + "=" * 60)
-        print("📊 SEED VALIDATION SUMMARY")
+        print("🎯 FINAL TEST RESULTS")
         print("=" * 60)
         
-        passed = sum(1 for r in self.test_results if r["passed"])
-        total = len(self.test_results)
-        success_rate = (passed / total * 100) if total > 0 else 0
+        success_rate = (self.passed_tests / self.total_tests * 100) if self.total_tests > 0 else 0
+        print(f"✅ PASSED: {self.passed_tests}/{self.total_tests} ({success_rate:.1f}%)")
         
-        print(f"Total Tests: {total}")
-        print(f"Passed: {passed}")
-        print(f"Failed: {total - passed}")
-        print(f"Success Rate: {success_rate:.1f}%")
-        
-        if success_rate >= 90:
-            print("🎉 EXCELLENT: Seed API validation successful!")
-        elif success_rate >= 75:
-            print("✅ GOOD: Most seed validation tests passed")
+        if self.passed_tests == self.total_tests:
+            print("🎉 ALL TESTS PASSED - ACCESS CONTROL REFACTORING IS WORKING PERFECTLY!")
         else:
-            print("❌ ISSUES: Seed validation has problems")
+            failed_tests = self.total_tests - self.passed_tests
+            print(f"❌ FAILED: {failed_tests} tests")
+            print("\nFAILED TESTS:")
+            for result in self.test_results:
+                if not result['passed']:
+                    print(f"  - {result['name']}: {result['details']}")
         
-        # List failed tests
-        failed_tests = [r for r in self.test_results if not r["passed"]]
-        if failed_tests:
-            print(f"\n❌ FAILED TESTS ({len(failed_tests)}):")
-            for test in failed_tests:
-                print(f"   • {test['test']}: {test['details']}")
-        
-        return success_rate >= 75
-        
-        # Summary
-        print("\n" + "=" * 80)
-        print("📊 TEST SUMMARY")
-        print("=" * 80)
-        
-        passed = sum(1 for r in self.test_results if r["passed"])
-        total = len(self.test_results)
-        success_rate = (passed / total * 100) if total > 0 else 0
-        
-        print(f"Total Tests: {total}")
-        print(f"Passed: {passed}")
-        print(f"Failed: {total - passed}")
-        print(f"Success Rate: {success_rate:.1f}%")
-        
-        if success_rate >= 90:
-            print("🎉 EXCELLENT: All major fixes verified!")
-        elif success_rate >= 75:
-            print("✅ GOOD: Most fixes working, minor issues remain")
-        else:
-            print("❌ ISSUES: Significant problems still exist")
-        
-        # List failed tests
-        failed_tests = [r for r in self.test_results if not r["passed"]]
-        if failed_tests:
-            print(f"\n❌ FAILED TESTS ({len(failed_tests)}):")
-            for test in failed_tests:
-                print(f"   • {test['test']}: {test['details']}")
-        
-        return success_rate >= 75
+        return self.passed_tests == self.total_tests
 
 if __name__ == "__main__":
-    tester = WorkflowLiteBackendTester()
-    
-    # Check if we should run only seed validation
-    if len(sys.argv) > 1 and sys.argv[1] == "seed":
-        success = tester.run_seed_validation_only()
-    else:
-        success = tester.run_all_tests()
-    
+    tester = AccessControlTester()
+    success = tester.run_all_tests()
     sys.exit(0 if success else 1)

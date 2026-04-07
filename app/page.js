@@ -18,7 +18,7 @@ import {
   Building2, Fuel, ShoppingCart, DollarSign, Droplets, LogOut, FileText, CheckCircle, Clock,
   User, Users, ChevronRight, TrendingUp, BarChart3, Eye, ClipboardList, Loader2, Plus, Settings,
   MapPin, AlertTriangle, Pencil, Trash2, UserPlus, Building, Calculator, Download, Calendar,
-  Layers, ChevronDown, ChevronUp, GripVertical, X, Save, RefreshCw
+  Layers, ChevronDown, ChevronUp, GripVertical, X, Save, RefreshCw, AlertCircle
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend
@@ -113,9 +113,9 @@ function LoginPage({ onLogin, loading }) {
 // ============== HEADER ==============
 function Header({ user, onLogout, activeTab, setActiveTab }) {
   const tabs = user.role === 'owner' 
-    ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }, { id: 'sites', label: 'Sites', icon: Building2 }, { id: 'users', label: 'Users & Access', icon: Users }, { id: 'banking', label: 'Banking', icon: Calculator }]
+    ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }, { id: 'sites', label: 'Sites', icon: Building2 }, { id: 'operators', label: 'Operators', icon: Users }]
     : user.role === 'operator'
-    ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }, { id: 'staff', label: 'Staff Access', icon: Users }, { id: 'fields', label: 'Form Fields', icon: Settings }, { id: 'banking', label: 'Banking', icon: Calculator }]
+    ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }, { id: 'staff', label: 'Staff Management', icon: Users }, { id: 'fields', label: 'Form Fields', icon: Settings }, { id: 'banking', label: 'Banking', icon: Calculator }]
     : [{ id: 'submit', label: 'Submit Report', icon: ClipboardList }, { id: 'history', label: 'My Reports', icon: FileText }];
 
   return (
@@ -1183,14 +1183,9 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
     return <div className="container mx-auto px-4 py-6"><SiteManagement user={user} sites={sites} onRefresh={onRefreshSites} /></div>;
   }
 
-  // Users Tab
-  if (activeTab === 'users') {
-    return <div className="container mx-auto px-4 py-6"><UserManagement user={user} sites={sites} onRefresh={onRefreshSites} /></div>;
-  }
-
-  // Banking Tab
-  if (activeTab === 'banking') {
-    return <div className="container mx-auto px-4 py-6"><BankingManagement user={user} sites={sites} /></div>;
+  // Operators Tab (Owner manages operators only)
+  if (activeTab === 'operators') {
+    return <div className="container mx-auto px-4 py-6"><OperatorManagement user={user} sites={sites} onRefresh={onRefreshSites} /></div>;
   }
 
   // Report Detail
@@ -1233,14 +1228,54 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
         <>
           {/* Stats Cards */}
           {stats && (
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-              <StatCard title="Total Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} subValue={`${stats.totalReports} reports`} color="green" />
-              <StatCard title="Total Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} color="blue" />
-              <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} color="purple" />
-              <StatCard title="Total Dips" value={formatCurrency(stats.totalDips)} icon={Droplets} color="cyan" />
-              <StatCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} color="red" />
-              <StatCard title="Banking" value={formatCurrency(stats.totalBanking)} icon={Calculator} color="orange" />
-            </div>
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                <StatCard title="Total Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} subValue={`${stats.totalReports} reports`} color="green" />
+                <StatCard title="Total Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} color="blue" />
+                <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} color="purple" />
+                <StatCard title="Total Dips" value={formatCurrency(stats.totalDips)} icon={Droplets} color="cyan" />
+                <StatCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} color="red" />
+                <StatCard title="Banking" value={formatCurrency(stats.totalBanking)} icon={Calculator} color="orange" />
+              </div>
+              
+              {/* Top/Lowest Performing Sites */}
+              {(stats.topPerformingSite || stats.lowestPerformingSite) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {stats.topPerformingSite && (
+                    <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-50">
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-green-600 mb-1">🏆 Top Performing Site</p>
+                            <h3 className="text-xl font-bold text-gray-900">{stats.topPerformingSite.siteName}</h3>
+                            <p className="text-sm text-gray-500">{stats.topPerformingSite.siteCode}</p>
+                            <p className="text-2xl font-bold text-green-600 mt-3">{formatCurrency(stats.topPerformingSite.revenue)}</p>
+                            <p className="text-xs text-gray-500">Total Revenue</p>
+                          </div>
+                          <TrendingUp className="h-8 w-8 text-green-500" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {stats.lowestPerformingSite && (
+                    <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-amber-50">
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-orange-600 mb-1">📊 Lowest Performing Site</p>
+                            <h3 className="text-xl font-bold text-gray-900">{stats.lowestPerformingSite.siteName}</h3>
+                            <p className="text-sm text-gray-500">{stats.lowestPerformingSite.siteCode}</p>
+                            <p className="text-2xl font-bold text-orange-600 mt-3">{formatCurrency(stats.lowestPerformingSite.revenue)}</p>
+                            <p className="text-xs text-gray-500">Total Revenue</p>
+                          </div>
+                          <AlertCircle className="h-8 w-8 text-orange-500" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </>
           )}
           
           {/* Charts */}
