@@ -1362,9 +1362,6 @@ function FuelPriceMapView({ sites, priceData, selectedDate }) {
 
   const currentSite = sites.find(s => s.id === selectedSite);
   const currentPriceData = priceData.find(p => p.site_id === selectedSite);
-  
-  // Debug: Log coordinates
-  console.log('Current site:', currentSite?.name, 'Coords:', currentSite?.latitude, currentSite?.longitude);
 
   if (!mounted) return <div className="h-[600px] bg-slate-100 rounded-lg animate-pulse" />;
   
@@ -1419,74 +1416,21 @@ function FuelPriceMapView({ sites, priceData, selectedDate }) {
           <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         </div>
       ) : (
-        <DynamicMap currentSite={currentSite} competitors={competitors} priceData={currentPriceData} />
+        <LeafletMapClient currentSite={currentSite} competitors={competitors} priceData={currentPriceData} />
       )}
     </div>
   );
 }
 
-// Dynamic Map Component (client-side only)
-function DynamicMap({ currentSite, competitors, priceData }) {
-  const [Map, setMap] = useState(null);
-  const [loadError, setLoadError] = useState(false);
+// Client-only Leaflet Map Component
+function LeafletMapClient({ currentSite, competitors, priceData }) {
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-    
-    const loadMap = async () => {
-      try {
-        const mod = await import('react-leaflet');
-        if (mounted) {
-          setMap(() => ({ 
-            MapContainer: mod.MapContainer, 
-            TileLayer: mod.TileLayer, 
-            Marker: mod.Marker, 
-            Popup: mod.Popup 
-          }));
-        }
-      } catch (error) {
-        console.error('Failed to load map:', error);
-        if (mounted) {
-          setLoadError(true);
-        }
-      }
-    };
-    
-    // Set timeout fallback
-    const timeout = setTimeout(() => {
-      if (!Map && mounted) {
-        console.error('Map loading timeout');
-        setLoadError(true);
-      }
-    }, 5000);
-    
-    loadMap();
-    
-    return () => {
-      mounted = false;
-      clearTimeout(timeout);
-    };
+    setIsClient(true);
   }, []);
 
-  // Wait for map library and valid coordinates
-  if (loadError) {
-    return (
-      <Card className="border-0 shadow-lg overflow-hidden">
-        <CardContent className="h-[600px] flex flex-col items-center justify-center p-8">
-          <AlertTriangle className="h-12 w-12 text-orange-500 mb-4" />
-          <p className="text-lg font-semibold mb-2">Map View Unavailable</p>
-          <p className="text-sm text-muted-foreground text-center mb-4">
-            Unable to load map library. Please use List View instead.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Site: {currentSite?.name} ({currentSite?.latitude}, {currentSite?.longitude})
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-  
-  if (!Map || !currentSite || !currentSite.latitude || !currentSite.longitude) {
+  if (!isClient || typeof window === 'undefined') {
     return (
       <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center">
         <div className="text-center">
@@ -1497,13 +1441,40 @@ function DynamicMap({ currentSite, competitors, priceData }) {
     );
   }
 
-  const { MapContainer, TileLayer, Marker, Popup } = Map;
-  
-  // Create custom icon function
-  const createIcon = (isOwn, isLowest) => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const L = require('leaflet');
+  return <LeafletMapInner currentSite={currentSite} competitors={competitors} priceData={priceData} />;
+}
+
+// Inner map component that only renders client-side
+function LeafletMapInner({ currentSite, competitors, priceData }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  try {
+    // Import Leaflet and react-leaflet dynamically
+    const L = require('leaflet');
+    const { MapContainer, TileLayer, Marker, Popup } = require('react-leaflet');
+
+    // Fix default marker icon issue with Leaflet + Webpack
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    });
+
+    // Create custom icon
+    const createIcon = (isOwn, isLowest) => {
       return L.divIcon({
         className: 'custom-marker',
         html: `<div class="fuel-marker ${isOwn ? 'own' : isLowest ? 'lowest' : 'competitor'}">${isOwn ? '⛽' : '🏪'}</div>`,
@@ -1511,18 +1482,11 @@ function DynamicMap({ currentSite, competitors, priceData }) {
         iconAnchor: [15, 30],
         popupAnchor: [0, -30]
       });
-    } catch (err) {
-      console.error('Icon creation error:', err);
-      return null;
-    }
-  };
+    };
 
-  const lowestCompPrice = priceData?.fuel_data?.ULP?.min_competitor_price || 999999;
-  
-  // Filter out competitors without valid coordinates
-  const validCompetitors = competitors.filter(c => c.latitude && c.longitude);
+    const lowestCompPrice = priceData?.fuel_data?.ULP?.min_competitor_price || 999999;
+    const validCompetitors = competitors.filter(c => c.latitude && c.longitude);
 
-  try {
     return (
       <Card className="border-0 shadow-lg overflow-hidden">
         <div className="h-[600px]">
@@ -1530,7 +1494,7 @@ function DynamicMap({ currentSite, competitors, priceData }) {
             center={[currentSite.latitude, currentSite.longitude]} 
             zoom={13} 
             style={{ height: '100%', width: '100%' }}
-            key={currentSite.id}
+            key={`map-${currentSite.id}`}
           >
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1538,38 +1502,35 @@ function DynamicMap({ currentSite, competitors, priceData }) {
             />
             
             {/* Own Site Marker */}
-            {createIcon(true, false) && (
-              <Marker position={[currentSite.latitude, currentSite.longitude]} icon={createIcon(true, false)}>
-                <Popup>
-                  <div className="p-2 min-w-[200px]">
-                    <h3 className="font-bold text-sm mb-2">{currentSite.name}</h3>
-                    <div className="space-y-1 text-xs">
-                      {priceData && Object.entries(priceData.fuel_data).map(([type, data]) => (
-                        data.own_price && (
-                          <div key={type} className="flex justify-between">
-                            <span className="font-medium">{type}:</span>
-                            <span className="text-blue-600 font-bold">${(data.own_price / 100).toFixed(1)}</span>
-                          </div>
-                        )
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">📍 Your Site</p>
+            <Marker position={[currentSite.latitude, currentSite.longitude]} icon={createIcon(true, false)}>
+              <Popup>
+                <div className="p-2 min-w-[200px]">
+                  <h3 className="font-bold text-sm mb-2">{currentSite.name}</h3>
+                  <div className="space-y-1 text-xs">
+                    {priceData && Object.entries(priceData.fuel_data).map(([type, data]) => (
+                      data.own_price && (
+                        <div key={type} className="flex justify-between">
+                          <span className="font-medium">{type}:</span>
+                          <span className="text-blue-600 font-bold">${(data.own_price / 100).toFixed(1)}</span>
+                        </div>
+                      )
+                    ))}
                   </div>
-                </Popup>
-              </Marker>
-            )}
+                  <p className="text-xs text-muted-foreground mt-2">📍 Your Site</p>
+                </div>
+              </Popup>
+            </Marker>
 
             {/* Competitor Markers */}
             {validCompetitors.map(comp => {
               const compPrice = priceData?.fuel_data?.ULP?.competitor_prices?.find(cp => cp.competitor_name === comp.competitor_name);
               const isLowest = compPrice && compPrice.price === lowestCompPrice;
-              const icon = createIcon(false, isLowest);
               
-              return icon ? (
+              return (
                 <Marker 
                   key={comp.id} 
                   position={[comp.latitude, comp.longitude]} 
-                  icon={icon}
+                  icon={createIcon(false, isLowest)}
                 >
                   <Popup>
                     <div className="p-2 min-w-[200px]">
@@ -1592,7 +1553,7 @@ function DynamicMap({ currentSite, competitors, priceData }) {
                     </div>
                   </Popup>
                 </Marker>
-              ) : null;
+              );
             })}
           </MapContainer>
         </div>
@@ -1602,8 +1563,15 @@ function DynamicMap({ currentSite, competitors, priceData }) {
     console.error('Map render error:', error);
     return (
       <Card className="border-0 shadow-lg overflow-hidden">
-        <CardContent className="h-[600px] flex items-center justify-center">
-          <p className="text-muted-foreground">Error rendering map. Please try List View.</p>
+        <CardContent className="h-[600px] flex flex-col items-center justify-center p-8">
+          <AlertTriangle className="h-12 w-12 text-orange-500 mb-4" />
+          <p className="text-lg font-semibold mb-2">Map View Unavailable</p>
+          <p className="text-sm text-muted-foreground text-center mb-4">
+            Unable to load map. Please use List View instead.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Error: {error.message}
+          </p>
         </CardContent>
       </Card>
     );
