@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
-import { demoUsers, demoSites, generateSiteAssignments, generateShiftReports, generateSiteFieldConfigs, generateSiteBankingFormulas } from '@/lib/seed';
+import { demoUsers, demoSites, generateSiteAssignments, generateShiftReports, generateSiteFieldConfigs, generateSiteBankingFormulas, generateFuelPriceData } from '@/lib/seed';
 import * as XLSX from 'xlsx';
 
 // Helper to get path segments
@@ -103,6 +103,9 @@ async function handleSeed() {
     await db.collection('site_field_configs').deleteMany({});
     await db.collection('site_banking_formulas').deleteMany({});
     await db.collection('shift_report_custom_values').deleteMany({});
+    await db.collection('site_competitors').deleteMany({});
+    await db.collection('fuel_price_entries').deleteMany({});
+    await db.collection('competitor_prices').deleteMany({});
     
     const users = demoUsers.map(u => ({ ...u }));
     await db.collection('users').insertMany(users);
@@ -125,6 +128,12 @@ async function handleSeed() {
     const bankingFormulas = generateSiteBankingFormulas(sites, users);
     await db.collection('site_banking_formulas').insertMany(bankingFormulas);
     
+    // Generate fuel price data (competitors, own prices, competitor prices)
+    const { siteCompetitors, fuelPriceEntries, competitorPrices } = generateFuelPriceData(sites, users);
+    await db.collection('site_competitors').insertMany(siteCompetitors);
+    await db.collection('fuel_price_entries').insertMany(fuelPriceEntries);
+    await db.collection('competitor_prices').insertMany(competitorPrices);
+    
     return NextResponse.json({
       message: 'Database seeded successfully',
       counts: {
@@ -134,7 +143,10 @@ async function handleSeed() {
         staff_assignments: staffAssignments.length,
         reports: reports.length,
         field_configs: fieldConfigs.length,
-        banking_formulas: bankingFormulas.length
+        banking_formulas: bankingFormulas.length,
+        site_competitors: siteCompetitors.length,
+        fuel_price_entries: fuelPriceEntries.length,
+        competitor_prices: competitorPrices.length
       }
     }, { headers: corsHeaders });
   } catch (error) {
@@ -847,6 +859,315 @@ async function handleBankingCalculate(request) {
   } catch (error) {
     console.error('Banking calculate error:', error);
     return NextResponse.json({ error: 'Calculation failed: ' + error.message }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// ============== FUEL PRICE INTELLIGENCE ==============
+
+// Site Competitors Management
+async function handleGetSiteCompetitors(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const siteId = url.searchParams.get('siteId') || url.searchParams.get('site_id');
+    
+    let query = {};
+    if (siteId) query.site_id = siteId;
+    
+    const competitors = await db.collection('site_competitors').find(query).toArray();
+    return NextResponse.json(competitors, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get site competitors error:', error);
+    return NextResponse.json({ error: 'Failed to get competitors' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateSiteCompetitor(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const competitor = {
+      id: uuidv4(),
+      site_id: data.site_id,
+      competitor_name: data.competitor_name,
+      distance_km: data.distance_km || null,
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('site_competitors').insertOne(competitor);
+    return NextResponse.json(competitor, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create site competitor error:', error);
+    return NextResponse.json({ error: 'Failed to create competitor' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleUpdateSiteCompetitor(competitorId, request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    await db.collection('site_competitors').updateOne(
+      { id: competitorId },
+      { $set: { competitor_name: data.competitor_name, distance_km: data.distance_km } }
+    );
+    
+    return NextResponse.json({ message: 'Competitor updated' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update site competitor error:', error);
+    return NextResponse.json({ error: 'Failed to update competitor' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleDeleteSiteCompetitor(competitorId) {
+  try {
+    const db = await getDb();
+    await db.collection('site_competitors').deleteOne({ id: competitorId });
+    return NextResponse.json({ message: 'Competitor deleted' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete site competitor error:', error);
+    return NextResponse.json({ error: 'Failed to delete competitor' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// Fuel Price Entries
+async function handleGetFuelPriceEntries(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const siteId = url.searchParams.get('siteId') || url.searchParams.get('site_id');
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+    
+    let query = {};
+    if (siteId) query.site_id = siteId;
+    if (startDate && endDate) {
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+    
+    const entries = await db.collection('fuel_price_entries')
+      .find(query)
+      .sort({ date: -1, created_at: -1 })
+      .toArray();
+    
+    return NextResponse.json(entries, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get fuel price entries error:', error);
+    return NextResponse.json({ error: 'Failed to get fuel price entries' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateFuelPriceEntry(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const entry = {
+      id: uuidv4(),
+      site_id: data.site_id,
+      entered_by_user_id: data.entered_by_user_id,
+      date: data.date,
+      fuel_type: data.fuel_type, // ULP, Diesel, Premium
+      own_price: parseFloat(data.own_price),
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('fuel_price_entries').insertOne(entry);
+    return NextResponse.json(entry, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create fuel price entry error:', error);
+    return NextResponse.json({ error: 'Failed to create fuel price entry' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleUpdateFuelPriceEntry(entryId, request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    await db.collection('fuel_price_entries').updateOne(
+      { id: entryId },
+      { $set: { own_price: parseFloat(data.own_price) } }
+    );
+    
+    return NextResponse.json({ message: 'Fuel price entry updated' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update fuel price entry error:', error);
+    return NextResponse.json({ error: 'Failed to update fuel price entry' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// Competitor Prices
+async function handleGetCompetitorPrices(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const siteId = url.searchParams.get('siteId') || url.searchParams.get('site_id');
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+    
+    let query = {};
+    if (siteId) query.site_id = siteId;
+    if (startDate && endDate) {
+      query.recorded_at = { $gte: startDate, $lte: endDate };
+    }
+    
+    const prices = await db.collection('competitor_prices')
+      .find(query)
+      .sort({ recorded_at: -1, created_at: -1 })
+      .toArray();
+    
+    return NextResponse.json(prices, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get competitor prices error:', error);
+    return NextResponse.json({ error: 'Failed to get competitor prices' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleCreateCompetitorPrice(request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    const price = {
+      id: uuidv4(),
+      site_id: data.site_id,
+      competitor_name: data.competitor_name,
+      fuel_type: data.fuel_type, // ULP, Diesel, Premium
+      price: parseFloat(data.price),
+      recorded_at: data.recorded_at || new Date().toISOString().split('T')[0],
+      entered_by_user_id: data.entered_by_user_id,
+      created_at: new Date().toISOString()
+    };
+    
+    await db.collection('competitor_prices').insertOne(price);
+    return NextResponse.json(price, { status: 201, headers: corsHeaders });
+  } catch (error) {
+    console.error('Create competitor price error:', error);
+    return NextResponse.json({ error: 'Failed to create competitor price' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleUpdateCompetitorPrice(priceId, request) {
+  try {
+    const db = await getDb();
+    const data = await request.json();
+    
+    await db.collection('competitor_prices').updateOne(
+      { id: priceId },
+      { $set: { price: parseFloat(data.price) } }
+    );
+    
+    return NextResponse.json({ message: 'Competitor price updated' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update competitor price error:', error);
+    return NextResponse.json({ error: 'Failed to update competitor price' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleDeleteCompetitorPrice(priceId) {
+  try {
+    const db = await getDb();
+    await db.collection('competitor_prices').deleteOne({ id: priceId });
+    return NextResponse.json({ message: 'Competitor price deleted' }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete competitor price error:', error);
+    return NextResponse.json({ error: 'Failed to delete competitor price' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// Fuel Price Comparison with Insights
+async function handleGetFuelPriceComparison(request) {
+  try {
+    const db = await getDb();
+    const url = new URL(request.url);
+    const siteIds = url.searchParams.get('siteIds')?.split(',').filter(Boolean) || [];
+    const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
+    
+    const comparisons = [];
+    
+    for (const siteId of siteIds) {
+      // Get site details
+      const site = await db.collection('sites').findOne({ id: siteId });
+      if (!site) continue;
+      
+      // Get latest own prices for this site on this date
+      const ownPrices = await db.collection('fuel_price_entries')
+        .find({ site_id: siteId, date: date })
+        .toArray();
+      
+      // Get competitor prices for this site on this date
+      const competitorPrices = await db.collection('competitor_prices')
+        .find({ site_id: siteId, recorded_at: date })
+        .toArray();
+      
+      // Group by fuel type
+      const fuelTypes = ['ULP', 'Diesel', 'Premium'];
+      const fuelData = {};
+      
+      for (const fuelType of fuelTypes) {
+        const ownPrice = ownPrices.find(p => p.fuel_type === fuelType);
+        const compPrices = competitorPrices.filter(p => p.fuel_type === fuelType);
+        
+        if (!ownPrice && compPrices.length === 0) continue;
+        
+        const compPriceValues = compPrices.map(p => p.price);
+        const minCompPrice = compPriceValues.length > 0 ? Math.min(...compPriceValues) : null;
+        const maxCompPrice = compPriceValues.length > 0 ? Math.max(...compPriceValues) : null;
+        
+        let insight = '';
+        let insightType = 'neutral'; // neutral, good, warning, danger
+        
+        if (ownPrice && minCompPrice !== null) {
+          const diff = ownPrice.own_price - minCompPrice;
+          if (diff > 5) {
+            insight = `You are ${Math.abs(diff).toFixed(1)} cents above lowest competitor. Consider reducing price.`;
+            insightType = 'danger';
+          } else if (diff > 2) {
+            insight = `You are ${Math.abs(diff).toFixed(1)} cents above lowest competitor.`;
+            insightType = 'warning';
+          } else if (diff < 0) {
+            insight = `You are the cheapest in this area! (${Math.abs(diff).toFixed(1)} cents below nearest competitor)`;
+            insightType = 'good';
+          } else {
+            insight = `Your price is competitive (within 2 cents of lowest).`;
+            insightType = 'neutral';
+          }
+        } else if (ownPrice && compPriceValues.length === 0) {
+          insight = 'No competitor data available for comparison.';
+          insightType = 'neutral';
+        }
+        
+        fuelData[fuelType] = {
+          own_price: ownPrice?.own_price || null,
+          competitor_prices: compPrices.map(cp => ({
+            competitor_name: cp.competitor_name,
+            price: cp.price
+          })),
+          min_competitor_price: minCompPrice,
+          max_competitor_price: maxCompPrice,
+          insight: insight,
+          insight_type: insightType,
+          difference_from_min: ownPrice && minCompPrice ? (ownPrice.own_price - minCompPrice).toFixed(1) : null
+        };
+      }
+      
+      if (Object.keys(fuelData).length > 0) {
+        comparisons.push({
+          site_id: siteId,
+          site_name: site.name,
+          site_code: site.code,
+          date: date,
+          fuel_data: fuelData
+        });
+      }
+    }
+    
+    return NextResponse.json(comparisons, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get fuel price comparison error:', error);
+    return NextResponse.json({ error: 'Failed to get fuel price comparison' }, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -1682,6 +2003,19 @@ export async function GET(request) {
   if (path[0] === 'dashboard' && path[1] === 'revenue-chart') {
     return handleGetRevenueChart(request);
   }
+  // Fuel Price Intelligence endpoints
+  if (path[0] === 'site-competitors') {
+    return handleGetSiteCompetitors(request);
+  }
+  if (path[0] === 'fuel-price-entries') {
+    return handleGetFuelPriceEntries(request);
+  }
+  if (path[0] === 'competitor-prices') {
+    return handleGetCompetitorPrices(request);
+  }
+  if (path[0] === 'fuel-price-comparison') {
+    return handleGetFuelPriceComparison(request);
+  }
   if (path[0] === 'export') {
     return handleExport(request);
   }
@@ -1745,6 +2079,16 @@ export async function POST(request) {
   if (path[0] === 'banking' && path[1] === 'calculate') {
     return handleBankingCalculate(request);
   }
+  // Fuel Price Intelligence endpoints
+  if (path[0] === 'site-competitors') {
+    return handleCreateSiteCompetitor(request);
+  }
+  if (path[0] === 'fuel-price-entries') {
+    return handleCreateFuelPriceEntry(request);
+  }
+  if (path[0] === 'competitor-prices') {
+    return handleCreateCompetitorPrice(request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -1776,6 +2120,16 @@ export async function PUT(request) {
   // Backward compatibility
   if (path[0] === 'banking-formulas' && path[1]) {
     return handleUpdateBankingFormula(path[1], request);
+  }
+  // Fuel Price Intelligence endpoints
+  if (path[0] === 'site-competitors' && path[1]) {
+    return handleUpdateSiteCompetitor(path[1], request);
+  }
+  if (path[0] === 'fuel-price-entries' && path[1]) {
+    return handleUpdateFuelPriceEntry(path[1], request);
+  }
+  if (path[0] === 'competitor-prices' && path[1]) {
+    return handleUpdateCompetitorPrice(path[1], request);
   }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
@@ -1811,6 +2165,13 @@ export async function DELETE(request) {
   // Backward compatibility
   if (path[0] === 'banking-formulas' && path[1]) {
     return handleDeleteBankingFormula(path[1]);
+  }
+  // Fuel Price Intelligence endpoints
+  if (path[0] === 'site-competitors' && path[1]) {
+    return handleDeleteSiteCompetitor(path[1]);
+  }
+  if (path[0] === 'competitor-prices' && path[1]) {
+    return handleDeleteCompetitorPrice(path[1]);
   }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
