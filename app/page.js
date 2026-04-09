@@ -1300,7 +1300,10 @@ function DynamicMap({ currentSite, competitors, priceData }) {
     });
   }, []);
 
-  if (!Map) return <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  // Wait for map library and valid coordinates
+  if (!Map || !currentSite || !currentSite.latitude || !currentSite.longitude) {
+    return <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
 
   const { MapContainer, TileLayer, Marker, Popup } = Map;
   
@@ -1318,6 +1321,9 @@ function DynamicMap({ currentSite, competitors, priceData }) {
   };
 
   const lowestCompPrice = priceData?.fuel_data?.ULP?.min_competitor_price || 999999;
+  
+  // Filter out competitors without valid coordinates
+  const validCompetitors = competitors.filter(c => c.latitude && c.longitude);
 
   return (
     <Card className="border-0 shadow-lg overflow-hidden">
@@ -1339,10 +1345,12 @@ function DynamicMap({ currentSite, competitors, priceData }) {
                 <h3 className="font-bold text-sm mb-2">{currentSite.name}</h3>
                 <div className="space-y-1 text-xs">
                   {priceData && Object.entries(priceData.fuel_data).map(([type, data]) => (
-                    <div key={type} className="flex justify-between">
-                      <span className="font-medium">{type}:</span>
-                      <span className="text-blue-600 font-bold">${(data.own_price / 100).toFixed(1)}</span>
-                    </div>
+                    data.own_price && (
+                      <div key={type} className="flex justify-between">
+                        <span className="font-medium">{type}:</span>
+                        <span className="text-blue-600 font-bold">${(data.own_price / 100).toFixed(1)}</span>
+                      </div>
+                    )
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">📍 Your Site</p>
@@ -1351,7 +1359,7 @@ function DynamicMap({ currentSite, competitors, priceData }) {
           </Marker>
 
           {/* Competitor Markers */}
-          {competitors.map(comp => {
+          {validCompetitors.map(comp => {
             const compPrice = priceData?.fuel_data?.ULP?.competitor_prices?.find(cp => cp.competitor_name === comp.competitor_name);
             const isLowest = compPrice && compPrice.price === lowestCompPrice;
             
