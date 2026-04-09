@@ -115,7 +115,7 @@ function Header({ user, onLogout, activeTab, setActiveTab }) {
   const tabs = user.role === 'owner' 
     ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }, { id: 'sites', label: 'Sites', icon: Building2 }, { id: 'operators', label: 'Operators', icon: Users }]
     : user.role === 'operator'
-    ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }, { id: 'staff', label: 'Staff Management', icon: Users }, { id: 'fields', label: 'Form Fields', icon: Settings }, { id: 'banking', label: 'Banking', icon: Calculator }]
+    ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }, { id: 'staff', label: 'Staff Management', icon: Users }, { id: 'pricing', label: 'Fuel Pricing', icon: Fuel }, { id: 'fields', label: 'Form Fields', icon: Settings }, { id: 'banking', label: 'Banking', icon: Calculator }]
     : [{ id: 'submit', label: 'Submit Report', icon: ClipboardList }, { id: 'history', label: 'My Reports', icon: FileText }];
 
   return (
@@ -1128,6 +1128,306 @@ function ShiftReportForm({ user, sites, onSuccess }) {
 }
 
 // ============== OWNER DASHBOARD ==============
+// ============== FUEL PRICE COMPARISON (Owner View) ==============
+function FuelPriceComparisonSection({ sites, siteIds }) {
+  const [priceData, setPriceData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const loadPriceData = useCallback(async () => {
+    if (!siteIds) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/fuel-price-comparison?siteIds=${siteIds}&date=${selectedDate}`);
+      const data = await res.json();
+      setPriceData(data);
+    } catch (err) { console.error('Failed to load fuel price data:', err); }
+    finally { setLoading(false); }
+  }, [siteIds, selectedDate]);
+
+  useEffect(() => { loadPriceData(); }, [loadPriceData]);
+
+  const getInsightColor = (type) => {
+    if (type === 'good') return 'bg-green-50 text-green-700 border-green-200';
+    if (type === 'warning') return 'bg-orange-50 text-orange-700 border-orange-200';
+    if (type === 'danger') return 'bg-red-50 text-red-700 border-red-200';
+    return 'bg-blue-50 text-blue-700 border-blue-200';
+  };
+
+  const getPriceColor = (isOwn, isMin, isMax) => {
+    if (isOwn) return 'text-blue-600 font-bold';
+    if (isMin) return 'text-green-600 font-semibold';
+    if (isMax) return 'text-red-600';
+    return 'text-gray-700';
+  };
+
+  if (loading) return <div className="flex items-center justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
+  if (priceData.length === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold flex items-center gap-2"><Fuel className="h-5 w-5" /> Fuel Price Intelligence</h3>
+          <p className="text-sm text-muted-foreground">Compare your fuel prices with nearby competitors</p>
+        </div>
+        <Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-[180px]" />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {priceData.map(site => (
+          <Card key={site.site_id} className="border-0 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                {site.site_name}
+              </CardTitle>
+              <CardDescription className="text-xs">{site.site_code}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {Object.entries(site.fuel_data).map(([fuelType, data]) => (
+                <div key={fuelType} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{fuelType}</span>
+                    {data.own_price && (
+                      <span className="text-lg font-bold text-blue-600">${(data.own_price / 100).toFixed(1)}</span>
+                    )}
+                  </div>
+
+                  {data.competitor_prices && data.competitor_prices.length > 0 && (
+                    <div className="space-y-1 pl-3 border-l-2 border-slate-200">
+                      {data.competitor_prices.map((comp, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <span className={getPriceColor(false, comp.price === data.min_competitor_price, comp.price === data.max_competitor_price)}>
+                            {comp.competitor_name}
+                          </span>
+                          <span className={getPriceColor(false, comp.price === data.min_competitor_price, comp.price === data.max_competitor_price)}>
+                            ${(comp.price / 100).toFixed(1)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {data.insight && (
+                    <div className={`text-xs p-2 rounded border ${getInsightColor(data.insight_type)}`}>
+                      {data.insight}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============== FUEL PRICING MANAGEMENT (Operator) ==============
+function FuelPricingManagement({ user, sites }) {
+  const [activeSubTab, setActiveSubTab] = useState('prices');
+  
+  if (activeSubTab === 'prices') return <FuelPriceEntry user={user} sites={sites} />;
+  if (activeSubTab === 'competitors') return <CompetitorManagement user={user} sites={sites} />;
+  
+  return (
+    <div className="space-y-6">
+      <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
+        <TabsList>
+          <TabsTrigger value="prices">Price Entry</TabsTrigger>
+          <TabsTrigger value="competitors">Competitors</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </div>
+  );
+}
+
+function FuelPriceEntry({ user, sites }) {
+  const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [prices, setPrices] = useState({ ULP: '', Diesel: '', Premium: '' });
+  const [competitorPrices, setCompetitorPrices] = useState({});
+  const [competitors, setCompetitors] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (selectedSite) {
+      fetch(`/api/site-competitors?siteId=${selectedSite}`)
+        .then(r => r.json())
+        .then(setCompetitors);
+    }
+  }, [selectedSite]);
+
+  const handleSavePrices = async () => {
+    setLoading(true);
+    try {
+      for (const [fuelType, price] of Object.entries(prices)) {
+        if (price) {
+          await fetch('/api/fuel-price-entries', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              site_id: selectedSite,
+              fuel_type: fuelType,
+              own_price: parseFloat(price),
+              date: selectedDate,
+              entered_by_user_id: user.id
+            })
+          });
+        }
+      }
+      
+      for (const [key, price] of Object.entries(competitorPrices)) {
+        if (price) {
+          const [compName, fuelType] = key.split('_');
+          await fetch('/api/competitor-prices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              site_id: selectedSite,
+              competitor_name: compName,
+              fuel_type: fuelType,
+              price: parseFloat(price),
+              recorded_at: selectedDate,
+              entered_by_user_id: user.id
+            })
+          });
+        }
+      }
+      
+      alert('Prices saved successfully!');
+      setPrices({ ULP: '', Diesel: '', Premium: '' });
+      setCompetitorPrices({});
+    } catch (err) { alert('Failed to save prices'); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div><h2 className="text-xl font-bold">Fuel Price Entry</h2><p className="text-muted-foreground">Enter your fuel prices and competitor prices</p></div>
+      
+      <div className="flex gap-4">
+        <Select value={selectedSite} onValueChange={setSelectedSite}>
+          <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
+          <SelectContent>{sites.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-[180px]" />
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-lg">Your Prices</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {['ULP', 'Diesel', 'Premium'].map(ft => (
+            <div key={ft} className="flex items-center gap-3">
+              <Label className="w-24">{ft}</Label>
+              <Input type="number" step="0.1" placeholder="185.9" value={prices[ft]} onChange={(e) => setPrices(p => ({ ...p, [ft]: e.target.value }))} className="w-32" />
+              <span className="text-xs text-muted-foreground">cents/litre</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {competitors.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-lg">Competitor Prices</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {competitors.map(comp => (
+              <div key={comp.id} className="space-y-2 p-3 bg-slate-50 rounded">
+                <p className="font-medium text-sm">{comp.competitor_name}</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {['ULP', 'Diesel', 'Premium'].map(ft => (
+                    <Input key={ft} type="number" step="0.1" placeholder={ft} value={competitorPrices[`${comp.competitor_name}_${ft}`] || ''} onChange={(e) => setCompetitorPrices(p => ({ ...p, [`${comp.competitor_name}_${ft}`]: e.target.value }))} className="text-sm" />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      <Button onClick={handleSavePrices} disabled={loading} className="w-full">{loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : <><Save className="h-4 w-4 mr-2" /> Save All Prices</>}</Button>
+    </div>
+  );
+}
+
+function CompetitorManagement({ user, sites }) {
+  const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
+  const [competitors, setCompetitors] = useState([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ competitor_name: '', distance_km: '' });
+
+  const loadCompetitors = useCallback(async () => {
+    if (!selectedSite) return;
+    const res = await fetch(`/api/site-competitors?siteId=${selectedSite}`);
+    const data = await res.json();
+    setCompetitors(data);
+  }, [selectedSite]);
+
+  useEffect(() => { loadCompetitors(); }, [loadCompetitors]);
+
+  const handleAdd = async () => {
+    if (!form.competitor_name) { alert('Competitor name required'); return; }
+    await fetch('/api/site-competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, site_id: selectedSite })
+    });
+    setForm({ competitor_name: '', distance_km: '' });
+    setShowAdd(false);
+    loadCompetitors();
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this competitor?')) return;
+    await fetch(`/api/site-competitors/${id}`, { method: 'DELETE' });
+    loadCompetitors();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div><h2 className="text-xl font-bold">Manage Competitors</h2><p className="text-muted-foreground">Add and manage nearby competitor stations</p></div>
+        <Select value={selectedSite} onValueChange={setSelectedSite}>
+          <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
+          <SelectContent>{sites.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> Add Competitor</Button></DialogTrigger>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Competitor</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div><Label>Competitor Name</Label><Input placeholder="Shell Petrol Station" value={form.competitor_name} onChange={(e) => setForm(p => ({ ...p, competitor_name: e.target.value }))} className="mt-1" /></div>
+            <div><Label>Distance (km)</Label><Input type="number" step="0.1" placeholder="1.5" value={form.distance_km} onChange={(e) => setForm(p => ({ ...p, distance_km: e.target.value }))} className="mt-1" /></div>
+          </div>
+          <DialogFooter><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose><Button onClick={handleAdd}>Add</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardContent className="pt-6">
+          {competitors.length === 0 ? <p className="text-center text-muted-foreground py-8">No competitors added yet</p> : (
+            <div className="space-y-2">
+              {competitors.map(comp => (
+                <div key={comp.id} className="flex items-center justify-between p-3 bg-slate-50 rounded">
+                  <div>
+                    <p className="font-medium">{comp.competitor_name}</p>
+                    {comp.distance_km && <p className="text-xs text-muted-foreground">{comp.distance_km} km away</p>}
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(comp.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============== OWNER DASHBOARD ==============
 function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
   const [stats, setStats] = useState(null);
   const [dailyRollups, setDailyRollups] = useState([]);
@@ -1277,6 +1577,9 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
               )}
             </>
           )}
+          
+          {/* Fuel Price Comparison Section */}
+          <FuelPriceComparisonSection sites={sites} siteIds={siteIds} />
           
           {/* Charts */}
           <div className="grid lg:grid-cols-2 gap-6">
@@ -1859,6 +2162,7 @@ function OperatorDashboard({ user, sites, activeTab }) {
   };
 
   if (activeTab === 'staff') { return <div className="container mx-auto px-4 py-6"><StaffAccessManagement user={user} sites={sites} /></div>; }
+  if (activeTab === 'pricing') { return <div className="container mx-auto px-4 py-6"><FuelPricingManagement user={user} sites={sites} /></div>; }
   if (activeTab === 'fields') { return <div className="container mx-auto px-4 py-6"><FieldConfiguration user={user} sites={sites} /></div>; }
   if (activeTab === 'banking') { return <div className="container mx-auto px-4 py-6"><BankingManagement user={user} sites={sites} /></div>; }
   if (selectedReport) { return <div className="container mx-auto px-4 py-6 max-w-4xl"><ReportDetail report={selectedReport} onClose={() => setSelectedReport(null)} onStatusChange={handleStatusChange} canChangeStatus={true} user={user} /></div>; }
