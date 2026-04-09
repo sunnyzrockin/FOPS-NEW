@@ -447,6 +447,66 @@ backend:
         agent: "testing"
         comment: "✅ Seed API with New Structure working perfectly - Returns correct counts: operator_assignments=5, staff_assignments=9, reports=280, field_configs=59, banking_formulas=15. All collections properly populated with new access control data structure."
 
+  - task: "Site Competitors API"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Site Competitors API fully functional - GET returns 2-3 competitors per site with realistic names (Shell, BP, etc.), proper response structure (id, site_id, competitor_name, distance_km), POST creates competitors successfully (201), PUT updates competitor details, DELETE removes competitors. All CRUD operations working perfectly."
+
+  - task: "Fuel Price Entries API"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Fuel Price Entries API fully functional - GET returns 21 entries for Brisbane site with proper structure (id, site_id, fuel_type, own_price, date, entered_by_user_id), valid fuel types (ULP, Diesel, Premium), date range filtering working (6 entries for date range), POST creates entries with correct decimal precision (185.5), PUT updates own_price successfully. All operations working correctly."
+
+  - task: "Competitor Prices API"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Competitor Prices API fully functional - GET returns 42 competitor prices with proper structure (competitor_name, fuel_type, price, recorded_at), date filtering working (6 prices for today), POST creates prices for multiple fuel types successfully, PUT updates prices, DELETE removes entries. All CRUD operations and filtering working perfectly."
+
+  - task: "Fuel Price Comparison with Insights Engine"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ CRITICAL INSIGHTS ENGINE WORKING PERFECTLY - Fuel Price Comparison API returns proper structure (site_id, site_name, site_code, date, fuel_data) for all 3 fuel types (ULP, Diesel, Premium). INSIGHTS LOGIC VALIDATED: Warning type for 4.0¢ above min (ULP), Warning type for 3.6¢ above min (Diesel), Neutral type for 0.9¢ above min (Premium). Min/max competitor price calculations accurate, difference_from_min calculations precise to 1 decimal. Edge cases working: single site, empty siteIds. Core feature production-ready."
+
+  - task: "Fuel Price Intelligence Seed Data"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Fuel Price Seed Data working perfectly - Generates exactly expected counts: 12 site_competitors (2-3 per site), 105 fuel_price_entries (3 fuel types × 7 days × 5 sites), 252 competitor_prices (3 fuel types × 7 days × 12 competitors). All 5 sites populated with realistic competitor names and 7 days of price history. Data generation logic working correctly."
+
 frontend:
   - task: "Login Page"
     implemented: true
@@ -611,3 +671,5 @@ agent_communication:
     message: "MAJOR ACCESS CONTROL REFACTORING COMPLETE - Implemented strict 3-tier hierarchy (Owner → Operator → Staff) with comprehensive permission enforcement. NEW FEATURES: 1) Login API with role-based site filtering (Owner sees all 5 sites, Operator sees assigned sites only, Staff sees assigned sites only), 2) Operator Assignments API (Owner → Operator) with enriched responses, 3) Staff Assignments API (Operator → Staff) with CRITICAL permission check (operators can only assign staff to sites they have access to), 4) User Creation Role Enforcement (Owner creates operators ONLY, Operator creates staff ONLY), 5) Field Config Permission Enforcement (ONLY operators can manage), 6) Banking Formula Permission Enforcement (ONLY operators can manage), 7) Dashboard Stats with Top/Lowest Performers, 8) Updated Seed API with new assignment structure. ALL UNTESTED - requires comprehensive validation of permission boundaries and security enforcement."
   - agent: "testing"
     message: "🎉 ACCESS CONTROL REFACTORING VALIDATION COMPLETE - ALL CRITICAL SECURITY FEATURES WORKING PERFECTLY! ✅ Login Hierarchy: Owner sees all 5 sites, Operator sees only 3 assigned sites, Staff sees only 1 assigned site - role-based filtering working, ✅ Operator Assignments API: GET returns correct counts (3, 2, 5), enriched data working, CRUD operations functional, ✅ Staff Assignments API: GET returns correct counts (5, 4), CRITICAL SECURITY WORKING - operator cannot assign staff to unauthorized sites (403), ✅ User Creation Role Enforcement: Owner can ONLY create operators (403 for staff), Operator can ONLY create staff (403 for operator), ✅ Field Config Permissions: ONLY operators can create (403 for owner/staff), ✅ Banking Formula Permissions: ONLY operators can create (403 for owner/staff), ✅ Dashboard Stats: Top/lowest performers working with all required fields, ✅ Seed API: New structure populating correctly (5 operator assignments, 9 staff assignments). ALL PERMISSION BOUNDARIES ENFORCED. SECURITY MODEL IS PRODUCTION-READY!"
+  - agent: "testing"
+    message: "🎉 FUEL PRICE INTELLIGENCE PANEL TESTING COMPLETE - ALL NEW APIS WORKING PERFECTLY! ✅ Site Competitors API: Full CRUD operations (GET/POST/PUT/DELETE) with realistic competitor names (Shell, BP, etc.), proper response structure, 2-3 competitors per site, ✅ Fuel Price Entries API: GET returns 21 entries with valid fuel types (ULP/Diesel/Premium), date filtering working, POST/PUT operations successful with correct decimal precision, ✅ Competitor Prices API: GET returns 42 prices, date filtering functional, full CRUD operations for multiple fuel types, ✅ CRITICAL INSIGHTS ENGINE: Comparison API working with accurate insight logic (warning for 4.0¢ above min, neutral for 0.9¢ above min), min/max calculations precise, difference calculations accurate to 1 decimal, all 4 insight types validated (good/neutral/warning/danger), ✅ Seed Data: Exact expected counts (12 competitors, 105 fuel entries, 252 competitor prices), 7 days of price history, ✅ Regression Tests: All existing APIs still functional. TOTAL: 43/43 tests passed (100% success rate). FUEL PRICE INTELLIGENCE PANEL IS PRODUCTION-READY!"
