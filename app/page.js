@@ -1267,12 +1267,28 @@ function FuelPriceMapView({ sites, priceData, selectedDate }) {
 
   const currentSite = sites.find(s => s.id === selectedSite);
   const currentPriceData = priceData.find(p => p.site_id === selectedSite);
+  
+  // Debug: Log coordinates
+  console.log('Current site:', currentSite?.name, 'Coords:', currentSite?.latitude, currentSite?.longitude);
 
   if (!mounted) return <div className="h-[600px] bg-slate-100 rounded-lg animate-pulse" />;
   
   if (!currentSite) {
     return <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center">
       <p className="text-muted-foreground">No site data available</p>
+    </div>;
+  }
+  
+  if (!currentSite.latitude || !currentSite.longitude) {
+    return <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center">
+      <div className="text-center p-8">
+        <AlertTriangle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
+        <p className="text-lg font-semibold mb-2">Map coordinates not available</p>
+        <p className="text-sm text-muted-foreground">
+          Site: {currentSite.name}<br/>
+          Please use List View instead.
+        </p>
+      </div>
     </div>;
   }
 
