@@ -1317,16 +1317,73 @@ function FuelPriceMapView({ sites, priceData, selectedDate }) {
 // Dynamic Map Component (client-side only)
 function DynamicMap({ currentSite, competitors, priceData }) {
   const [Map, setMap] = useState(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    import('react-leaflet').then((mod) => {
-      setMap(() => ({ MapContainer: mod.MapContainer, TileLayer: mod.TileLayer, Marker: mod.Marker, Popup: mod.Popup }));
-    });
+    let mounted = true;
+    
+    const loadMap = async () => {
+      try {
+        const mod = await import('react-leaflet');
+        if (mounted) {
+          setMap(() => ({ 
+            MapContainer: mod.MapContainer, 
+            TileLayer: mod.TileLayer, 
+            Marker: mod.Marker, 
+            Popup: mod.Popup 
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load map:', error);
+        if (mounted) {
+          setLoadError(true);
+        }
+      }
+    };
+    
+    // Set timeout fallback
+    const timeout = setTimeout(() => {
+      if (!Map && mounted) {
+        console.error('Map loading timeout');
+        setLoadError(true);
+      }
+    }, 5000);
+    
+    loadMap();
+    
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
   }, []);
 
   // Wait for map library and valid coordinates
+  if (loadError) {
+    return (
+      <Card className="border-0 shadow-lg overflow-hidden">
+        <CardContent className="h-[600px] flex flex-col items-center justify-center p-8">
+          <AlertTriangle className="h-12 w-12 text-orange-500 mb-4" />
+          <p className="text-lg font-semibold mb-2">Map View Unavailable</p>
+          <p className="text-sm text-muted-foreground text-center mb-4">
+            Unable to load map library. Please use List View instead.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Site: {currentSite?.name} ({currentSite?.latitude}, {currentSite?.longitude})
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+  
   if (!Map || !currentSite || !currentSite.latitude || !currentSite.longitude) {
-    return <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return (
+      <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">Loading map...</p>
+        </div>
+      </div>
+    );
   }
 
   const { MapContainer, TileLayer, Marker, Popup } = Map;
@@ -1334,14 +1391,19 @@ function DynamicMap({ currentSite, competitors, priceData }) {
   // Create custom icon function
   const createIcon = (isOwn, isLowest) => {
     if (typeof window === 'undefined') return null;
-    const L = require('leaflet');
-    return L.divIcon({
-      className: 'custom-marker',
-      html: `<div class="fuel-marker ${isOwn ? 'own' : isLowest ? 'lowest' : 'competitor'}">${isOwn ? '⛽' : '🏪'}</div>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 30],
-      popupAnchor: [0, -30]
-    });
+    try {
+      const L = require('leaflet');
+      return L.divIcon({
+        className: 'custom-marker',
+        html: `<div class="fuel-marker ${isOwn ? 'own' : isLowest ? 'lowest' : 'competitor'}">${isOwn ? '⛽' : '🏪'}</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+        popupAnchor: [0, -30]
+      });
+    } catch (err) {
+      console.error('Icon creation error:', err);
+      return null;
+    }
   };
 
   const lowestCompPrice = priceData?.fuel_data?.ULP?.min_competitor_price || 999999;
@@ -1349,77 +1411,92 @@ function DynamicMap({ currentSite, competitors, priceData }) {
   // Filter out competitors without valid coordinates
   const validCompetitors = competitors.filter(c => c.latitude && c.longitude);
 
-  return (
-    <Card className="border-0 shadow-lg overflow-hidden">
-      <div className="h-[600px]">
-        <MapContainer 
-          center={[currentSite.latitude, currentSite.longitude]} 
-          zoom={13} 
-          style={{ height: '100%', width: '100%' }}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          />
-          
-          {/* Own Site Marker */}
-          <Marker position={[currentSite.latitude, currentSite.longitude]} icon={createIcon(true, false)}>
-            <Popup>
-              <div className="p-2 min-w-[200px]">
-                <h3 className="font-bold text-sm mb-2">{currentSite.name}</h3>
-                <div className="space-y-1 text-xs">
-                  {priceData && Object.entries(priceData.fuel_data).map(([type, data]) => (
-                    data.own_price && (
-                      <div key={type} className="flex justify-between">
-                        <span className="font-medium">{type}:</span>
-                        <span className="text-blue-600 font-bold">${(data.own_price / 100).toFixed(1)}</span>
-                      </div>
-                    )
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">📍 Your Site</p>
-              </div>
-            </Popup>
-          </Marker>
-
-          {/* Competitor Markers */}
-          {validCompetitors.map(comp => {
-            const compPrice = priceData?.fuel_data?.ULP?.competitor_prices?.find(cp => cp.competitor_name === comp.competitor_name);
-            const isLowest = compPrice && compPrice.price === lowestCompPrice;
+  try {
+    return (
+      <Card className="border-0 shadow-lg overflow-hidden">
+        <div className="h-[600px]">
+          <MapContainer 
+            center={[currentSite.latitude, currentSite.longitude]} 
+            zoom={13} 
+            style={{ height: '100%', width: '100%' }}
+            key={currentSite.id}
+          >
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            />
             
-            return (
-              <Marker 
-                key={comp.id} 
-                position={[comp.latitude, comp.longitude]} 
-                icon={createIcon(false, isLowest)}
-              >
+            {/* Own Site Marker */}
+            {createIcon(true, false) && (
+              <Marker position={[currentSite.latitude, currentSite.longitude]} icon={createIcon(true, false)}>
                 <Popup>
                   <div className="p-2 min-w-[200px]">
-                    <h3 className="font-bold text-sm mb-2">{comp.competitor_name}</h3>
+                    <h3 className="font-bold text-sm mb-2">{currentSite.name}</h3>
                     <div className="space-y-1 text-xs">
-                      {priceData && Object.entries(priceData.fuel_data).map(([type, data]) => {
-                        const price = data.competitor_prices?.find(cp => cp.competitor_name === comp.competitor_name);
-                        return price ? (
+                      {priceData && Object.entries(priceData.fuel_data).map(([type, data]) => (
+                        data.own_price && (
                           <div key={type} className="flex justify-between">
                             <span className="font-medium">{type}:</span>
-                            <span className={price.price === data.min_competitor_price ? 'text-green-600 font-bold' : 'text-gray-700'}>
-                              ${(price.price / 100).toFixed(1)}
-                            </span>
+                            <span className="text-blue-600 font-bold">${(data.own_price / 100).toFixed(1)}</span>
                           </div>
-                        ) : null;
-                      })}
+                        )
+                      ))}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">📍 {comp.distance_km} km away</p>
-                    {isLowest && <p className="text-xs text-green-600 font-semibold mt-1">✨ Lowest Price!</p>}
+                    <p className="text-xs text-muted-foreground mt-2">📍 Your Site</p>
                   </div>
                 </Popup>
               </Marker>
-            );
-          })}
-        </MapContainer>
-      </div>
-    </Card>
-  );
+            )}
+
+            {/* Competitor Markers */}
+            {validCompetitors.map(comp => {
+              const compPrice = priceData?.fuel_data?.ULP?.competitor_prices?.find(cp => cp.competitor_name === comp.competitor_name);
+              const isLowest = compPrice && compPrice.price === lowestCompPrice;
+              const icon = createIcon(false, isLowest);
+              
+              return icon ? (
+                <Marker 
+                  key={comp.id} 
+                  position={[comp.latitude, comp.longitude]} 
+                  icon={icon}
+                >
+                  <Popup>
+                    <div className="p-2 min-w-[200px]">
+                      <h3 className="font-bold text-sm mb-2">{comp.competitor_name}</h3>
+                      <div className="space-y-1 text-xs">
+                        {priceData && Object.entries(priceData.fuel_data).map(([type, data]) => {
+                          const price = data.competitor_prices?.find(cp => cp.competitor_name === comp.competitor_name);
+                          return price ? (
+                            <div key={type} className="flex justify-between">
+                              <span className="font-medium">{type}:</span>
+                              <span className={price.price === data.min_competitor_price ? 'text-green-600 font-bold' : 'text-gray-700'}>
+                                ${(price.price / 100).toFixed(1)}
+                              </span>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">📍 {comp.distance_km} km away</p>
+                      {isLowest && <p className="text-xs text-green-600 font-semibold mt-1">✨ Lowest Price!</p>}
+                    </div>
+                  </Popup>
+                </Marker>
+              ) : null;
+            })}
+          </MapContainer>
+        </div>
+      </Card>
+    );
+  } catch (error) {
+    console.error('Map render error:', error);
+    return (
+      <Card className="border-0 shadow-lg overflow-hidden">
+        <CardContent className="h-[600px] flex items-center justify-center">
+          <p className="text-muted-foreground">Error rendering map. Please try List View.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 }
 
 // ============== FUEL PRICING MANAGEMENT (Operator) ==============
