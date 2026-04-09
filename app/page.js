@@ -1242,21 +1242,39 @@ function FuelPriceMapView({ sites, priceData, selectedDate }) {
   const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
   const [competitors, setCompetitors] = useState([]);
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { 
+    setMounted(true);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     if (selectedSite) {
+      setLoading(true);
       fetch(`/api/site-competitors?siteId=${selectedSite}`)
         .then(r => r.json())
-        .then(setCompetitors);
+        .then(data => {
+          setCompetitors(data);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error('Failed to load competitors:', err);
+          setLoading(false);
+        });
     }
   }, [selectedSite]);
 
   const currentSite = sites.find(s => s.id === selectedSite);
   const currentPriceData = priceData.find(p => p.site_id === selectedSite);
 
-  if (!mounted || !currentSite) return <div className="h-[600px] bg-slate-100 rounded-lg animate-pulse" />;
+  if (!mounted) return <div className="h-[600px] bg-slate-100 rounded-lg animate-pulse" />;
+  
+  if (!currentSite) {
+    return <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center">
+      <p className="text-muted-foreground">No site data available</p>
+    </div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -1265,19 +1283,19 @@ function FuelPriceMapView({ sites, priceData, selectedDate }) {
           <SelectTrigger className="w-[300px]"><SelectValue /></SelectTrigger>
           <SelectContent>{sites.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
         </Select>
-        {currentPriceData && (
+        {currentPriceData && currentPriceData.fuel_data && currentPriceData.fuel_data.ULP && (
           <Card className="flex-1 border-0 shadow-sm">
             <CardContent className="p-4 flex items-center justify-between">
               <div className="text-sm">
                 <span className="text-muted-foreground">Lowest nearby: </span>
                 <span className="font-bold text-green-600">
-                  ${((currentPriceData.fuel_data.ULP?.min_competitor_price || 0) / 100).toFixed(1)}
+                  ${((currentPriceData.fuel_data.ULP.min_competitor_price || 0) / 100).toFixed(1)}
                 </span>
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">You are: </span>
-                <span className={`font-bold ${parseFloat(currentPriceData.fuel_data.ULP?.difference_from_min || 0) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                  {parseFloat(currentPriceData.fuel_data.ULP?.difference_from_min || 0) > 0 ? '+' : ''}{currentPriceData.fuel_data.ULP?.difference_from_min || '0'}¢
+                <span className={`font-bold ${parseFloat(currentPriceData.fuel_data.ULP.difference_from_min || 0) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                  {parseFloat(currentPriceData.fuel_data.ULP.difference_from_min || 0) > 0 ? '+' : ''}{currentPriceData.fuel_data.ULP.difference_from_min || '0'}¢
                 </span>
               </div>
             </CardContent>
@@ -1285,7 +1303,13 @@ function FuelPriceMapView({ sites, priceData, selectedDate }) {
         )}
       </div>
 
-      <DynamicMap currentSite={currentSite} competitors={competitors} priceData={currentPriceData} />
+      {loading ? (
+        <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        </div>
+      ) : (
+        <DynamicMap currentSite={currentSite} competitors={competitors} priceData={currentPriceData} />
+      )}
     </div>
   );
 }
