@@ -1128,6 +1128,101 @@ function ShiftReportForm({ user, sites, onSuccess }) {
 }
 
 // ============== OWNER DASHBOARD ==============
+// ============== MORNING PRICE BRIEF ==============
+function MorningPriceBrief({ sites, selectedDate }) {
+  const [briefData, setBriefData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadBrief = async () => {
+      if (!sites || sites.length === 0) return;
+      setLoading(true);
+      try {
+        const siteIds = sites.map(s => s.id).join(',');
+        const date = selectedDate || new Date().toISOString().split('T')[0];
+        const res = await fetch(`/api/fuel-price-comparison?siteIds=${siteIds}&date=${date}`);
+        const data = await res.json();
+        setBriefData(data);
+      } catch (err) { console.error('Failed to load brief:', err); }
+      finally { setLoading(false); }
+    };
+    loadBrief();
+  }, [sites, selectedDate]);
+
+  if (loading) return <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  if (briefData.length === 0) return <p className="text-sm text-muted-foreground">No price data available</p>;
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {briefData.map(site => {
+        const ulpData = site.fuel_data?.ULP;
+        if (!ulpData || !ulpData.own_price) return null;
+
+        const diff = parseFloat(ulpData.difference_from_min || 0);
+        const isCompetitive = Math.abs(diff) <= 2;
+        const isCheapest = diff < 0;
+
+        let suggestion = '';
+        let actionColor = 'text-blue-600';
+
+        if (isCheapest) {
+          suggestion = '✅ You are the cheapest';
+          actionColor = 'text-green-600';
+        } else if (isCompetitive) {
+          suggestion = '✅ Competitive pricing';
+          actionColor = 'text-blue-600';
+        } else if (diff > 5) {
+          suggestion = `⚠️ Consider reducing by ${(diff - 1).toFixed(1)}¢`;
+          actionColor = 'text-red-600';
+        } else {
+          suggestion = `💡 Consider reducing by ${(diff / 2).toFixed(1)}¢`;
+          actionColor = 'text-orange-600';
+        }
+
+        return (
+          <Card key={site.site_id} className="border-0 shadow-sm">
+            <CardContent className="p-4 space-y-2">
+              <div>
+                <p className="font-semibold text-sm">{site.site_name}</p>
+                <p className="text-xs text-muted-foreground">{site.site_code}</p>
+              </div>
+              
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-muted-foreground">Your Price:</span>
+                <span className="text-xl font-bold text-blue-600">
+                  ${(ulpData.own_price / 100).toFixed(1)}
+                </span>
+              </div>
+
+              {ulpData.min_competitor_price && (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xs text-muted-foreground">Lowest Nearby:</span>
+                    <span className="text-lg font-semibold text-green-600">
+                      ${(ulpData.min_competitor_price / 100).toFixed(1)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xs text-muted-foreground">Difference:</span>
+                    <span className={`font-bold ${diff > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                      {diff > 0 ? '+' : ''}{diff.toFixed(1)}¢
+                    </span>
+                  </div>
+
+                  <div className={`text-xs font-medium pt-2 border-t ${actionColor}`}>
+                    {suggestion}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 // ============== FUEL PRICE MAP VIEW & COMPARISON ==============
 function FuelPriceComparisonSection({ sites, siteIds }) {
   const [viewMode, setViewMode] = useState('map'); // 'map' or 'list'
@@ -1817,6 +1912,19 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
         <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
       ) : (
         <>
+          {/* Morning Price Brief Panel */}
+          <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Fuel className="h-5 w-5" /> Morning Price Brief
+              </CardTitle>
+              <CardDescription>Quick pricing overview across all your sites</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MorningPriceBrief sites={sites} selectedDate={dateRange.to} />
+            </CardContent>
+          </Card>
+
           {/* Stats Cards */}
           {stats && (
             <>
