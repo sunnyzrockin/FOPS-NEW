@@ -22,6 +22,92 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
+// ============== USER INVITES ==============
+async function handleCreateInvite(request) {
+  try {
+    const { email, role, invited_by_user_id, site_id } = await request.json();
+    
+    // Validation
+    if (role !== 'operator' && role !== 'staff') {
+      return NextResponse.json({ error: 'Invalid role for invitation' }, { status: 400, headers: corsHeaders });
+    }
+    
+    const newInvite = {
+      id: uuidv4(),
+      email,
+      role,
+      invited_by_user_id,
+      site_id: site_id || null,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+    };
+    
+    const { data, error } = await supabase
+      .from('user_invites')
+      .insert([newInvite])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // TODO: Send invite email via Supabase
+    // For now, return the invite details
+    
+    return NextResponse.json(data, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Create invite error:', error);
+    return NextResponse.json({ error: 'Failed to create invite' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleGetInvites(request) {
+  try {
+    const url = new URL(request.url);
+    const invitedBy = url.searchParams.get('invitedBy');
+    
+    let query = supabase.from('user_invites').select('*');
+    
+    if (invitedBy) {
+      query = query.eq('invited_by_user_id', invitedBy);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    return NextResponse.json(data || [], { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get invites error:', error);
+    return NextResponse.json({ error: 'Failed to fetch invites' }, { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleUpdateUserRole(userId, request) {
+  try {
+    const { role } = await request.json();
+    
+    // Validate role
+    if (!['owner', 'operator', 'staff'].includes(role)) {
+      return NextResponse.json({ error: 'Invalid role' }, { status: 400, headers: corsHeaders });
+    }
+    
+    const { data, error } = await supabase
+      .from('users')
+      .update({ role })
+      .eq('id', userId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    return NextResponse.json(data, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update user role error:', error);
+    return NextResponse.json({ error: 'Failed to update user role' }, { status: 500, headers: corsHeaders });
+  }
+}
+
 // ============== AUTH (REAL SUPABASE AUTH) ==============
 async function handleLogin(request) {
   try {
@@ -1408,6 +1494,9 @@ export async function GET(request) {
   if (path[0] === 'export') {
     return handleExport(request);
   }
+  if (path[0] === 'invites') {
+    return handleGetInvites(request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -1455,6 +1544,9 @@ export async function POST(request) {
   if (path[0] === 'competitor-prices') {
     return handleCreateCompetitorPrice(request);
   }
+  if (path[0] === 'invites') {
+    return handleCreateInvite(request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -1463,6 +1555,9 @@ export async function PUT(request) {
   const path = getPathSegments(request);
   
   if (path[0] === 'users' && path[1]) {
+    if (path[2] === 'role') {
+      return handleUpdateUserRole(path[1], request);
+    }
     return handleUpdateUser(path[1], request);
   }
   if (path[0] === 'sites' && path[1]) {
