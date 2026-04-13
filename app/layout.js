@@ -1,9 +1,10 @@
 import './globals.css';
 import 'leaflet/dist/leaflet.css';
+import { AuthProvider } from '@/lib/auth-context';
 
 export const metadata = {
-  title: 'WorkflowLite - Fuel Station Reporting',
-  description: 'Multi-site shift reporting for fuel station operators',
+  title: 'FOPS - Field Operations System',
+  description: 'Manage sites, staff, and daily performance in one place',
 };
 
 export default function RootLayout({ children }) {
@@ -20,7 +21,9 @@ export default function RootLayout({ children }) {
         `}} />
       </head>
       <body className="bg-background text-foreground min-h-screen">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
