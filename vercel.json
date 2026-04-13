@@ -1,12 +1,7 @@
 {
-  "buildCommand": "yarn build",
-  "devCommand": "yarn dev",
-  "installCommand": "yarn install",
   "framework": "nextjs",
+  "buildCommand": "next build",
   "outputDirectory": ".next",
-  "regions": ["syd1"],
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "https://xjpelthxnnetecfympmv.supabase.co",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_qWlmWcHoiwSqZlzLi9YmWw_xlB-kpsr"
-  }
+  "installCommand": "yarn install",
+  "regions": ["syd1"]
 }
