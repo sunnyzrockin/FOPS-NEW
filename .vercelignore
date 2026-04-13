@@ -1,0 +1,13 @@
+# Vercel Ignore
+node_modules
+.next
+.git
+*.log
+.env.local
+test_reports
+backend_test.py
+focused_test.py
+fuel_price_test.py
+tests
+*.backup.js
+SUPABASE_MIGRATION_GUIDE.md
