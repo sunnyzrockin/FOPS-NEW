@@ -5,8 +5,12 @@ export async function middleware(req) {
 
   // Protected routes - require authentication
   if (pathname.startsWith('/app')) {
-    // Check for Supabase session cookie
-    const hasSession = req.cookies.has('sb-access-token') || req.cookies.has('sb-xjpelthxnnetecfympmv-auth-token');
+    // Check for Supabase session cookie (generic pattern that works across all environments)
+    const cookies = req.cookies.getAll();
+    const hasSession = cookies.some(cookie => 
+      cookie.name === 'sb-access-token' || 
+      cookie.name.includes('-auth-token')
+    );
     
     if (!hasSession) {
       const redirectUrl = req.nextUrl.clone();
@@ -18,7 +22,11 @@ export async function middleware(req) {
 
   // Redirect authenticated users away from auth pages
   if (pathname === '/login' || pathname === '/signup') {
-    const hasSession = req.cookies.has('sb-access-token') || req.cookies.has('sb-xjpelthxnnetecfympmv-auth-token');
+    const cookies = req.cookies.getAll();
+    const hasSession = cookies.some(cookie => 
+      cookie.name === 'sb-access-token' || 
+      cookie.name.includes('-auth-token')
+    );
     
     if (hasSession) {
       return NextResponse.redirect(new URL('/app', req.url));
