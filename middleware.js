@@ -1,33 +1,31 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 import { NextResponse } from 'next/server';
 
 export async function middleware(req) {
-  const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req, res });
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { pathname } = req.nextUrl;
 
   // Protected routes - require authentication
-  if (req.nextUrl.pathname.startsWith('/app')) {
-    if (!session) {
+  if (pathname.startsWith('/app')) {
+    // Check for Supabase session cookie
+    const hasSession = req.cookies.has('sb-access-token') || req.cookies.has('sb-xjpelthxnnetecfympmv-auth-token');
+    
+    if (!hasSession) {
       const redirectUrl = req.nextUrl.clone();
       redirectUrl.pathname = '/login';
-      redirectUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname);
+      redirectUrl.searchParams.set('redirectedFrom', pathname);
       return NextResponse.redirect(redirectUrl);
     }
   }
 
   // Redirect authenticated users away from auth pages
-  if (session && (
-    req.nextUrl.pathname === '/login' ||
-    req.nextUrl.pathname === '/signup'
-  )) {
-    return NextResponse.redirect(new URL('/app', req.url));
+  if (pathname === '/login' || pathname === '/signup') {
+    const hasSession = req.cookies.has('sb-access-token') || req.cookies.has('sb-xjpelthxnnetecfympmv-auth-token');
+    
+    if (hasSession) {
+      return NextResponse.redirect(new URL('/app', req.url));
+    }
   }
 
-  return res;
+  return NextResponse.next();
 }
 
 export const config = {
