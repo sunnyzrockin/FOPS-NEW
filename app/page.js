@@ -59,10 +59,10 @@ function LoginPage({ onLogin, loading }) {
   const handleSeed = async () => {
     setSeeding(true);
     try {
-      const res = await fetch('/api/seed', { method: 'POST' });
+      const res = await fetch('/api/seed-supabase', { method: 'POST' });
       const data = await res.json();
-      if (res.ok) { alert(`Database seeded! Created ${data.counts.users} users, ${data.counts.sites} sites, ${data.counts.reports} reports.`); }
-      else { alert('Seeding failed: ' + data.error); }
+      if (res.ok) { alert(`Supabase database seeded successfully! Check browser console for details.`); }
+      else { alert('Seeding failed: ' + (data.error || 'Unknown error')); }
     } catch (err) { alert('Seeding failed: ' + err.message); }
     finally { setSeeding(false); }
   };
@@ -94,14 +94,14 @@ function LoginPage({ onLogin, loading }) {
           </form>
           <Separator className="my-6" />
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground text-center">Demo Credentials</p>
+            <p className="text-sm text-muted-foreground text-center">Demo Credentials (Real Supabase Auth)</p>
             <div className="grid gap-2 text-xs">
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-blue-700">Owner:</span><span className="text-slate-600">owner@demo.com / demo123</span></div>
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-green-700">Operator:</span><span className="text-slate-600">operator@demo.com / demo123</span></div>
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-purple-700">Staff:</span><span className="text-slate-600">staff@demo.com / demo123</span></div>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-blue-700">Owner:</span><span className="text-slate-600">owner@workflowlite.com / WorkflowDemo2026!</span></div>
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-green-700">Operator:</span><span className="text-slate-600">operator@workflowlite.com / WorkflowDemo2026!</span></div>
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-purple-700">Staff:</span><span className="text-slate-600">staff@workflowlite.com / WorkflowDemo2026!</span></div>
             </div>
             <Button variant="outline" size="sm" className="w-full mt-2" onClick={handleSeed} disabled={seeding}>
-              {seeding ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding...</> : 'Seed Demo Data'}
+              {seeding ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding Supabase...</> : 'Seed Supabase Database'}
             </Button>
           </div>
         </CardContent>
