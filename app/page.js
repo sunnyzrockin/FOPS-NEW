@@ -281,6 +281,25 @@ function DailyRollupRow({ rollup, onClick, expanded, onToggle }) {
             </div>
           </div>
           
+          {rollup.formula_results && rollup.formula_results.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Calculator className="h-4 w-4 text-blue-600" />
+                <p className="text-sm font-medium">Daily Formula Rollups</p>
+                <Badge variant="outline" className="text-xs">Auto-calculated</Badge>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {rollup.formula_results.map((result, idx) => (
+                  <div key={idx} className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 p-3 rounded-lg">
+                    <p className="text-xs text-blue-600 mb-1">{result.formula_name}</p>
+                    <p className="text-lg font-bold text-blue-700">{formatCurrency(result.result_value)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{result.result_label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           <p className="text-sm font-medium mb-2">Individual Shifts:</p>
           <div className="space-y-2">
             {rollup.shifts.map((shift, idx) => (
@@ -981,6 +1000,8 @@ function ShiftReportForm({ user, sites, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [fieldConfigs, setFieldConfigs] = useState([]);
+  const [formulas, setFormulas] = useState([]);
+  const [formulaResults, setFormulaResults] = useState({});
   const [form, setForm] = useState({
     site_id: sites[0]?.id || '',
     date: new Date().toISOString().split('T')[0],
@@ -1000,6 +1021,62 @@ function ShiftReportForm({ user, sites, onSuccess }) {
     };
     loadFieldConfigs();
   }, [form.site_id]);
+
+  // Load formulas visible to staff
+  useEffect(() => {
+    const loadFormulas = async () => {
+      if (!form.site_id) return;
+      try {
+        const res = await fetch(`/api/banking-formulas?siteId=${form.site_id}`);
+        const data = await res.json();
+        // Filter only formulas visible to staff
+        setFormulas(data.filter(f => f.visible_to_staff));
+      } catch (err) { console.error('Failed to load formulas:', err); }
+    };
+    loadFormulas();
+  }, [form.site_id]);
+
+  // Calculate formula results in real-time as form values change
+  useEffect(() => {
+    const calculateFormulas = () => {
+      const results = {};
+      formulas.forEach(formula => {
+        try {
+          const operations = JSON.parse(formula.formula_json).operations || [];
+          let result = 0;
+          let currentOp = '+';
+          
+          for (const op of operations) {
+            if (op.type === 'field') {
+              const value = parseFloat(form[op.value] || 0);
+              if (currentOp === '+') result += value;
+              else if (currentOp === '-') result -= value;
+              else if (currentOp === '*') result *= value;
+              else if (currentOp === '/') result = value !== 0 ? result / value : 0;
+            } else if (op.type === 'operator') {
+              currentOp = op.value;
+            } else if (op.type === 'number') {
+              const value = parseFloat(op.value || 0);
+              if (currentOp === '+') result += value;
+              else if (currentOp === '-') result -= value;
+              else if (currentOp === '*') result *= value;
+              else if (currentOp === '/') result = value !== 0 ? result / value : 0;
+            }
+          }
+          
+          results[formula.id] = Math.round(result * 100) / 100;
+        } catch (err) {
+          console.error(`Formula calculation error for ${formula.name}:`, err);
+          results[formula.id] = 0;
+        }
+      });
+      setFormulaResults(results);
+    };
+    
+    if (formulas.length > 0) {
+      calculateFormulas();
+    }
+  }, [form, formulas]);
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -1110,6 +1187,35 @@ function ShiftReportForm({ user, sites, onSuccess }) {
               ))}
             </div>
           </div>
+          
+          {formulas.length > 0 && (
+            <>
+              <Separator />
+              
+              <div>
+                <h3 className="font-medium mb-4 flex items-center gap-2">
+                  <Calculator className="h-4 w-4 text-blue-600" />
+                  Live Calculations
+                  <Badge variant="outline" className="text-xs">Auto-updating</Badge>
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {formulas.map(formula => (
+                    <div key={formula.id} className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
+                      <p className="text-xs text-muted-foreground mb-1">{formula.name}</p>
+                      <p className="text-2xl font-bold text-blue-700">
+                        {formatCurrency(formulaResults[formula.id] || 0)}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">{formula.result_label || 'Result'}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3" />
+                  Values update automatically as you enter data
+                </p>
+              </div>
+            </>
+          )}
           
           <Separator />
           
