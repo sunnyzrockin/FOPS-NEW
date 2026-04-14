@@ -244,6 +244,16 @@ export default function LoginPage() {
               <p className="text-sm text-slate-500 text-center">
                 Need access? <span className="font-medium text-slate-700">Contact your administrator.</span>
               </p>
+              
+              {/* Signup Link - Subtle but accessible */}
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-sm text-slate-600 text-center">
+                  Don't have an account?{' '}
+                  <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
+                    Sign up
+                  </Link>
+                </p>
+              </div>
             </div>
           </div>
 

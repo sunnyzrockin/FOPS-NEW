@@ -11,12 +11,20 @@ export default function LandingPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg"></div>
             <span className="text-xl font-bold">FOPS</span>
           </div>
-          <Link 
-            href="/login"
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            Login
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link 
+              href="/signup"
+              className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
+            >
+              Sign up
+            </Link>
+            <Link 
+              href="/login"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Login
+            </Link>
+          </div>
         </div>
       </header>
 
