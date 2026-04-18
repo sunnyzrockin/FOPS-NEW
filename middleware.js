@@ -2,40 +2,38 @@ import { NextResponse } from 'next/server';
 
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
+  
+  // Skip middleware for API routes, static files, and auth callback
+  if (
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/auth/callback') ||
+    pathname.includes('.')
+  ) {
+    return NextResponse.next();
+  }
 
   // Protected routes - require authentication
   if (pathname.startsWith('/app')) {
-    // Check for Supabase session cookie (generic pattern that works across all environments)
-    const cookies = req.cookies.getAll();
-    const hasSession = cookies.some(cookie => 
-      cookie.name === 'sb-access-token' || 
-      cookie.name.includes('-auth-token')
-    );
+    // Check for user data in localStorage (client-side) - middleware will allow through
+    // Real auth check happens client-side in AuthProvider
+    const response = NextResponse.next();
     
-    if (!hasSession) {
-      const redirectUrl = req.nextUrl.clone();
-      redirectUrl.pathname = '/login';
-      redirectUrl.searchParams.set('redirectedFrom', pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
+    // Disable caching to prevent stale redirects
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    response.headers.set('x-middleware-cache', 'no-cache');
+    
+    return response;
   }
 
-  // Redirect authenticated users away from auth pages
-  if (pathname === '/login' || pathname === '/signup') {
-    const cookies = req.cookies.getAll();
-    const hasSession = cookies.some(cookie => 
-      cookie.name === 'sb-access-token' || 
-      cookie.name.includes('-auth-token')
-    );
-    
-    if (hasSession) {
-      return NextResponse.redirect(new URL('/app', req.url));
-    }
-  }
-
-  return NextResponse.next();
+  const response = NextResponse.next();
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  
+  return response;
 }
 
 export const config = {
-  matcher: ['/app/:path*', '/login', '/signup'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };
