@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -2960,6 +2961,7 @@ function StaffDashboard({ user, sites, activeTab }) {
 
 // ============== MAIN APP ==============
 export default function App() {
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -2977,6 +2979,13 @@ export default function App() {
     }
     setInitialized(true);
   }, []);
+
+  // Redirect unauthenticated users to login page
+  useEffect(() => {
+    if (initialized && !user) {
+      router.push('/login');
+    }
+  }, [initialized, user, router]);
 
   const handleLogin = async (email, password) => {
     setLoading(true);
@@ -3014,7 +3023,10 @@ export default function App() {
   };
 
   if (!initialized) { return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>; }
-  if (!user) { return <LoginPage onLogin={handleLogin} loading={loading} />; }
+  if (!user) { 
+    // Show loader while redirecting to login
+    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>; 
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
