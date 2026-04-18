@@ -2962,30 +2962,42 @@ function StaffDashboard({ user, sites, activeTab }) {
 // ============== MAIN APP ==============
 export default function App() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [sites, setSites] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [initialized, setInitialized] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-
-  useEffect(() => {
-    const savedUser = localStorage.getItem('workflowlite_user');
-    const savedSites = localStorage.getItem('workflowlite_sites');
-    if (savedUser && savedSites) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      setSites(JSON.parse(savedSites));
-      setActiveTab(parsedUser.role === 'staff' ? 'submit' : 'dashboard');
+  
+  // Initialize state from localStorage to avoid flash
+  const [user, setUser] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('workflowlite_user');
+      return savedUser ? JSON.parse(savedUser) : null;
     }
-    setInitialized(true);
-  }, []);
+    return null;
+  });
+  
+  const [sites, setSites] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedSites = localStorage.getItem('workflowlite_sites');
+      return savedSites ? JSON.parse(savedSites) : [];
+    }
+    return [];
+  });
+  
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('workflowlite_user');
+      if (savedUser) {
+        const parsedUser = JSON.parse(savedUser);
+        return parsedUser.role === 'staff' ? 'submit' : 'dashboard';
+      }
+    }
+    return 'dashboard';
+  });
 
   // Redirect unauthenticated users to login page
   useEffect(() => {
-    if (initialized && !user) {
+    if (!user) {
       router.push('/login');
     }
-  }, [initialized, user, router]);
+  }, [user, router]);
 
   const handleLogin = async (email, password) => {
     setLoading(true);
@@ -3022,10 +3034,9 @@ export default function App() {
     } catch (err) { console.error('Failed to refresh sites:', err); }
   };
 
-  if (!initialized) { return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>; }
   if (!user) { 
-    // Show loader while redirecting to login
-    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>; 
+    // Show minimal loader while redirecting to login
+    return null; 
   }
 
   return (
