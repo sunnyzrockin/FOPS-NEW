@@ -74,7 +74,7 @@ function LoginPage({ onLogin, loading }) {
           <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
             <Fuel className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">WorkflowLite</CardTitle>
+          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">FOPS</CardTitle>
           <CardDescription>Fuel Station Shift Reporting</CardDescription>
         </CardHeader>
         <CardContent>
@@ -93,17 +93,6 @@ function LoginPage({ onLogin, loading }) {
             </Button>
           </form>
           <Separator className="my-6" />
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground text-center">Demo Credentials (Real Supabase Auth)</p>
-            <div className="grid gap-2 text-xs">
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-blue-700">Owner:</span><span className="text-slate-600">owner@workflowlite.com / WorkflowDemo2026!</span></div>
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-green-700">Operator:</span><span className="text-slate-600">operator@workflowlite.com / WorkflowDemo2026!</span></div>
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-xl flex justify-between items-center"><span className="font-semibold text-purple-700">Staff:</span><span className="text-slate-600">staff@workflowlite.com / WorkflowDemo2026!</span></div>
-            </div>
-            <Button variant="outline" size="sm" className="w-full mt-2" onClick={handleSeed} disabled={seeding}>
-              {seeding ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Seeding Supabase...</> : 'Seed Supabase Database'}
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </div>
@@ -127,7 +116,7 @@ function Header({ user, onLogout, activeTab, setActiveTab }) {
               <Fuel className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">WorkflowLite</h1>
+              <h1 className="font-bold text-lg bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">FOPS</h1>
               <p className="text-xs text-muted-foreground capitalize">{user.role} Dashboard</p>
             </div>
           </div>
