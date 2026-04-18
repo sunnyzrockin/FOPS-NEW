@@ -124,7 +124,7 @@ backend:
     implemented: true
     working: false
     file: "/app/app/api/[[...path]]/route.js"
-    stuck_count: 2
+    stuck_count: 3
     priority: "high"
     needs_retesting: false
     status_history:
@@ -137,12 +137,15 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ POST-DEPLOYMENT CRITICAL ISSUE PERSISTS: Sites API with Bearer token still returns 0 sites for all roles. Root cause identified: Sites table is completely empty due to seeding failures. Login API returns 5 sites from cached/hardcoded data, but actual database has 0 sites. Sites API doesn't implement role-based filtering with Bearer tokens - only uses ownerId query parameter."
+      - working: false
+        agent: "testing"
+        comment: "❌ PRODUCTION VALIDATION CONFIRMS CRITICAL ISSUE: Owner login correctly returns 5 sites, but Sites API returns 0 sites. Operator/Staff login return 0 sites (expected 3/1) due to empty assignment tables. Role hierarchy partially working - authentication succeeds but role-based site filtering broken due to missing assignment data. Sites table has 5 records but assignment tables completely empty."
 
   - task: "Site Assignments (Operator & Staff)"
     implemented: true
     working: false
     file: "/app/app/api/[[...path]]/route.js"
-    stuck_count: 2
+    stuck_count: 3
     priority: "high"
     needs_retesting: false
     status_history:
@@ -155,6 +158,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ POST-DEPLOYMENT SEEDING ISSUE PERSISTS: Assignment tables remain empty despite seeding attempts. Seeding logs show successful creation (5 operator assignments, 10 staff assignments) but database queries return 0 records. Possible RLS policy blocking reads or constraint violations preventing inserts."
+      - working: false
+        agent: "testing"
+        comment: "❌ PRODUCTION VALIDATION CONFIRMS ASSIGNMENT FAILURE: Both operator_site_assignments and staff_site_assignments tables completely empty (0 records each). APIs respond correctly but return empty arrays. This breaks role-based access - operators see 0 sites instead of 3, staff see 0 instead of 1. Seeding claims success but data not persisting. RLS policies or foreign key constraints preventing insertion."
 
   - task: "Banking Formulas with Visibility Controls"
     implemented: true
@@ -424,3 +430,5 @@ agent_communication:
     message: "VERCEL AUTO-DEPLOYMENT CONFIGURED - User encountered Vercel blocking deployments from Emergent bot account (emergent-agent-e1) due to team membership requirements. SOLUTION IMPLEMENTED: Created Vercel Deploy Hook + GitHub webhook to bypass Git integration blocking. Cleaned up 3 duplicate Vercel projects, kept only fopsv2 production project. Successful deployment confirmed via Deploy Hook. NO CODE CHANGES - deployment infrastructure only. READY FOR COMPREHENSIVE PRE-USER TESTING - Please test all workflows (Auth flows, Staff shift submission, Operator review, Owner dashboard, Banking formulas, Fuel price intelligence, Daily rollups, Field management) to ensure deployment did not break anything. Test credentials unchanged."
   - agent: "testing"
     message: "❌ POST-DEPLOYMENT COMPREHENSIVE TESTING COMPLETE - CRITICAL REGRESSIONS FOUND! Results: 7/14 tests passed (50% success rate). ✅ WORKING: Health Check, All Authentication (Owner/Operator/Staff login), Users API, Reports API (19 reports), Seed API. ❌ CRITICAL FAILURES: 1) Sites table completely empty (0 sites) despite seeding claiming success - breaks core functionality, 2) Sites API with Bearer tokens returns 0 sites for all roles - authentication not implemented, 3) Assignment tables empty (0 operator/staff assignments) - role hierarchy broken, 4) Invalid credentials rejection not working, 5) All advanced features unavailable due to missing sites. ROOT CAUSE: Seeding process has constraint violations and RLS policy issues preventing data insertion. DEPLOYMENT BROKE CORE DATA LAYER."
+  - agent: "testing"
+    message: "🔍 COMPREHENSIVE PRODUCTION VALIDATION COMPLETE - MIXED RESULTS! Tested all authentication flows, role-based access, and API endpoints as requested. Results: 4/9 critical tests passed (44.4% success rate). ✅ WORKING PERFECTLY: Health Check (Supabase), Owner Login (5 sites correctly), Invalid Credentials Rejection (401), Reports API (19 reports). ❌ CRITICAL ISSUES CONFIRMED: 1) Assignment tables completely empty (0 operator assignments, 0 staff assignments) - RLS policies or seeding constraints blocking data insertion, 2) Operator/Staff login returns 0 sites instead of expected 3/1 sites - role hierarchy broken, 3) Sites API returns 0 sites despite owner login showing 5 sites - inconsistent data access. ROOT CAUSE: Assignment table seeding failures prevent role-based site filtering. Core authentication works but role boundaries are broken due to missing assignment data."
