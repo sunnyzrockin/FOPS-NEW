@@ -289,7 +289,7 @@ function DailyRollupRow({ rollup, onClick, expanded, onToggle }) {
                 <Badge variant="outline" className="text-xs">Auto-calculated</Badge>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {rollup.formula_results.map((result, idx) => (
+                {(rollup.formula_results || []).map((result, idx) => (
                   <div key={idx} className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 p-3 rounded-lg">
                     <p className="text-xs text-blue-600 mb-1">{result.formula_name}</p>
                     <p className="text-lg font-bold text-blue-700">{formatCurrency(result.result_value)}</p>
@@ -302,7 +302,7 @@ function DailyRollupRow({ rollup, onClick, expanded, onToggle }) {
           
           <p className="text-sm font-medium mb-2">Individual Shifts:</p>
           <div className="space-y-2">
-            {rollup.shifts.map((shift, idx) => (
+            {(rollup.shifts || []).map((shift, idx) => (
               <div 
                 key={shift.id} 
                 className="flex items-center justify-between p-3 bg-white rounded-lg cursor-pointer hover:bg-blue-50 transition-colors"
@@ -1260,7 +1260,7 @@ function MorningPriceBrief({ sites, selectedDate }) {
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {briefData.map(site => {
+      {(briefData || []).map(site => {
         const ulpData = site.fuel_data?.ULP;
         if (!ulpData || !ulpData.own_price) return null;
 
@@ -1388,7 +1388,7 @@ function FuelPriceComparisonSection({ sites, siteIds }) {
         <FuelPriceMapView sites={sites} priceData={priceData} selectedDate={selectedDate} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {priceData.map(site => (
+          {(priceData || []).map(site => (
             <Card key={site.site_id} className="border-0 shadow-lg">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
