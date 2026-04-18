@@ -31,29 +31,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Add timeout wrapper to prevent indefinite hanging
-      const loginWithTimeout = async () => {
-        const loginPromise = signIn(email, password);
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Login timeout - please try again')), 15000)
-        );
-        return Promise.race([loginPromise, timeoutPromise]);
-      };
-
-      const { data, error: signInError } = await loginWithTimeout();
-      
-      if (signInError) {
-        setError(signInError.message || 'Invalid email or password');
-        setLoading(false);
-        return;
-      }
-
-      if (!data.session) {
-        setError('Login failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-
+      // Call API directly instead of using Supabase client (which hangs)
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,19 +41,24 @@ export default function LoginPage() {
       const userData = await res.json();
 
       if (!res.ok) {
-        setError(userData.error || 'Failed to fetch user data');
+        setError(userData.error || 'Invalid email or password');
         setLoading(false);
         return;
       }
 
+      // Store user data and session
       localStorage.setItem('user', JSON.stringify(userData.user));
       localStorage.setItem('sites', JSON.stringify(userData.sites || []));
+      if (userData.session) {
+        localStorage.setItem('supabase-session', JSON.stringify(userData.session));
+      }
 
+      // Redirect to dashboard
       router.push('/app');
       
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.message || 'An unexpected error occurred. Please try again.');
+      setError('An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };
