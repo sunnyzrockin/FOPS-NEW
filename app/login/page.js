@@ -31,7 +31,16 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error: signInError } = await signIn(email, password);
+      // Add timeout wrapper to prevent indefinite hanging
+      const loginWithTimeout = async () => {
+        const loginPromise = signIn(email, password);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Login timeout - please try again')), 15000)
+        );
+        return Promise.race([loginPromise, timeoutPromise]);
+      };
+
+      const { data, error: signInError } = await loginWithTimeout();
       
       if (signInError) {
         setError(signInError.message || 'Invalid email or password');
@@ -66,7 +75,7 @@ export default function LoginPage() {
       
     } catch (err) {
       console.error('Login error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      setError(err.message || 'An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };
