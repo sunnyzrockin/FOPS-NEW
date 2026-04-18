@@ -201,6 +201,65 @@ async function handleLogin(request) {
 // ============== RLS FIX ==============
 async function handleRLSFix() {
   try {
+
+async function handleSignup(request) {
+  try {
+    const { name, email, password, role = 'staff' } = await request.json();
+    
+    // Import Supabase client
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { name, role }
+    });
+    
+    if (authError) {
+      console.error('Auth signup error:', authError);
+      throw authError;
+    }
+    
+    // Create user in users table
+    const newUser = {
+      id: uuidv4(),
+      auth_user_id: authData.user.id,
+      name,
+      email,
+      role,
+      status: 'active'
+    };
+    
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .insert([newUser])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Database user creation error:', error);
+      throw error;
+    }
+    
+    return NextResponse.json({ 
+      user: data,
+      message: 'Account created successfully' 
+    }, { headers: corsHeaders });
+    
+  } catch (error) {
+    console.error('Signup error:', error);
+    return NextResponse.json({ 
+      error: error.message || 'Failed to create account' 
+    }, { status: 500, headers: corsHeaders });
+  }
+}
+
     console.log('🔧 Applying RLS recursion fix...');
     
     // Import supabaseAdmin for admin operations
@@ -1726,6 +1785,9 @@ export async function POST(request) {
   
   if (path[0] === 'auth' && path[1] === 'login') {
     return handleLogin(request);
+  }
+  if (path[0] === 'auth' && path[1] === 'signup') {
+    return handleSignup(request);
   }
   if (path[0] === 'rls-fix') {
     return handleRLSFix();

@@ -41,20 +41,8 @@ export default function SignupPage() {
     }
 
     try {
-      // Sign up with Supabase Auth
-      const { data, error: signUpError } = await signUp(email, password, {
-        name,
-        role: 'staff', // Default role
-      });
-
-      if (signUpError) {
-        setError(signUpError.message || 'Failed to create account');
-        setLoading(false);
-        return;
-      }
-
-      // Create user record in database
-      const res = await fetch('/api/users', {
+      // Call signup API endpoint (creates both auth user and database record)
+      const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -65,9 +53,10 @@ export default function SignupPage() {
         }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const errorData = await res.json();
-        setError(errorData.error || 'Failed to create user record');
+        setError(data.error || 'Failed to create account');
         setLoading(false);
         return;
       }
