@@ -2963,41 +2963,36 @@ function StaffDashboard({ user, sites, activeTab }) {
 export default function App() {
   const router = useRouter();
   
-  // Initialize state from localStorage to avoid flash
-  const [user, setUser] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const savedUser = localStorage.getItem('workflowlite_user');
-      return savedUser ? JSON.parse(savedUser) : null;
-    }
-    return null;
-  });
-  
-  const [sites, setSites] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const savedSites = localStorage.getItem('workflowlite_sites');
-      return savedSites ? JSON.parse(savedSites) : [];
-    }
-    return [];
-  });
-  
+  // Start with null to avoid hydration mismatch
+  const [user, setUser] = useState(null);
+  const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const savedUser = localStorage.getItem('workflowlite_user');
-      if (savedUser) {
-        const parsedUser = JSON.parse(savedUser);
-        return parsedUser.role === 'staff' ? 'submit' : 'dashboard';
-      }
-    }
-    return 'dashboard';
-  });
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [mounted, setMounted] = useState(false);
 
-  // Redirect unauthenticated users to login page
+  // Initialize from localStorage only on client side
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
+    const savedUser = localStorage.getItem('workflowlite_user');
+    const savedSites = localStorage.getItem('workflowlite_sites');
+    
+    if (savedUser && savedSites) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        setSites(JSON.parse(savedSites));
+        setActiveTab(parsedUser.role === 'staff' ? 'submit' : 'dashboard');
+        setMounted(true);
+      } catch (e) {
+        // Invalid data in localStorage
+        localStorage.removeItem('workflowlite_user');
+        localStorage.removeItem('workflowlite_sites');
+        router.replace('/login');
+      }
+    } else {
+      // No user data, redirect to login
+      router.replace('/login');
     }
-  }, [user, router]);
+  }, [router]);
 
   const handleLogin = async (email, password) => {
     setLoading(true);
@@ -3034,9 +3029,13 @@ export default function App() {
     } catch (err) { console.error('Failed to refresh sites:', err); }
   };
 
-  if (!user) { 
-    // Show minimal loader while redirecting to login
-    return null; 
+  // Show loading while initializing and redirecting  
+  if (!mounted || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
   }
 
   return (
