@@ -1675,9 +1675,215 @@ function LeafletMapInner({ currentSite, competitors, priceData }) {
 }
 
 // ============== FUEL PRICING MANAGEMENT (Operator) ==============
+// ============== OPERATOR PRICE CHANGE NOTIFICATIONS ==============
+function OperatorPriceChangeNotifications({ user, sites }) {
+  const [pendingChanges, setPendingChanges] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notifying, setNotifying] = useState(null);
+
+  const loadPendingChanges = async () => {
+    try {
+      const res = await fetch(`/api/fuel-prices/pending?userId=${user.id}&role=operator`);
+      const data = await res.json();
+      setPendingChanges(data);
+    } catch (err) {
+      console.error('Failed to load pending changes:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPendingChanges();
+    // Poll every 5 minutes
+    const interval = setInterval(loadPendingChanges, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user.id]);
+
+  const handleNotifyStaff = async (priceChangeId) => {
+    setNotifying(priceChangeId);
+    try {
+      const res = await fetch(`/api/fuel-prices/${priceChangeId}/notify-staff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operatorUserId: user.id })
+      });
+
+      if (res.ok) {
+        alert('Staff notified successfully!');
+        loadPendingChanges();
+      } else {
+        const error = await res.json();
+        alert(`Error: ${error.error}`);
+      }
+    } catch (err) {
+      alert('Failed to notify staff');
+      console.error(err);
+    } finally {
+      setNotifying(null);
+    }
+  };
+
+  const getUrgencyLevel = (priceChange) => {
+    if (!priceChange.notifications?.[0]?.staff_notified_at) return 'pending';
+    
+    const notifiedAt = new Date(priceChange.notifications[0].staff_notified_at);
+    const minutesElapsed = (new Date() - notifiedAt) / (1000 * 60);
+    
+    if (minutesElapsed >= 30) return 'critical';
+    if (minutesElapsed >= 15) return 'urgent';
+    return 'normal';
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <AlertCircle className="h-6 w-6 text-orange-600" />
+            Price Change Notifications
+          </h2>
+          <p className="text-muted-foreground mt-1">Review and notify staff about fuel price changes</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={loadPendingChanges} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        </div>
+      ) : pendingChanges.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-500 opacity-50" />
+            <p className="text-lg font-medium">All price changes acknowledged!</p>
+            <p className="text-sm text-muted-foreground mt-1">No pending notifications</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {pendingChanges.map(pc => {
+            const urgency = getUrgencyLevel(pc);
+            const isNotified = pc.notifications?.[0]?.staff_notified_at;
+            const acknowledgedCount = pc.acknowledgements?.length || 0;
+
+            return (
+              <Card key={pc.id} className={`border-2 ${
+                urgency === 'critical' ? 'border-red-500 bg-red-50' :
+                urgency === 'urgent' ? 'border-orange-500 bg-orange-50' :
+                isNotified ? 'border-blue-200' : 'border-slate-300'
+              }`}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Fuel className={`h-5 w-5 ${
+                          urgency === 'critical' ? 'text-red-600' :
+                          urgency === 'urgent' ? 'text-orange-600' :
+                          'text-blue-600'
+                        }`} />
+                        {pc.site?.name} - {pc.fuel_type}
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        Created by {pc.created_by?.name} • {formatDateTime(pc.created_at)}
+                      </CardDescription>
+                    </div>
+                    <Badge variant={
+                      urgency === 'critical' ? 'destructive' :
+                      urgency === 'urgent' ? 'secondary' :
+                      'outline'
+                    } className="ml-2">
+                      {urgency === 'critical' ? '🚨 CRITICAL' :
+                       urgency === 'urgent' ? '⚠️ URGENT' :
+                       isNotified ? '✓ Notified' : 'New'}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-4 p-4 bg-white rounded-lg border">
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground mb-1">Current</p>
+                      {pc.old_price ? (
+                        <p className="text-lg line-through text-muted-foreground">{pc.old_price}¢</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">N/A</p>
+                      )}
+                    </div>
+                    <ChevronRight className="h-6 w-6 text-muted-foreground" />
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground mb-1">New Price</p>
+                      <p className="text-2xl font-bold text-blue-600">{pc.new_price}¢</p>
+                    </div>
+                    <Separator orientation="vertical" className="h-12" />
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground mb-1">Effective</p>
+                      <p className="font-medium">{formatDateTime(pc.effective_datetime)}</p>
+                    </div>
+                  </div>
+
+                  {pc.notes && (
+                    <div className="p-3 bg-slate-100 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">Notes:</p>
+                      <p className="text-sm">{pc.notes}</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="text-sm text-muted-foreground">
+                      {acknowledgedCount > 0 && (
+                        <span className="text-green-600 font-medium">
+                          ✓ {acknowledgedCount} staff acknowledged
+                        </span>
+                      )}
+                      {urgency === 'critical' && (
+                        <span className="text-red-600 font-medium ml-3">
+                          ⚠️ Escalated - 30+ min unacknowledged
+                        </span>
+                      )}
+                      {urgency === 'urgent' && (
+                        <span className="text-orange-600 font-medium ml-3">
+                          ⚠️ Urgent - 15+ min unacknowledged
+                        </span>
+                      )}
+                    </div>
+
+                    {isNotified ? (
+                      <div className="flex items-center gap-2 text-sm text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        Staff notified {formatDateTime(isNotified)}
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => handleNotifyStaff(pc.id)}
+                        disabled={notifying === pc.id}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        {notifying === pc.id ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Notifying...</>
+                        ) : (
+                          <><AlertCircle className="mr-2 h-4 w-4" /> Notify Staff</>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function FuelPricingManagement({ user, sites }) {
-  const [activeSubTab, setActiveSubTab] = useState('prices');
+  const [activeSubTab, setActiveSubTab] = useState('notifications');
   
+  if (activeSubTab === 'notifications') return <OperatorPriceChangeNotifications user={user} sites={sites} />;
   if (activeSubTab === 'prices') return <FuelPriceEntry user={user} sites={sites} />;
   if (activeSubTab === 'competitors') return <CompetitorManagement user={user} sites={sites} />;
   
@@ -1685,6 +1891,7 @@ function FuelPricingManagement({ user, sites }) {
     <div className="space-y-6">
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
         <TabsList>
+          <TabsTrigger value="notifications">Price Change Notifications</TabsTrigger>
           <TabsTrigger value="prices">Price Entry</TabsTrigger>
           <TabsTrigger value="competitors">Competitors</TabsTrigger>
         </TabsList>
@@ -3226,6 +3433,144 @@ function StaffAccessManagement({ user, sites }) {
 }
 
 // ============== STAFF DASHBOARD ==============
+// ============== STAFF PRICE CHANGE BANNER ==============
+function StaffPriceChangeBanner({ user }) {
+  const [pendingChanges, setPendingChanges] = useState([]);
+  const [acknowledging, setAcknowledging] = useState(null);
+
+  const loadPendingChanges = async () => {
+    try {
+      const res = await fetch(`/api/fuel-prices/pending?userId=${user.id}&role=staff`);
+      const data = await res.json();
+      setPendingChanges(data);
+    } catch (err) {
+      console.error('Failed to load pending price changes:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadPendingChanges();
+    // Poll every 5 minutes
+    const interval = setInterval(loadPendingChanges, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user.id]);
+
+  const handleAcknowledge = async (priceChangeId) => {
+    setAcknowledging(priceChangeId);
+    try {
+      const res = await fetch(`/api/fuel-prices/${priceChangeId}/acknowledge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffUserId: user.id })
+      });
+
+      if (res.ok) {
+        loadPendingChanges();
+      } else {
+        const error = await res.json();
+        alert(`Error: ${error.error}`);
+      }
+    } catch (err) {
+      alert('Failed to acknowledge');
+      console.error(err);
+    } finally {
+      setAcknowledging(null);
+    }
+  };
+
+  const getUrgencyLevel = (priceChange) => {
+    const notifiedAt = priceChange.notifications?.[0]?.staff_notified_at;
+    if (!notifiedAt) return 'normal';
+    
+    const minutesElapsed = (new Date() - new Date(notifiedAt)) / (1000 * 60);
+    if (minutesElapsed >= 15) return 'urgent';
+    return 'normal';
+  };
+
+  if (pendingChanges.length === 0) return null;
+
+  return (
+    <div className="space-y-2 mb-6">
+      {pendingChanges.map(pc => {
+        const urgency = getUrgencyLevel(pc);
+        const isUrgent = urgency === 'urgent';
+
+        return (
+          <div
+            key={pc.id}
+            className={`p-4 rounded-lg border-2 ${
+              isUrgent
+                ? 'bg-red-50 border-red-500 shadow-lg'
+                : 'bg-yellow-50 border-yellow-500'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <Fuel className={`h-5 w-5 ${isUrgent ? 'text-red-600' : 'text-yellow-700'}`} />
+                  <h3 className={`font-bold text-lg ${isUrgent ? 'text-red-900' : 'text-yellow-900'}`}>
+                    {isUrgent && '🚨 URGENT: '}
+                    Fuel Price Change - {pc.site?.name}
+                  </h3>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fuel Type</p>
+                    <p className="font-semibold">{pc.fuel_type}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">New Price</p>
+                    <div className="flex items-center gap-2">
+                      {pc.old_price && (
+                        <>
+                          <span className="line-through text-muted-foreground">{pc.old_price}¢</span>
+                          <ChevronRight className="h-4 w-4" />
+                        </>
+                      )}
+                      <span className="text-xl font-bold text-blue-600">{pc.new_price}¢/L</span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Effective</p>
+                    <p className="font-medium">{formatDateTime(pc.effective_datetime)}</p>
+                  </div>
+                </div>
+
+                {pc.notes && (
+                  <div className="mb-3 p-2 bg-white/50 rounded">
+                    <p className="text-sm"><strong>Note:</strong> {pc.notes}</p>
+                  </div>
+                )}
+
+                {isUrgent && (
+                  <p className="text-sm text-red-700 font-medium">
+                    ⚠️ This price change was notified over 15 minutes ago. Please acknowledge immediately!
+                  </p>
+                )}
+              </div>
+
+              <Button
+                onClick={() => handleAcknowledge(pc.id)}
+                disabled={acknowledging === pc.id}
+                className={isUrgent ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-600 hover:bg-yellow-700'}
+                size="lg"
+              >
+                {acknowledging === pc.id ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Acknowledging...</>
+                ) : (
+                  <><CheckCircle className="mr-2 h-5 w-5" /> Acknowledge</>
+                )}
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
 function StaffDashboard({ user, sites, activeTab }) {
   const [reports, setReports] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -3252,6 +3597,9 @@ function StaffDashboard({ user, sites, activeTab }) {
 
   return (
     <div className="container mx-auto px-4 py-6">
+      {/* Price Change Banner */}
+      <StaffPriceChangeBanner user={user} />
+      
       {activeTab === 'submit' && <ShiftReportForm user={user} sites={sites} onSuccess={loadReports} />}
       {activeTab === 'history' && (
         <Card className="border-0 shadow-lg">
@@ -3301,6 +3649,27 @@ export default function App() {
       router.replace('/login');
     }
   }, [router]);
+
+  // Global escalation polling - runs every 5 minutes
+  useEffect(() => {
+    if (!mounted || !user) return;
+
+    const checkEscalations = async () => {
+      try {
+        await fetch('/api/fuel-prices/escalate', { method: 'POST' });
+      } catch (err) {
+        console.error('Escalation check failed:', err);
+      }
+    };
+
+    // Run immediately on mount
+    checkEscalations();
+
+    // Then every 5 minutes
+    const interval = setInterval(checkEscalations, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [mounted, user]);
+
 
   const handleLogin = async (email, password) => {
     setLoading(true);
