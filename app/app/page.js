@@ -3626,7 +3626,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
 
-  // Initialize from localStorage only on client side
+  // Initialize from localStorage only on client side (runs once on mount)
   useEffect(() => {
     const savedUser = localStorage.getItem('workflowlite_user');
     const savedSites = localStorage.getItem('workflowlite_sites');
@@ -3640,6 +3640,7 @@ export default function App() {
         setMounted(true);
       } catch (e) {
         // Invalid data in localStorage
+        console.error('Failed to parse user data:', e);
         localStorage.removeItem('workflowlite_user');
         localStorage.removeItem('workflowlite_sites');
         router.replace('/login');
@@ -3648,7 +3649,8 @@ export default function App() {
       // No user data, redirect to login
       router.replace('/login');
     }
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty array - run only once on mount
 
   // Global escalation polling - runs every 5 minutes
   useEffect(() => {
