@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import supabase from '@/lib/supabase';
+import supabase, { supabaseAdmin } from '@/lib/supabase';
 import { seedDatabase } from '@/lib/supabase-seed';
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
@@ -356,17 +356,28 @@ async function handleCreateUser(request) {
     const body = await request.json();
     const { name, email, password, role } = body;
     
-    // Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    if (!supabaseAdmin) {
+      return NextResponse.json({ 
+        error: 'Service role key not configured' 
+      }, { status: 500, headers: corsHeaders });
+    }
+    
+    // Create user in Supabase Auth using admin client
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password,
+      password: password || 'tempPass123!',
       email_confirm: true,
       user_metadata: { name, role }
     });
     
-    if (authError) throw authError;
+    if (authError) {
+      console.error('Supabase auth error:', authError);
+      return NextResponse.json({ 
+        error: `Failed to create auth user: ${authError.message}` 
+      }, { status: 500, headers: corsHeaders });
+    }
     
-    // Create user in users table
+    // Create user in users table using admin client to bypass RLS
     const newUser = {
       id: uuidv4(),
       auth_user_id: authData.user.id,
@@ -376,18 +387,25 @@ async function handleCreateUser(request) {
       status: 'active'
     };
     
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('users')
       .insert([newUser])
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Database insert error:', error);
+      return NextResponse.json({ 
+        error: `Failed to create user record: ${error.message}` 
+      }, { status: 500, headers: corsHeaders });
+    }
     
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('Create user error:', error);
-    return NextResponse.json({ error: 'Failed to create user' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ 
+      error: `Failed to create user: ${error.message}` 
+    }, { status: 500, headers: corsHeaders });
   }
 }
 
