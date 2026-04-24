@@ -19,11 +19,13 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (user && !authLoading) {
-      router.push('/app');
-    }
-  }, [user, authLoading, router]);
+  // Removed automatic redirect that causes loops
+  // The manual redirect after login (line 57) handles navigation
+  // useEffect(() => {
+  //   if (user && !authLoading) {
+  //     router.push('/app');
+  //   }
+  // }, [user, authLoading, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,8 +55,11 @@ export default function LoginPage() {
         localStorage.setItem('supabase-session', JSON.stringify(userData.session));
       }
 
-      // Redirect to dashboard
-      router.push('/app');
+      // Small delay to ensure localStorage is written before redirect
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Redirect to dashboard using window.location for guaranteed navigation
+      window.location.href = '/app';
       
     } catch (err) {
       console.error('Login error:', err);

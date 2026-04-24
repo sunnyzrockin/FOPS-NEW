@@ -3625,6 +3625,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   // Initialize from localStorage only on client side (runs once on mount)
   useEffect(() => {
@@ -3643,11 +3644,17 @@ export default function App() {
         console.error('Failed to parse user data:', e);
         localStorage.removeItem('workflowlite_user');
         localStorage.removeItem('workflowlite_sites');
-        router.replace('/login');
+        if (!hasRedirected) {
+          setHasRedirected(true);
+          router.replace('/login');
+        }
       }
     } else {
-      // No user data, redirect to login
-      router.replace('/login');
+      // No user data, redirect to login (only once)
+      if (!hasRedirected) {
+        setHasRedirected(true);
+        router.replace('/login');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty array - run only once on mount
