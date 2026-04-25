@@ -356,11 +356,15 @@ async function handleCreateUser(request) {
     const body = await request.json();
     const { name, email, password, role } = body;
     
+    // Check if service role key is configured
     if (!supabaseAdmin) {
+      console.error('CRITICAL: SUPABASE_SERVICE_ROLE_KEY not set in environment variables');
       return NextResponse.json({ 
-        error: 'Service role key not configured' 
+        error: 'Server configuration error: Service role key not configured. Please contact administrator.' 
       }, { status: 500, headers: corsHeaders });
     }
+    
+    console.log(`Creating user: ${email} with role: ${role}`);
     
     // Create user in Supabase Auth using admin client
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -376,6 +380,8 @@ async function handleCreateUser(request) {
         error: `Failed to create auth user: ${authError.message}` 
       }, { status: 500, headers: corsHeaders });
     }
+    
+    console.log(`Auth user created: ${authData.user.id}`);
     
     // Create user in users table using admin client to bypass RLS
     const newUser = {
@@ -400,6 +406,7 @@ async function handleCreateUser(request) {
       }, { status: 500, headers: corsHeaders });
     }
     
+    console.log(`User created successfully: ${data.id}`);
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('Create user error:', error);
