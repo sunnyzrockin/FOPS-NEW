@@ -1238,15 +1238,19 @@ function MorningPriceBrief({ sites, selectedDate }) {
         const date = selectedDate || new Date().toISOString().split('T')[0];
         const res = await fetch(`/api/fuel-price-comparison?siteIds=${siteIds}&date=${date}`);
         const data = await res.json();
-        setBriefData(data);
-      } catch (err) { console.error('Failed to load brief:', err); }
+        // Ensure data is an array
+        setBriefData(Array.isArray(data) ? data : []);
+      } catch (err) { 
+        console.error('Failed to load brief:', err); 
+        setBriefData([]);
+      }
       finally { setLoading(false); }
     };
     loadBrief();
   }, [sites, selectedDate]);
 
   if (loading) return <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-  if (briefData.length === 0) return <p className="text-sm text-muted-foreground">No price data available</p>;
+  if (!Array.isArray(briefData) || briefData.length === 0) return <p className="text-sm text-muted-foreground">No price data available</p>;
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
