@@ -2744,15 +2744,35 @@ function OperatorManagement({ user, sites, onRefresh }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, role: 'operator', creatorRole: 'owner' })
       });
+      
+      // Handle empty response
+      const text = await res.text();
+      if (!text) {
+        alert('Failed to create operator: Server returned empty response. Check Vercel environment variables.');
+        return;
+      }
+      
+      // Parse JSON
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Response was not JSON:', text);
+        alert('Failed to create operator: Invalid server response');
+        return;
+      }
+      
       if (res.ok) {
         setForm({ name: '', email: '', password: 'demo123' });
         setShowAddOperator(false);
         loadData();
       } else {
-        const data = await res.json();
         alert(data.error || 'Failed to create operator');
       }
-    } catch (err) { alert('Failed to create operator: ' + err.message); }
+    } catch (err) { 
+      console.error('Create operator error:', err);
+      alert('Failed to create operator: ' + err.message); 
+    }
   };
 
   const handleDeleteOperator = async (operatorId) => {
@@ -3234,15 +3254,35 @@ function StaffAccessManagement({ user, sites }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, role: 'staff', creatorRole: 'operator' })
       });
+      
+      // Handle empty response
+      const text = await res.text();
+      if (!text) {
+        alert('Failed to create staff: Server returned empty response. Check Vercel environment variables.');
+        return;
+      }
+      
+      // Parse JSON
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Response was not JSON:', text);
+        alert('Failed to create staff: Invalid server response');
+        return;
+      }
+      
       if (res.ok) {
         setForm({ name: '', email: '', password: 'demo123' });
         setShowAddStaff(false);
         loadData();
       } else {
-        const data = await res.json();
         alert(data.error || 'Failed to create staff member');
       }
-    } catch (err) { alert('Failed to create staff: ' + err.message); }
+    } catch (err) { 
+      console.error('Create staff error:', err);
+      alert('Failed to create staff: ' + err.message); 
+    }
   };
 
   const handleDeleteStaff = async (staffId) => {
