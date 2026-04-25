@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
-import supabase, { supabaseAdmin } from '@/lib/supabase';
+import supabase, { supabaseAdmin, supabaseStatus } from '@/lib/supabase';
 import { seedDatabase } from '@/lib/supabase-seed';
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
+
+// CRITICAL: Force Node.js runtime on Vercel (NOT edge).
+// The Supabase admin client uses Node-only APIs (e.g. crypto, fetch with
+// keep-alive) and silently fails on edge runtime, returning empty responses.
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 // Helper to get path segments
 function getPathSegments(request) {
@@ -198,34 +205,31 @@ async function handleLogin(request) {
   }
 }
 
-// ============== RLS FIX ==============
-async function handleRLSFix() {
-  try {
-
+// ============== AUTH SIGNUP ==============
 async function handleSignup(request) {
   try {
     const { name, email, password, role = 'staff' } = await request.json();
-    
-    // Import Supabase client
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-    
+
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY missing', status: supabaseStatus() },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
     // Create user in Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { name, role }
+      user_metadata: { name, role },
     });
-    
+
     if (authError) {
       console.error('Auth signup error:', authError);
       throw authError;
     }
-    
+
     // Create user in users table
     const newUser = {
       id: uuidv4(),
@@ -233,33 +237,36 @@ async function handleSignup(request) {
       name,
       email,
       role,
-      status: 'active'
+      status: 'active',
     };
-    
+
     const { data, error } = await supabaseAdmin
       .from('users')
       .insert([newUser])
       .select()
       .single();
-    
+
     if (error) {
       console.error('Database user creation error:', error);
       throw error;
     }
-    
-    return NextResponse.json({ 
-      user: data,
-      message: 'Account created successfully' 
-    }, { headers: corsHeaders });
-    
+
+    return NextResponse.json(
+      { user: data, message: 'Account created successfully' },
+      { headers: corsHeaders }
+    );
   } catch (error) {
     console.error('Signup error:', error);
-    return NextResponse.json({ 
-      error: error.message || 'Failed to create account' 
-    }, { status: 500, headers: corsHeaders });
+    return NextResponse.json(
+      { error: error.message || 'Failed to create account', stack: error.stack },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
 
+// ============== RLS FIX ==============
+async function handleRLSFix() {
+  try {
     console.log('🔧 Applying RLS recursion fix...');
     
     // Import supabaseAdmin for admin operations
@@ -352,67 +359,111 @@ async function handleGetUsers(request) {
 }
 
 async function handleCreateUser(request) {
+  // Step-by-step logs we return on failure so we can see exactly where Vercel halts.
+  const steps = [];
+  let body = null;
   try {
-    const body = await request.json();
+    steps.push('parse-body:start');
+    body = await request.json();
+    steps.push(`parse-body:ok email=${body?.email} role=${body?.role}`);
     const { name, email, password, role } = body;
-    
-    // Check if service role key is configured
-    if (!supabaseAdmin) {
-      console.error('CRITICAL: SUPABASE_SERVICE_ROLE_KEY not set in environment variables');
-      return NextResponse.json({ 
-        error: 'Server configuration error: Service role key not configured. Please contact administrator.' 
-      }, { status: 500, headers: corsHeaders });
+
+    // Validate
+    if (!email || !role || !name) {
+      return NextResponse.json(
+        { error: 'Missing required fields (name, email, role)', steps },
+        { status: 400, headers: corsHeaders }
+      );
     }
-    
-    console.log(`Creating user: ${email} with role: ${role}`);
-    
+
+    // Check if service role key is configured
+    steps.push('admin-check');
+    if (!supabaseAdmin) {
+      console.error('CRITICAL: SUPABASE_SERVICE_ROLE_KEY not set');
+      return NextResponse.json(
+        {
+          error:
+            'Server configuration error: Service role key not configured.',
+          status: supabaseStatus(),
+          steps,
+        },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
     // Create user in Supabase Auth using admin client
+    steps.push('auth-create:start');
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: password || 'tempPass123!',
       email_confirm: true,
-      user_metadata: { name, role }
+      user_metadata: { name, role },
     });
-    
+    steps.push('auth-create:done');
+
     if (authError) {
       console.error('Supabase auth error:', authError);
-      return NextResponse.json({ 
-        error: `Failed to create auth user: ${authError.message}` 
-      }, { status: 500, headers: corsHeaders });
+      return NextResponse.json(
+        {
+          error: `Failed to create auth user: ${authError.message}`,
+          code: authError.code,
+          status: authError.status,
+          steps,
+        },
+        { status: 500, headers: corsHeaders }
+      );
     }
-    
-    console.log(`Auth user created: ${authData.user.id}`);
-    
+
     // Create user in users table using admin client to bypass RLS
+    steps.push('db-insert:start');
     const newUser = {
       id: uuidv4(),
       auth_user_id: authData.user.id,
       name,
       email,
       role,
-      status: 'active'
+      status: 'active',
     };
-    
+
     const { data, error } = await supabaseAdmin
       .from('users')
       .insert([newUser])
       .select()
       .single();
-    
+    steps.push('db-insert:done');
+
     if (error) {
       console.error('Database insert error:', error);
-      return NextResponse.json({ 
-        error: `Failed to create user record: ${error.message}` 
-      }, { status: 500, headers: corsHeaders });
+      // Best-effort cleanup of orphaned auth user
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        steps.push('orphan-cleanup:done');
+      } catch (cleanupErr) {
+        steps.push(`orphan-cleanup:failed ${cleanupErr.message}`);
+      }
+      return NextResponse.json(
+        {
+          error: `Failed to create user record: ${error.message}`,
+          code: error.code,
+          details: error.details,
+          steps,
+        },
+        { status: 500, headers: corsHeaders }
+      );
     }
-    
-    console.log(`User created successfully: ${data.id}`);
+
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('Create user error:', error);
-    return NextResponse.json({ 
-      error: `Failed to create user: ${error.message}` 
-    }, { status: 500, headers: corsHeaders });
+    return NextResponse.json(
+      {
+        error: `Failed to create user: ${error?.message || 'unknown error'}`,
+        name: error?.name,
+        stack: error?.stack?.split('\n').slice(0, 8).join('\n'),
+        steps,
+      },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
 
