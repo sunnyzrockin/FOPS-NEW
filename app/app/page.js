@@ -3234,12 +3234,16 @@ function StaffAccessManagement({ user, sites }) {
   const loadData = useCallback(async () => {
     try {
       const [usersRes, assignmentsRes] = await Promise.all([
-        fetch('/api/users?role=staff'),
-        fetch(`/api/staff-assignments?operatorId=${user.id}`)
+        fetch('/api/users?role=staff', { cache: 'no-store' }),
+        fetch(`/api/staff-assignments?operatorId=${user.id}`, { cache: 'no-store' })
       ]);
       const [usersData, assignmentsData] = await Promise.all([usersRes.json(), assignmentsRes.json()]);
-      setStaffUsers(usersData);
-      setStaffAssignments(assignmentsData);
+      // Defensive: API may return {error:...} on failure; normalise to []
+      setStaffUsers(Array.isArray(usersData) ? usersData : []);
+      setStaffAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+      if (!Array.isArray(usersData)) {
+        console.error('Failed to load staff list:', usersData);
+      }
     } catch (err) { console.error('Failed to load staff:', err); }
     finally { setLoading(false); }
   }, [user.id]);

@@ -340,21 +340,23 @@ async function handleGetUsers(request) {
   try {
     const url = new URL(request.url);
     const role = url.searchParams.get('role');
-    
-    let query = supabase.from('users').select('*');
-    
+
+    // Use admin client to bypass RLS (users table may have policies that hide rows)
+    const client = supabaseAdmin || supabase;
+    let query = client.from('users').select('*');
+
     if (role) {
       query = query.eq('role', role);
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
-    
+
     return NextResponse.json(data || [], { headers: corsHeaders });
   } catch (error) {
     console.error('Get users error:', error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to fetch users', message: error?.message }, { status: 500, headers: corsHeaders });
   }
 }
 
