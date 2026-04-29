@@ -3230,22 +3230,53 @@ function StaffAccessManagement({ user, sites }) {
   const [selectedSites, setSelectedSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', email: '', password: 'demo123' });
+  const [debug, setDebug] = useState(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   const loadData = useCallback(async () => {
+    const t = Date.now();
+    const dbg = { startedAt: new Date().toISOString(), userId: user.id };
     try {
+      const usersUrl = `/api/users?role=staff&_t=${t}`;
+      const assignmentsUrl = `/api/staff-assignments?operatorId=${user.id}&_t=${t}`;
+      dbg.usersUrl = usersUrl;
+      dbg.assignmentsUrl = assignmentsUrl;
+
       const [usersRes, assignmentsRes] = await Promise.all([
-        fetch('/api/users?role=staff', { cache: 'no-store' }),
-        fetch(`/api/staff-assignments?operatorId=${user.id}`, { cache: 'no-store' })
+        fetch(usersUrl, { cache: 'no-store' }),
+        fetch(assignmentsUrl, { cache: 'no-store' })
       ]);
-      const [usersData, assignmentsData] = await Promise.all([usersRes.json(), assignmentsRes.json()]);
-      // Defensive: API may return {error:...} on failure; normalise to []
-      setStaffUsers(Array.isArray(usersData) ? usersData : []);
-      setStaffAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+      dbg.usersStatus = usersRes.status;
+      dbg.assignmentsStatus = assignmentsRes.status;
+
+      const usersText = await usersRes.text();
+      const assignmentsText = await assignmentsRes.text();
+      dbg.usersBodyPreview = usersText.slice(0, 200);
+      dbg.assignmentsBodyPreview = assignmentsText.slice(0, 200);
+
+      let usersData = [];
+      let assignmentsData = [];
+      try { usersData = JSON.parse(usersText); } catch (e) { dbg.usersParseError = e.message; }
+      try { assignmentsData = JSON.parse(assignmentsText); } catch (e) { dbg.assignmentsParseError = e.message; }
+
+      const finalUsers = Array.isArray(usersData) ? usersData : [];
+      const finalAssignments = Array.isArray(assignmentsData) ? assignmentsData : [];
+      dbg.staffCount = finalUsers.length;
+      dbg.assignmentsCount = finalAssignments.length;
+
+      setStaffUsers(finalUsers);
+      setStaffAssignments(finalAssignments);
+
       if (!Array.isArray(usersData)) {
-        console.error('Failed to load staff list:', usersData);
+        console.error('Failed to load staff list (non-array):', usersData);
       }
-    } catch (err) { console.error('Failed to load staff:', err); }
-    finally { setLoading(false); }
+    } catch (err) {
+      dbg.error = err.message;
+      console.error('Failed to load staff:', err);
+    } finally {
+      setLoading(false);
+      setDebug(dbg);
+    }
   }, [user.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -3426,10 +3457,27 @@ function StaffAccessManagement({ user, sites }) {
 
       <Card className="border-0 shadow-lg">
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="h-5 w-5" /> Staff Members ({staffUsers.length})
-          </CardTitle>
-          <CardDescription>Staff members can submit shift reports for assigned sites</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Users className="h-5 w-5" /> Staff Members ({staffUsers.length})
+              </CardTitle>
+              <CardDescription>Staff members can submit shift reports for assigned sites</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => loadData()}>
+                <Loader2 className="h-3 w-3 mr-1" /> Refresh
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowDebug(v => !v)}>
+                {showDebug ? 'Hide' : 'Show'} Debug
+              </Button>
+            </div>
+          </div>
+          {showDebug && debug && (
+            <div className="mt-3 p-3 bg-slate-100 rounded-md text-xs font-mono overflow-x-auto">
+              <pre className="whitespace-pre-wrap break-all">{JSON.stringify(debug, null, 2)}</pre>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {staffUsers.length === 0 ? (
