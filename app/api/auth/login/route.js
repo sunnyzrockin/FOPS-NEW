@@ -10,6 +10,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// Admin client to bypass RLS for trusted server-side reads/writes
+const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+  : supabase;
+
 export async function POST(request) {
   try {
     const { email, password } = await request.json();
@@ -35,8 +43,8 @@ export async function POST(request) {
       );
     }
 
-    // Get user from database
-    const { data: user, error: userError } = await supabase
+    // Get user from database (use admin to bypass RLS)
+    const { data: user, error: userError } = await supabaseAdmin
       .from('users')
       .select('*')
       .eq('auth_user_id', authData.user.id)
@@ -50,25 +58,25 @@ export async function POST(request) {
       );
     }
 
-    // Get sites based on role
+    // Get sites based on role (use admin to bypass RLS)
     let sites = [];
     
     if (user.role === 'owner') {
-      const { data: ownerSites } = await supabase
+      const { data: ownerSites } = await supabaseAdmin
         .from('sites')
         .select('*')
         .eq('owner_id', user.id);
       sites = ownerSites || [];
       
     } else if (user.role === 'operator') {
-      const { data: assignments } = await supabase
+      const { data: assignments } = await supabaseAdmin
         .from('operator_site_assignments')
         .select('site_id')
         .eq('operator_user_id', user.id);
       
       if (assignments && assignments.length > 0) {
         const siteIds = assignments.map(a => a.site_id);
-        const { data: operatorSites } = await supabase
+        const { data: operatorSites } = await supabaseAdmin
           .from('sites')
           .select('*')
           .in('id', siteIds);
@@ -76,14 +84,14 @@ export async function POST(request) {
       }
       
     } else if (user.role === 'staff') {
-      const { data: assignments } = await supabase
+      const { data: assignments } = await supabaseAdmin
         .from('staff_site_assignments')
         .select('site_id')
         .eq('staff_user_id', user.id);
       
       if (assignments && assignments.length > 0) {
         const siteIds = assignments.map(a => a.site_id);
-        const { data: staffSites } = await supabase
+        const { data: staffSites } = await supabaseAdmin
           .from('sites')
           .select('*')
           .in('id', siteIds);

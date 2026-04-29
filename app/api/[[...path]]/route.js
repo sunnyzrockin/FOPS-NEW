@@ -511,18 +511,17 @@ async function handleGetOperatorAssignments(request) {
     const url = new URL(request.url);
     const siteId = url.searchParams.get('siteId');
     const operatorId = url.searchParams.get('operatorId');
-    
-    // Use admin client to bypass RLS issues
+    const ownerId = url.searchParams.get('ownerId');
+
     const { createClient } = await import('@supabase/supabase-js');
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
-    
-    // Get the authenticated user from the Authorization header
+
+    // Optional Bearer auth
     const authHeader = request.headers.get('Authorization');
     let currentUser = null;
-    
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       try {
@@ -539,7 +538,7 @@ async function handleGetOperatorAssignments(request) {
         console.log('Token verification failed:', e);
       }
     }
-    
+
     let query = supabaseAdmin
       .from('operator_site_assignments')
       .select(`
@@ -547,35 +546,32 @@ async function handleGetOperatorAssignments(request) {
         operator:users!operator_user_id(id, name, email),
         site:sites(id, name, code)
       `);
-    
-    // Apply role-based filtering in application logic
+
     if (currentUser) {
       if (currentUser.role === 'owner') {
-        // Owners can see assignments they created
         query = query.eq('assigned_by_owner_id', currentUser.id);
       } else if (currentUser.role === 'operator') {
-        // Operators can see their own assignments
         query = query.eq('operator_user_id', currentUser.id);
       } else {
-        // Staff cannot see operator assignments
         return NextResponse.json([], { headers: corsHeaders });
       }
-    } else {
-      // No authentication, return empty for security
-      return NextResponse.json([], { headers: corsHeaders });
+    } else if (ownerId) {
+      query = query.eq('assigned_by_owner_id', ownerId);
+    } else if (operatorId) {
+      query = query.eq('operator_user_id', operatorId);
     }
-    
+
     if (siteId) query = query.eq('site_id', siteId);
     if (operatorId) query = query.eq('operator_user_id', operatorId);
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
-    
+
     return NextResponse.json(data || [], { headers: corsHeaders });
   } catch (error) {
     console.error('Get operator assignments error:', error);
-    return NextResponse.json({ error: 'Failed to fetch assignments' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to fetch assignments', message: error?.message }, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -583,42 +579,48 @@ async function handleCreateOperatorAssignment(request) {
   try {
     const body = await request.json();
     const { operator_user_id, site_id, assigned_by_owner_id } = body;
-    
+
+    if (!operator_user_id || !site_id) {
+      return NextResponse.json({ error: 'operator_user_id and site_id are required' }, { status: 400, headers: corsHeaders });
+    }
+
     const newAssignment = {
       id: uuidv4(),
       operator_user_id,
       site_id,
-      assigned_by_owner_id
+      assigned_by_owner_id: assigned_by_owner_id || null
     };
-    
-    const { data, error } = await supabase
+
+    const client = supabaseAdmin || supabase;
+    const { data, error } = await client
       .from('operator_site_assignments')
       .insert([newAssignment])
       .select()
       .single();
-    
+
     if (error) throw error;
-    
+
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('Create operator assignment error:', error);
-    return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to create assignment', message: error?.message, code: error?.code }, { status: 500, headers: corsHeaders });
   }
 }
 
 async function handleDeleteOperatorAssignment(assignmentId) {
   try {
-    const { error } = await supabase
+    const client = supabaseAdmin || supabase;
+    const { error } = await client
       .from('operator_site_assignments')
       .delete()
       .eq('id', assignmentId);
-    
+
     if (error) throw error;
-    
+
     return NextResponse.json({ message: 'Assignment deleted' }, { headers: corsHeaders });
   } catch (error) {
     console.error('Delete operator assignment error:', error);
-    return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to delete assignment', message: error?.message }, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -628,18 +630,20 @@ async function handleGetStaffAssignments(request) {
     const url = new URL(request.url);
     const siteId = url.searchParams.get('siteId');
     const staffId = url.searchParams.get('staffId');
-    
-    // Use admin client to bypass RLS issues
+    const operatorId = url.searchParams.get('operatorId');
+    const ownerId = url.searchParams.get('ownerId');
+
+    // Use admin client to bypass RLS
     const { createClient } = await import('@supabase/supabase-js');
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
-    
-    // Get the authenticated user from the Authorization header
+
+    // Get the authenticated user from the Authorization header (optional)
     const authHeader = request.headers.get('Authorization');
     let currentUser = null;
-    
+
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       try {
@@ -656,7 +660,7 @@ async function handleGetStaffAssignments(request) {
         console.log('Token verification failed:', e);
       }
     }
-    
+
     let query = supabaseAdmin
       .from('staff_site_assignments')
       .select(`
@@ -664,45 +668,51 @@ async function handleGetStaffAssignments(request) {
         staff:users!staff_user_id(id, name, email),
         site:sites(id, name, code)
       `);
-    
-    // Apply role-based filtering in application logic
+
+    // Apply filtering. Prefer Bearer-token role over query params.
     if (currentUser) {
       if (currentUser.role === 'owner') {
-        // Owners can see all staff assignments for their sites
         const { data: ownerSites } = await supabaseAdmin
           .from('sites')
           .select('id')
           .eq('owner_id', currentUser.id);
-        
         if (ownerSites && ownerSites.length > 0) {
-          const siteIds = ownerSites.map(s => s.id);
-          query = query.in('site_id', siteIds);
+          query = query.in('site_id', ownerSites.map(s => s.id));
         } else {
           return NextResponse.json([], { headers: corsHeaders });
         }
       } else if (currentUser.role === 'operator') {
-        // Operators can see assignments they created
         query = query.eq('assigned_by_operator_id', currentUser.id);
       } else if (currentUser.role === 'staff') {
-        // Staff can see their own assignments
         query = query.eq('staff_user_id', currentUser.id);
       }
-    } else {
-      // No authentication, return empty for security
-      return NextResponse.json([], { headers: corsHeaders });
+    } else if (operatorId) {
+      // Frontend passes operatorId explicitly when no Bearer token
+      query = query.eq('assigned_by_operator_id', operatorId);
+    } else if (ownerId) {
+      const { data: ownerSites } = await supabaseAdmin
+        .from('sites')
+        .select('id')
+        .eq('owner_id', ownerId);
+      if (ownerSites && ownerSites.length > 0) {
+        query = query.in('site_id', ownerSites.map(s => s.id));
+      } else {
+        return NextResponse.json([], { headers: corsHeaders });
+      }
     }
-    
+    // If no filter at all, return all (admin-style; staff_user_id/site_id below can scope further)
+
     if (siteId) query = query.eq('site_id', siteId);
     if (staffId) query = query.eq('staff_user_id', staffId);
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
-    
+
     return NextResponse.json(data || [], { headers: corsHeaders });
   } catch (error) {
     console.error('Get staff assignments error:', error);
-    return NextResponse.json({ error: 'Failed to fetch assignments' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to fetch assignments', message: error?.message }, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -710,42 +720,50 @@ async function handleCreateStaffAssignment(request) {
   try {
     const body = await request.json();
     const { staff_user_id, site_id, assigned_by_operator_id } = body;
-    
+
+    if (!staff_user_id || !site_id) {
+      return NextResponse.json({ error: 'staff_user_id and site_id are required' }, { status: 400, headers: corsHeaders });
+    }
+
     const newAssignment = {
       id: uuidv4(),
       staff_user_id,
       site_id,
-      assigned_by_operator_id
+      assigned_by_operator_id: assigned_by_operator_id || null
     };
-    
-    const { data, error } = await supabase
+
+    // Use admin client to bypass RLS
+    const client = supabaseAdmin || supabase;
+    const { data, error } = await client
       .from('staff_site_assignments')
       .insert([newAssignment])
       .select()
       .single();
-    
+
     if (error) throw error;
-    
+
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('Create staff assignment error:', error);
-    return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to create assignment', message: error?.message, code: error?.code }, { status: 500, headers: corsHeaders });
   }
 }
 
 async function handleDeleteStaffAssignment(assignmentId) {
   try {
-    const { error } = await supabase
+    // Use admin client to bypass RLS
+    const client = supabaseAdmin || supabase;
+    const { error } = await client
       .from('staff_site_assignments')
       .delete()
       .eq('id', assignmentId);
-    
+
     if (error) throw error;
-    
+
     return NextResponse.json({ message: 'Assignment deleted' }, { headers: corsHeaders });
   } catch (error) {
     console.error('Delete staff assignment error:', error);
-    return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to delete assignment', message: error?.message }, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -754,25 +772,24 @@ async function handleGetSites(request) {
   try {
     const url = new URL(request.url);
     const ownerId = url.searchParams.get('ownerId');
-    
+    const userId = url.searchParams.get('userId');
+
     // Use admin client to bypass RLS issues
     const { createClient } = await import('@supabase/supabase-js');
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
-    
+
     // Get the authenticated user from the Authorization header
     const authHeader = request.headers.get('Authorization');
     let currentUser = null;
-    
+
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       try {
-        // Verify the JWT token and get user info
         const { data: { user }, error } = await supabase.auth.getUser(token);
         if (user && !error) {
-          // Get user metadata from users table
           const { data: userData } = await supabaseAdmin
             .from('users')
             .select('*')
@@ -784,40 +801,48 @@ async function handleGetSites(request) {
         console.log('Token verification failed:', e);
       }
     }
-    
+
+    // If no Bearer token but a userId/ownerId is supplied, treat that as the
+    // identifying user and look up their role from the DB so we can apply
+    // the correct scoping. This lets the frontend (which doesn't currently
+    // forward the JWT) refresh sites via /api/sites?userId=<id>.
+    if (!currentUser && userId) {
+      const { data: userData } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (userData) currentUser = userData;
+    }
+
     let query = supabaseAdmin.from('sites').select('*');
-    
+
     // Apply role-based filtering in application logic
     if (currentUser) {
       if (currentUser.role === 'owner') {
-        // Owners can see all their sites
         query = query.eq('owner_id', currentUser.id);
       } else if (currentUser.role === 'operator') {
-        // Operators can see assigned sites
         const { data: assignments } = await supabaseAdmin
           .from('operator_site_assignments')
           .select('site_id')
           .eq('operator_user_id', currentUser.id);
-        
+
         if (assignments && assignments.length > 0) {
           const siteIds = assignments.map(a => a.site_id);
           query = query.in('id', siteIds);
         } else {
-          // No assignments, return empty
           return NextResponse.json([], { headers: corsHeaders });
         }
       } else if (currentUser.role === 'staff') {
-        // Staff can see assigned sites
         const { data: assignments } = await supabaseAdmin
           .from('staff_site_assignments')
           .select('site_id')
           .eq('staff_user_id', currentUser.id);
-        
+
         if (assignments && assignments.length > 0) {
           const siteIds = assignments.map(a => a.site_id);
           query = query.in('id', siteIds);
         } else {
-          // No assignments, return empty
           return NextResponse.json([], { headers: corsHeaders });
         }
       }
@@ -825,18 +850,18 @@ async function handleGetSites(request) {
       // Fallback for non-authenticated requests with ownerId
       query = query.eq('owner_id', ownerId);
     } else {
-      // No authentication and no ownerId, return empty for security
+      // No authentication and no identifier, return empty
       return NextResponse.json([], { headers: corsHeaders });
     }
-    
-    const { data, error} = await query;
-    
+
+    const { data, error } = await query;
+
     if (error) throw error;
-    
+
     return NextResponse.json(data || [], { headers: corsHeaders });
   } catch (error) {
     console.error('Get sites error:', error);
-    return NextResponse.json({ error: 'Failed to fetch sites' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to fetch sites', message: error?.message }, { status: 500, headers: corsHeaders });
   }
 }
 

@@ -3430,27 +3430,37 @@ function StaffAccessManagement({ user, sites }) {
             <DialogDescription>Select which sites this staff member can access (from your assigned sites only)</DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3 max-h-[400px] overflow-y-auto">
-            {sites.map(site => (
-              <div key={site.id} className="flex items-center space-x-3 p-3 rounded-xl hover:bg-slate-50">
-                <Checkbox
-                  id={site.id}
-                  checked={selectedSites.includes(site.id)}
-                  onCheckedChange={(checked) =>
-                    setSelectedSites(prev =>
-                      checked ? [...prev, site.id] : prev.filter(id => id !== site.id)
-                    )
-                  }
-                />
-                <label htmlFor={site.id} className="flex-1 cursor-pointer">
-                  <p className="font-medium">{site.name}</p>
-                  <p className="text-xs text-muted-foreground">{site.code} • {site.location}</p>
-                </label>
+            {sites.length === 0 ? (
+              <div className="text-center py-8 px-4">
+                <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                <p className="font-medium text-amber-700">No sites available to assign</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  You don&apos;t have any sites assigned to you yet. Ask your owner to assign sites to your operator account first.
+                </p>
               </div>
-            ))}
+            ) : (
+              sites.map(site => (
+                <div key={site.id} className="flex items-center space-x-3 p-3 rounded-xl hover:bg-slate-50">
+                  <Checkbox
+                    id={site.id}
+                    checked={selectedSites.includes(site.id)}
+                    onCheckedChange={(checked) =>
+                      setSelectedSites(prev =>
+                        checked ? [...prev, site.id] : prev.filter(id => id !== site.id)
+                      )
+                    }
+                  />
+                  <label htmlFor={site.id} className="flex-1 cursor-pointer">
+                    <p className="font-medium">{site.name}</p>
+                    <p className="text-xs text-muted-foreground">{site.code} • {site.location}</p>
+                  </label>
+                </div>
+              ))
+            )}
           </div>
           <DialogFooter>
             <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-            <Button onClick={handleSaveAssignments}>Save Assignments</Button>
+            <Button onClick={handleSaveAssignments} disabled={sites.length === 0}>Save Assignments</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
