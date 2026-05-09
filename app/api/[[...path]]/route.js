@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import supabase, { supabaseAdmin, supabaseStatus } from '@/lib/supabase';
-import { seedDatabase } from '@/lib/supabase-seed';
 import { v4 as uuidv4 } from 'uuid';
-import * as XLSX from 'xlsx';
+// xlsx moved to dedicated /api/export route to keep catch-all bundle small.
 
 // CRITICAL: Force Node.js runtime on Vercel (NOT edge).
 // The Supabase admin client uses Node-only APIs (e.g. crypto, fetch with
@@ -50,7 +49,7 @@ async function handleCreateInvite(request) {
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
     };
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('user_invites')
       .insert([newInvite])
       .select()
@@ -73,7 +72,7 @@ async function handleGetInvites(request) {
     const url = new URL(request.url);
     const invitedBy = url.searchParams.get('invitedBy');
     
-    let query = supabase.from('user_invites').select('*');
+    let query = (supabaseAdmin || supabase).from('user_invites').select('*');
     
     if (invitedBy) {
       query = query.eq('invited_by_user_id', invitedBy);
@@ -99,7 +98,7 @@ async function handleUpdateUserRole(userId, request) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400, headers: corsHeaders });
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('users')
       .update({ role })
       .eq('id', userId)
@@ -313,6 +312,8 @@ async function handleRLSFix() {
 // ============== SEED SUPABASE DATABASE ==============
 async function handleSeedSupabase() {
   try {
+    // Lazy-import to keep catch-all bundle small
+    const { seedDatabase } = await import('@/lib/supabase-seed');
     const result = await seedDatabase();
     
     if (result.success) {
@@ -473,7 +474,7 @@ async function handleUpdateUser(userId, request) {
   try {
     const updates = await request.json();
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('users')
       .update(updates)
       .eq('id', userId)
@@ -491,7 +492,7 @@ async function handleUpdateUser(userId, request) {
 
 async function handleDeleteUser(userId) {
   try {
-    const { error } = await supabase
+    const { error } = await (supabaseAdmin || supabase)
       .from('users')
       .delete()
       .eq('id', userId);
@@ -867,7 +868,7 @@ async function handleGetSites(request) {
 
 async function handleGetSiteById(siteId) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('sites')
       .select('*')
       .eq('id', siteId)
@@ -892,7 +893,7 @@ async function handleCreateSite(request) {
       status: 'active'
     };
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('sites')
       .insert([newSite])
       .select()
@@ -911,7 +912,7 @@ async function handleUpdateSite(siteId, request) {
   try {
     const updates = await request.json();
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('sites')
       .update(updates)
       .eq('id', siteId)
@@ -937,7 +938,7 @@ async function handleGetFieldConfigs(request) {
       return NextResponse.json({ error: 'siteId is required' }, { status: 400, headers: corsHeaders });
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_field_configs')
       .select('*')
       .eq('site_id', siteId)
@@ -955,24 +956,33 @@ async function handleGetFieldConfigs(request) {
 async function handleCreateFieldConfig(request) {
   try {
     const body = await request.json();
-    
+
     const newConfig = {
       id: uuidv4(),
       ...body
     };
-    
-    const { data, error } = await supabase
+
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_field_configs')
       .insert([newConfig])
       .select()
       .single();
-    
+
     if (error) throw error;
-    
+
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('Create field config error:', error);
-    return NextResponse.json({ error: 'Failed to create field config' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json(
+      {
+        error: 'Failed to create field config',
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+      },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
 
@@ -980,7 +990,7 @@ async function handleUpdateFieldConfig(configId, request) {
   try {
     const updates = await request.json();
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_field_configs')
       .update(updates)
       .eq('id', configId)
@@ -998,7 +1008,7 @@ async function handleUpdateFieldConfig(configId, request) {
 
 async function handleDeleteFieldConfig(configId) {
   try {
-    const { error } = await supabase
+    const { error } = await (supabaseAdmin || supabase)
       .from('site_field_configs')
       .delete()
       .eq('id', configId);
@@ -1016,7 +1026,7 @@ async function handleBulkUpdateFieldConfigs(request) {
   try {
     const { configs } = await request.json();
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_field_configs')
       .upsert(configs)
       .select();
@@ -1040,7 +1050,7 @@ async function handleGetBankingFormulas(request) {
       return NextResponse.json({ error: 'siteId is required' }, { status: 400, headers: corsHeaders });
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_banking_formulas')
       .select('*')
       .eq('site_id', siteId)
@@ -1067,7 +1077,7 @@ async function handleCreateBankingFormula(request) {
       visible_in_operator_daily_summary: body.visible_in_operator_daily_summary !== false
     };
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_banking_formulas')
       .insert([newFormula])
       .select()
@@ -1086,7 +1096,7 @@ async function handleUpdateBankingFormula(formulaId, request) {
   try {
     const updates = await request.json();
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_banking_formulas')
       .update(updates)
       .eq('id', formulaId)
@@ -1104,7 +1114,7 @@ async function handleUpdateBankingFormula(formulaId, request) {
 
 async function handleDeleteBankingFormula(formulaId) {
   try {
-    const { error } = await supabase
+    const { error } = await (supabaseAdmin || supabase)
       .from('site_banking_formulas')
       .delete()
       .eq('id', formulaId);
@@ -1163,7 +1173,7 @@ async function handleGetReports(request) {
     const endDate = url.searchParams.get('endDate');
     const status = url.searchParams.get('status');
     
-    let query = supabase
+    let query = (supabaseAdmin || supabase)
       .from('shift_reports')
       .select(`
         *,
@@ -1205,7 +1215,7 @@ async function handleCreateReport(request) {
       submitted_at: new Date().toISOString()
     };
     
-    const { data: report, error: reportError } = await supabase
+    const { data: report, error: reportError } = await (supabaseAdmin || supabase)
       .from('shift_reports')
       .insert([newReport])
       .select()
@@ -1214,7 +1224,7 @@ async function handleCreateReport(request) {
     if (reportError) throw reportError;
     
     // Calculate and save formula results if visible to staff
-    const { data: formulas } = await supabase
+    const { data: formulas } = await (supabaseAdmin || supabase)
       .from('site_banking_formulas')
       .select('*')
       .eq('site_id', body.site_id)
@@ -1236,7 +1246,7 @@ async function handleCreateReport(request) {
       }
       
       if (formulaResults.length > 0) {
-        await supabase
+        await (supabaseAdmin || supabase)
           .from('shift_formula_results')
           .insert(formulaResults);
       }
@@ -1259,7 +1269,7 @@ async function handleUpdateReportStatus(reportId, request) {
       reviewed_at: new Date().toISOString()
     };
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('shift_reports')
       .update(updates)
       .eq('id', reportId)
@@ -1321,7 +1331,7 @@ async function handleGetDailyRollups(request) {
     
     const siteIdArray = siteIds.split(',');
     
-    let query = supabase
+    let query = (supabaseAdmin || supabase)
       .from('shift_reports')
       .select('*')
       .in('site_id', siteIdArray);
@@ -1377,7 +1387,7 @@ async function handleGetDailyRollups(request) {
     // Calculate formula rollups for each day
     for (const key in rollups) {
       const rollup = rollups[key];
-      const { data: formulas } = await supabase
+      const { data: formulas } = await (supabaseAdmin || supabase)
         .from('site_banking_formulas')
         .select('*')
         .eq('site_id', rollup.site_id)
@@ -1420,7 +1430,7 @@ async function handleGetDashboardStats(request) {
     
     const siteIdArray = siteIds.split(',');
     
-    let query = supabase
+    let query = (supabaseAdmin || supabase)
       .from('shift_reports')
       .select('*')
       .in('site_id', siteIdArray);
@@ -1469,7 +1479,7 @@ async function handleGetSiteCompetitors(request) {
       return NextResponse.json({ error: 'siteId is required' }, { status: 400, headers: corsHeaders });
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_competitors')
       .select('*')
       .eq('site_id', siteId);
@@ -1492,7 +1502,7 @@ async function handleCreateSiteCompetitor(request) {
       ...body
     };
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_competitors')
       .insert([newCompetitor])
       .select()
@@ -1511,7 +1521,7 @@ async function handleUpdateSiteCompetitor(competitorId, request) {
   try {
     const updates = await request.json();
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('site_competitors')
       .update(updates)
       .eq('id', competitorId)
@@ -1529,7 +1539,7 @@ async function handleUpdateSiteCompetitor(competitorId, request) {
 
 async function handleDeleteSiteCompetitor(competitorId) {
   try {
-    const { error } = await supabase
+    const { error } = await (supabaseAdmin || supabase)
       .from('site_competitors')
       .delete()
       .eq('id', competitorId);
@@ -1549,7 +1559,7 @@ async function handleGetFuelPriceEntries(request) {
     const siteId = url.searchParams.get('siteId');
     const date = url.searchParams.get('date');
     
-    let query = supabase
+    let query = (supabaseAdmin || supabase)
       .from('fuel_price_entries')
       .select('*')
       .order('date', { ascending: false });
@@ -1578,7 +1588,7 @@ async function handleCreateFuelPriceEntry(request) {
       entered_at: new Date().toISOString()
     };
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('fuel_price_entries')
       .insert([newEntry])
       .select()
@@ -1597,7 +1607,7 @@ async function handleUpdateFuelPriceEntry(entryId, request) {
   try {
     const updates = await request.json();
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('fuel_price_entries')
       .update(updates)
       .eq('id', entryId)
@@ -1620,7 +1630,7 @@ async function handleGetCompetitorPrices(request) {
     const siteId = url.searchParams.get('siteId');
     const date = url.searchParams.get('date');
     
-    let query = supabase
+    let query = (supabaseAdmin || supabase)
       .from('competitor_fuel_prices')
       .select('*')
       .order('date', { ascending: false });
@@ -1650,7 +1660,7 @@ async function handleCreateCompetitorPrice(request) {
       entered_at: new Date().toISOString()
     };
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('competitor_fuel_prices')
       .insert([newPrice])
       .select()
@@ -1669,7 +1679,7 @@ async function handleUpdateCompetitorPrice(priceId, request) {
   try {
     const updates = await request.json();
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabaseAdmin || supabase)
       .from('competitor_fuel_prices')
       .update(updates)
       .eq('id', priceId)
@@ -1687,7 +1697,7 @@ async function handleUpdateCompetitorPrice(priceId, request) {
 
 async function handleDeleteCompetitorPrice(priceId) {
   try {
-    const { error } = await supabase
+    const { error } = await (supabaseAdmin || supabase)
       .from('competitor_fuel_prices')
       .delete()
       .eq('id', priceId);
@@ -1712,28 +1722,28 @@ async function handleGetFuelPriceComparison(request) {
     }
     
     // Get own site info
-    const { data: site } = await supabase
+    const { data: site } = await (supabaseAdmin || supabase)
       .from('sites')
       .select('*')
       .eq('id', siteId)
       .single();
     
     // Get own fuel prices
-    const { data: ownPrices } = await supabase
+    const { data: ownPrices } = await (supabaseAdmin || supabase)
       .from('fuel_price_entries')
       .select('*')
       .eq('site_id', siteId)
       .eq('date', date);
     
     // Get competitors
-    const { data: competitors } = await supabase
+    const { data: competitors } = await (supabaseAdmin || supabase)
       .from('site_competitors')
       .select('*')
       .eq('site_id', siteId);
     
     // Get competitor prices
     const competitorIds = (competitors || []).map(c => c.id);
-    const { data: competitorPrices } = await supabase
+    const { data: competitorPrices } = await (supabaseAdmin || supabase)
       .from('competitor_fuel_prices')
       .select('*')
       .in('competitor_id', competitorIds)
@@ -1759,71 +1769,12 @@ async function handleGetFuelPriceComparison(request) {
 
 // ============== EXPORT ==============
 async function handleExport(request) {
-  try {
-    const url = new URL(request.url);
-    const siteIds = url.searchParams.get('siteIds');
-    const startDate = url.searchParams.get('startDate');
-    const endDate = url.searchParams.get('endDate');
-    
-    if (!siteIds) {
-      return NextResponse.json({ error: 'siteIds is required' }, { status: 400, headers: corsHeaders });
-    }
-    
-    const siteIdArray = siteIds.split(',');
-    
-    let query = supabase
-      .from('shift_reports')
-      .select(`
-        *,
-        site:sites(name, code),
-        submitted_by:users!submitted_by_user_id(name)
-      `)
-      .in('site_id', siteIdArray)
-      .order('date', { ascending: false });
-    
-    if (startDate) query = query.gte('date', startDate);
-    if (endDate) query = query.lte('date', endDate);
-    
-    const { data: reports, error } = await query;
-    
-    if (error) throw error;
-    
-    const exportData = (reports || []).map(report => ({
-      Date: report.date,
-      Site: report.site?.name || '',
-      'Site Code': report.site?.code || '',
-      'Shift Type': report.shift_type,
-      'Staff Member': report.submitted_by?.name || '',
-      'Total Sales': report.total_sales,
-      'Fuel Sales': report.fuel_sales,
-      'Shop Sales': report.shop_sales,
-      'Total Litres': report.total_litres,
-      'EFTPOS': report.eftpos,
-      'Motorpass': report.motorpass,
-      'Cash': report.cash,
-      'Accounts': report.accounts,
-      'Drive Offs': report.drive_offs,
-      'Status': report.status,
-      'Submitted At': new Date(report.submitted_at).toLocaleString()
-    }));
-    
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Shift Reports');
-    
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    
-    return new NextResponse(buf, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="shift-reports-${new Date().toISOString().split('T')[0]}.xlsx"`
-      }
-    });
-  } catch (error) {
-    console.error('Export error:', error);
-    return NextResponse.json({ error: 'Failed to export data' }, { status: 500, headers: corsHeaders });
-  }
+  // Forward to dedicated /api/export route (which carries the heavy xlsx import).
+  // This keeps the catch-all bundle small.
+  const url = new URL(request.url);
+  const newUrl = new URL('/api/export', url);
+  newUrl.search = url.search;
+  return NextResponse.redirect(newUrl, 307);
 }
 
 // ============== REQUEST ROUTING ==============

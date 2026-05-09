@@ -637,18 +637,23 @@ function BankingFormulaBuilder({ siteId, userId, onClose, existingFormula }) {
 function BankingManagement({ user, sites }) {
   const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
   const [formulas, setFormulas] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingFormula, setEditingFormula] = useState(null);
 
   const loadFormulas = useCallback(async () => {
-    if (!selectedSite) return;
+    if (!selectedSite) {
+      // No site selected — don't show spinner forever.
+      setFormulas([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(`/api/banking-formulas?siteId=${selectedSite}`);
+      const res = await fetch(`/api/banking-formulas?siteId=${selectedSite}`, { cache: 'no-store' });
       const data = await res.json();
-      setFormulas(data);
-    } catch (err) { console.error('Failed to load formulas:', err); }
+      setFormulas(Array.isArray(data) ? data : []);
+    } catch (err) { console.error('Failed to load formulas:', err); setFormulas([]); }
     finally { setLoading(false); }
   }, [selectedSite]);
 
@@ -656,8 +661,17 @@ function BankingManagement({ user, sites }) {
 
   const handleDelete = async (formulaId) => {
     if (!confirm('Delete this formula?')) return;
-    await fetch(`/api/banking-formulas/${formulaId}`, { method: 'DELETE' });
-    loadFormulas();
+    try {
+      const res = await fetch(`/api/banking-formulas/${formulaId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Failed to delete formula: ${data.error || data.message || res.status}`);
+        return;
+      }
+      loadFormulas();
+    } catch (err) {
+      alert('Failed to delete formula: ' + err.message);
+    }
   };
 
   const handleBuilderClose = (saved) => {
@@ -699,7 +713,15 @@ function BankingManagement({ user, sites }) {
 
       {!showBuilder && (
         <div className="space-y-4">
-          {loading ? (
+          {!selectedSite ? (
+            <Card className="border-dashed border-2">
+              <CardContent className="py-12 text-center">
+                <Calculator className="h-12 w-12 mx-auto mb-4 text-slate-300" />
+                <p className="font-medium">Select a site to view its banking formulas</p>
+                <p className="text-sm text-muted-foreground mt-1">Choose a site from the dropdown above.</p>
+              </CardContent>
+            </Card>
+          ) : loading ? (
             <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-purple-500" /></div>
           ) : formulas.length === 0 ? (
             <Card className="border-dashed border-2">
@@ -751,19 +773,26 @@ function BankingManagement({ user, sites }) {
 function FieldConfiguration({ user, sites }) {
   const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
   const [fields, setFields] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [newField, setNewField] = useState({ label: '', field_type: 'number' });
 
   const loadFields = useCallback(async () => {
-    if (!selectedSite) return;
+    if (!selectedSite) {
+      // No site selected — don't show spinner forever.
+      setFields([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(`/api/field-configs?siteId=${selectedSite}`);
+      const res = await fetch(`/api/field-configs?siteId=${selectedSite}`, { cache: 'no-store' });
       const data = await res.json();
-      setFields(data.sort((a, b) => a.display_order - b.display_order));
-    } catch (err) { console.error('Failed to load fields:', err); }
+      const list = Array.isArray(data) ? data : [];
+      setFields(list.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)));
+    } catch (err) { console.error('Failed to load fields:', err); setFields([]); }
     finally { setLoading(false); }
   }, [selectedSite]);
 
@@ -772,40 +801,75 @@ function FieldConfiguration({ user, sites }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch('/api/field-configs/bulk', {
+      const res = await fetch('/api/field-configs/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ configs: fields })
       });
-      loadFields();
-    } catch (err) { alert('Failed to save'); }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Failed to save: ${data.error || data.message || res.status}`);
+      } else {
+        loadFields();
+      }
+    } catch (err) { alert('Failed to save: ' + err.message); }
     finally { setSaving(false); }
   };
 
   const handleAddField = async () => {
     if (!newField.label) { alert('Label is required'); return; }
+    if (!selectedSite) { alert('Please select a site first'); return; }
+    setAdding(true);
     try {
-      await fetch('/api/field-configs', {
+      // Generate snake_case `key` from the label
+      const fieldKey = newField.label
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, 60) || `field_${Date.now()}`;
+
+      const res = await fetch('/api/field-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           site_id: selectedSite,
+          key: fieldKey,
           label: newField.label,
           field_type: newField.field_type,
           display_order: fields.length + 1,
+          is_core: false,
+          is_enabled: true,
           created_by_user_id: user.id
         })
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const detail = data.message || data.error || res.status;
+        const hint = data.hint ? `\nHint: ${data.hint}` : '';
+        alert(`Failed to add field: ${detail}${hint}`);
+        return;
+      }
       setNewField({ label: '', field_type: 'number' });
       setShowAddField(false);
       loadFields();
-    } catch (err) { alert('Failed to add field'); }
+    } catch (err) { alert('Failed to add field: ' + err.message); }
+    finally { setAdding(false); }
   };
 
   const handleDelete = async (fieldId) => {
     if (!confirm('Delete this field?')) return;
-    await fetch(`/api/field-configs/${fieldId}`, { method: 'DELETE' });
-    loadFields();
+    try {
+      const res = await fetch(`/api/field-configs/${fieldId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Failed to delete: ${data.error || data.message || res.status}`);
+        return;
+      }
+      loadFields();
+    } catch (err) {
+      alert('Failed to delete: ' + err.message);
+    }
   };
 
   const updateField = (id, key, value) => {
@@ -860,14 +924,24 @@ function FieldConfiguration({ user, sites }) {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleAddField}>Add</Button>
+              <Button onClick={handleAddField} disabled={adding}>
+                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+              </Button>
               <Button variant="ghost" onClick={() => setShowAddField(false)}><X className="h-4 w-4" /></Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {loading ? (
+      {!selectedSite ? (
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center">
+            <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+            <p className="font-medium">Select a site to configure fields</p>
+            <p className="text-sm text-muted-foreground mt-1">Choose a site from the dropdown above to view and edit its custom shift-report fields.</p>
+          </CardContent>
+        </Card>
+      ) : loading ? (
         <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
       ) : (
         <div className="space-y-2">
@@ -2777,8 +2851,20 @@ function OperatorManagement({ user, sites, onRefresh }) {
 
   const handleDeleteOperator = async (operatorId) => {
     if (!confirm('Are you sure? This will remove all site assignments for this operator.')) return;
-    await fetch(`/api/users/${operatorId}`, { method: 'DELETE' });
-    loadData();
+    try {
+      const res = await fetch(`/api/users/${operatorId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Failed to delete operator: ${data.error || data.message || res.status}`);
+        return;
+      }
+      // Optimistic UI update
+      setOperators(prev => prev.filter(o => o.id !== operatorId));
+      setOperatorAssignments(prev => prev.filter(a => a.operator_user_id !== operatorId));
+      loadData();
+    } catch (err) {
+      alert('Failed to delete operator: ' + err.message);
+    }
   };
 
   const openAssignSites = (operator) => {
@@ -3322,8 +3408,21 @@ function StaffAccessManagement({ user, sites }) {
 
   const handleDeleteStaff = async (staffId) => {
     if (!confirm('Are you sure? This will remove all site assignments for this staff member.')) return;
-    await fetch(`/api/users/${staffId}`, { method: 'DELETE' });
-    loadData();
+    try {
+      const res = await fetch(`/api/users/${staffId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Failed to delete staff: ${data.error || data.message || res.status}`);
+        return;
+      }
+      // Optimistically remove from list immediately for instant UI feedback
+      setStaffUsers(prev => prev.filter(s => s.id !== staffId));
+      setStaffAssignments(prev => prev.filter(a => a.staff_user_id !== staffId));
+      // Then re-fetch to make sure
+      loadData();
+    } catch (err) {
+      alert('Failed to delete staff: ' + err.message);
+    }
   };
 
   const openAssignSites = (staff) => {
