@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, supabase, supabaseStatus } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
+import { verifyAuth, rateLimit, clientIp } from '@/lib/auth-helpers';
 
 // Force Node runtime + dynamic so Vercel doesn't infer edge or cache.
 export const runtime = 'nodejs';
@@ -45,7 +46,20 @@ export async function GET(request) {
 }
 
 // POST /api/users  -> create user (auth + DB row)
+//
+// Security:
+// - Rate-limited to 10 creations / minute per IP to slow brute-force abuse.
+// - When an Authorization header IS provided, we verify the caller and
+//   enforce role-based permissions (only owner can create operators,
+//   only operator can create staff). When NO header is provided we
+//   currently fall back to anonymous (legacy) — the frontend will
+//   migrate to always-authenticated calls.
 export async function POST(request) {
+  // Rate-limit by IP
+  const ip = clientIp(request);
+  const rl = rateLimit({ key: `users:create:${ip}`, limit: 10, windowMs: 60_000 });
+  if (!rl.ok) return rl.response;
+
   const steps = [];
   try {
     steps.push('parse-body');
@@ -58,6 +72,28 @@ export async function POST(request) {
         { status: 400, headers: corsHeaders }
       );
     }
+
+    // ---- Optional auth check (non-breaking; only enforces if header present)
+    const auth = await verifyAuth(request, { allowAnon: true });
+    if (auth.user) {
+      // Role-based permission check
+      const allowedTransitions = {
+        owner: ['operator', 'staff', 'owner'],
+        operator: ['staff'],
+      };
+      const allowed = allowedTransitions[auth.user.role] || [];
+      if (!allowed.includes(role)) {
+        return NextResponse.json(
+          {
+            error: `Your role (${auth.user.role}) cannot create users with role "${role}"`,
+            allowed,
+          },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+    }
+    // (When no auth header is sent we currently allow — to be removed once
+    // frontend always forwards the JWT.)
 
     steps.push('admin-check');
     if (!supabaseAdmin) {

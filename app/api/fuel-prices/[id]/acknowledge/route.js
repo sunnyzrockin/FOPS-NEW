@@ -9,7 +9,7 @@ const supabase = createClient(
 // POST /api/fuel-prices/[id]/acknowledge - Staff acknowledges price change
 export async function POST(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const { staffUserId } = body;
 

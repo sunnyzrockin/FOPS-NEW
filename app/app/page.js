@@ -19,7 +19,7 @@ import {
   Building2, Fuel, ShoppingCart, DollarSign, Droplets, LogOut, FileText, CheckCircle, Clock,
   User, Users, ChevronRight, TrendingUp, BarChart3, Eye, ClipboardList, Loader2, Plus, Settings,
   MapPin, AlertTriangle, Pencil, Trash2, UserPlus, Building, Calculator, Download, Calendar,
-  Layers, ChevronDown, ChevronUp, GripVertical, X, Save, RefreshCw, AlertCircle
+  Layers, ChevronDown, ChevronUp, GripVertical, X, Save, RefreshCw, AlertCircle, Mail
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend
@@ -3367,6 +3367,36 @@ function StaffAccessManagement({ user, sites }) {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const handleSendStaffInvite = async () => {
+    if (!form.name || !form.email) { alert('Name and email are required'); return; }
+    try {
+      const res = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email,
+          role: 'staff',
+          invited_by_user_id: user.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Failed to send invite: ${data.error || data.message || res.status}`);
+        return;
+      }
+      const ackMsg = data.email_sent
+        ? `Invite email sent to ${form.email}`
+        : data.email_mocked
+        ? `Invite created but email service is not configured. Share this link directly:\n\n${data.accept_url}`
+        : `Invite created but email failed to send. Share this link directly:\n\n${data.accept_url}`;
+      alert(ackMsg);
+      setForm({ name: '', email: '', password: 'demo123' });
+      setShowAddStaff(false);
+    } catch (err) {
+      alert('Failed to send invite: ' + err.message);
+    }
+  };
+
   const handleCreateStaff = async () => {
     if (!form.name || !form.email) { alert('Name and email are required'); return; }
     try {
@@ -3492,7 +3522,12 @@ function StaffAccessManagement({ user, sites }) {
             </Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Add New Staff Member</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Add New Staff Member</DialogTitle>
+              <DialogDescription>
+                Send an email invitation (recommended) or create the account directly with a temporary password.
+              </DialogDescription>
+            </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
                 <Label>Name *</Label>
@@ -3514,9 +3549,12 @@ function StaffAccessManagement({ user, sites }) {
                 />
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-2">
               <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-              <Button onClick={handleCreateStaff}>Create Staff Member</Button>
+              <Button variant="outline" onClick={handleSendStaffInvite}>
+                <Mail className="h-4 w-4 mr-1" /> Send Invite
+              </Button>
+              <Button onClick={handleCreateStaff}>Create Directly</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
