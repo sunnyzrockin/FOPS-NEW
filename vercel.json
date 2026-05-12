@@ -3,8 +3,5 @@
   "buildCommand": "next build",
   "outputDirectory": ".next",
   "installCommand": "yarn install",
-  "regions": ["syd1"],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ]
+  "regions": ["syd1"]
 }

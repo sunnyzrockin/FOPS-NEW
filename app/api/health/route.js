@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 // return the new marker. If it still shows the old marker, the deploy did
 // not include this commit.
 // ============================================================================
-const VERSION_MARKER = 'fops-2026-05-09-deploy-pipeline-test-01';
+const VERSION_MARKER = 'fops-2026-05-09-vercel-rewrite-fix-02';
 
 export async function GET() {
   return NextResponse.json(
