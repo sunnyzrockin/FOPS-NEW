@@ -2,6 +2,10 @@
 
 > A lightweight multi-site shift-reporting and fuel-price-intelligence platform for fuel-station owners and operators.
 
+<!-- DEPLOY-PIPELINE-TEST-MARKER: fops-2026-05-09-deploy-pipeline-test-01 -->
+<!-- If you can see this marker on GitHub at sunnyzrockin/FOPS, the workspace→GitHub push is working. -->
+<!-- If you can hit /api/health on the live site and get this marker back, the GitHub→Vercel deploy is working. -->
+
 [![Deploy Status](https://img.shields.io/badge/deploy-live-success)](https://fopsapp.com)
 [![Next.js](https://img.shields.io/badge/Next.js-15.1-black)](https://nextjs.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-Auth%20%2B%20DB-3ECF8E)](https://supabase.com/)
