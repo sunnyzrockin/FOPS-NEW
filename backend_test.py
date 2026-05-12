@@ -1,659 +1,632 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend Testing for FOPS Application
-Testing the Owner → Operator → Staff 3-tier hierarchy flow
-
-This script tests all P0 production failures that were just fixed:
-1. POST /api/users - Create user (auth + DB row in single call)
-2. GET /api/users?role=staff/operator - List users with role filtering
-3. POST /api/auth/login - Login with role-based site filtering
-4. Staff/Operator assignments CRUD operations
-5. Sites GET with userId param support
-6. End-to-end hierarchy flow simulation
+Comprehensive E2E Backend Testing for FOPS (Field Operations System)
+Tests the full Owner → Operator → Staff 3-tier hierarchy plus portfolio endpoint
 """
 
 import requests
 import json
-import time
-import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 # Configuration
-BASE_URL = "https://fuel-ops-simple.preview.emergentagent.com"
-API_BASE = f"{BASE_URL}/api"
+BASE_URL = "http://localhost:3000"
+SUPABASE_URL = "https://xjpelthxnnetecfympmv.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_qWlmWcHoiwSqZlzLi9YmWw_xlB-kpsr"
+PASSWORD = "WorkflowDemo2026!"
 
-# Test credentials from /app/memory/test_credentials.md
-TEST_CREDENTIALS = {
-    "owner": {
-        "email": "owner@workflowlite.com",
-        "password": "WorkflowDemo2026!",
-        "user_id": "owner-001",
-        "role": "owner"
-    },
-    "operator": {
-        "email": "operator@workflowlite.com", 
-        "password": "WorkflowDemo2026!",
-        "user_id": "operator-001",
-        "role": "operator"
-    },
-    "staff": {
-        "email": "staff@workflowlite.com",
-        "password": "WorkflowDemo2026!", 
-        "user_id": "staff-001",
-        "role": "staff"
-    }
+# Test credentials
+CREDENTIALS = {
+    "owner": {"email": "owner@workflowlite.com", "expected_sites": 5},
+    "operator": {"email": "operator@workflowlite.com", "expected_sites": 3},
+    "staff": {"email": "staff@workflowlite.com", "expected_sites": 1}
 }
 
-class FOPSBackendTester:
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        })
-        self.test_results = []
-        self.created_users = []  # Track for cleanup
-        self.created_assignments = []  # Track for cleanup
-        
-    def log_test(self, test_name: str, success: bool, details: str = "", response_data: dict = None):
-        """Log test result"""
-        result = {
-            "test": test_name,
-            "success": success,
-            "details": details,
-            "timestamp": datetime.now().isoformat()
-        }
-        if response_data:
-            result["response_preview"] = str(response_data)[:200] + "..." if len(str(response_data)) > 200 else str(response_data)
-        
-        self.test_results.append(result)
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status}: {test_name}")
-        if details:
-            print(f"   Details: {details}")
-        if not success and response_data:
-            print(f"   Response: {result['response_preview']}")
-        print()
+# Test results tracking
+test_results = {
+    "passed": 0,
+    "failed": 0,
+    "tests": []
+}
 
-    def make_request(self, method: str, endpoint: str, data: dict = None, params: dict = None, headers: dict = None) -> Tuple[bool, dict, int]:
-        """Make HTTP request and return (success, response_data, status_code)"""
-        url = f"{API_BASE}/{endpoint.lstrip('/')}"
+def log_test(name: str, passed: bool, details: str = ""):
+    """Log test result"""
+    status = "✅ PASS" if passed else "❌ FAIL"
+    print(f"{status}: {name}")
+    if details:
+        print(f"  Details: {details}")
+    
+    test_results["tests"].append({
+        "name": name,
+        "passed": passed,
+        "details": details
+    })
+    
+    if passed:
+        test_results["passed"] += 1
+    else:
+        test_results["failed"] += 1
+
+def get_supabase_jwt(email: str, password: str) -> Optional[str]:
+    """Get JWT token from Supabase Auth"""
+    try:
+        url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
+        headers = {
+            "apikey": SUPABASE_ANON_KEY,
+            "Content-Type": "application/json"
+        }
+        body = {
+            "email": email,
+            "password": password
+        }
         
+        response = requests.post(url, headers=headers, json=body)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("access_token")
+        else:
+            print(f"Failed to get JWT for {email}: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"Exception getting JWT for {email}: {str(e)}")
+        return None
+
+def test_auth_flows():
+    """A) AUTH FLOW (Sanity)"""
+    print("\n" + "="*80)
+    print("A) AUTH FLOW TESTS")
+    print("="*80)
+    
+    # Test 1: Owner login
+    try:
+        response = requests.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": CREDENTIALS["owner"]["email"], "password": PASSWORD}
+        )
+        passed = response.status_code == 200
+        if passed:
+            data = response.json()
+            sites_count = len(data.get("sites", []))
+            passed = sites_count == CREDENTIALS["owner"]["expected_sites"]
+            log_test(
+                "Owner login returns 5 sites",
+                passed,
+                f"Status: {response.status_code}, Sites: {sites_count}"
+            )
+        else:
+            log_test("Owner login returns 5 sites", False, f"Status: {response.status_code}")
+    except Exception as e:
+        log_test("Owner login returns 5 sites", False, str(e))
+    
+    # Test 2: Operator login
+    try:
+        response = requests.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": CREDENTIALS["operator"]["email"], "password": PASSWORD}
+        )
+        passed = response.status_code == 200
+        if passed:
+            data = response.json()
+            sites_count = len(data.get("sites", []))
+            passed = sites_count == CREDENTIALS["operator"]["expected_sites"]
+            log_test(
+                "Operator login returns 3 sites",
+                passed,
+                f"Status: {response.status_code}, Sites: {sites_count}"
+            )
+        else:
+            log_test("Operator login returns 3 sites", False, f"Status: {response.status_code}")
+    except Exception as e:
+        log_test("Operator login returns 3 sites", False, str(e))
+    
+    # Test 3: Staff login
+    try:
+        response = requests.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": CREDENTIALS["staff"]["email"], "password": PASSWORD}
+        )
+        passed = response.status_code == 200
+        if passed:
+            data = response.json()
+            sites_count = len(data.get("sites", []))
+            passed = sites_count == CREDENTIALS["staff"]["expected_sites"]
+            log_test(
+                "Staff login returns 1 site",
+                passed,
+                f"Status: {response.status_code}, Sites: {sites_count}"
+            )
+        else:
+            log_test("Staff login returns 1 site", False, f"Status: {response.status_code}")
+    except Exception as e:
+        log_test("Staff login returns 1 site", False, str(e))
+    
+    # Test 4: Invalid credentials
+    try:
+        response = requests.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": CREDENTIALS["owner"]["email"], "password": "WrongPassword123!"}
+        )
+        passed = response.status_code == 401
+        log_test(
+            "Invalid credentials rejected with 401",
+            passed,
+            f"Status: {response.status_code}"
+        )
+    except Exception as e:
+        log_test("Invalid credentials rejected with 401", False, str(e))
+    
+    # Test 5: Supabase JWT issuance for all 3 users
+    jwt_tokens = {}
+    for role, creds in CREDENTIALS.items():
+        token = get_supabase_jwt(creds["email"], PASSWORD)
+        jwt_tokens[role] = token
+        log_test(
+            f"Supabase JWT issuance for {role}",
+            token is not None,
+            f"Token length: {len(token) if token else 0}"
+        )
+    
+    return jwt_tokens
+
+def test_portfolio_endpoint(jwt_tokens: Dict[str, str]):
+    """B) NEW /api/portfolio (Bearer-auth — HIGH PRIORITY)"""
+    print("\n" + "="*80)
+    print("B) PORTFOLIO ENDPOINT TESTS")
+    print("="*80)
+    
+    # Test 1: No Authorization header
+    try:
+        response = requests.get(f"{BASE_URL}/api/portfolio")
+        passed = response.status_code == 401
+        if passed:
+            data = response.json()
+            passed = "Missing Authorization header" in data.get("error", "")
+        log_test(
+            "Portfolio without auth returns 401 with correct error",
+            passed,
+            f"Status: {response.status_code}, Body: {response.text[:100]}"
+        )
+    except Exception as e:
+        log_test("Portfolio without auth returns 401", False, str(e))
+    
+    # Test 2: Invalid Bearer token
+    try:
+        headers = {"Authorization": "Bearer abc"}
+        response = requests.get(f"{BASE_URL}/api/portfolio", headers=headers)
+        passed = response.status_code == 401
+        if passed:
+            data = response.json()
+            passed = "Invalid or expired token" in data.get("error", "")
+        log_test(
+            "Portfolio with invalid token returns 401",
+            passed,
+            f"Status: {response.status_code}, Body: {response.text[:100]}"
+        )
+    except Exception as e:
+        log_test("Portfolio with invalid token returns 401", False, str(e))
+    
+    # Test 3: Owner with historical date
+    if jwt_tokens.get("owner"):
         try:
-            req_headers = self.session.headers.copy()
-            if headers:
-                req_headers.update(headers)
+            headers = {"Authorization": f"Bearer {jwt_tokens['owner']}"}
+            response = requests.get(
+                f"{BASE_URL}/api/portfolio?date=2026-04-13",
+                headers=headers
+            )
+            passed = response.status_code == 200
+            if passed:
+                data = response.json()
+                # Validate response shape
+                has_user = "user" in data and data["user"].get("role") == "owner"
+                has_date = data.get("date") == "2026-04-13"
+                has_summary = "summary" in data and "total_sites" in data["summary"]
+                has_sites = "sites" in data and isinstance(data["sites"], list)
                 
-            if method.upper() == 'GET':
-                response = self.session.get(url, params=params, headers=req_headers, timeout=30)
-            elif method.upper() == 'POST':
-                response = self.session.post(url, json=data, params=params, headers=req_headers, timeout=30)
-            elif method.upper() == 'PUT':
-                response = self.session.put(url, json=data, params=params, headers=req_headers, timeout=30)
-            elif method.upper() == 'DELETE':
-                response = self.session.delete(url, params=params, headers=req_headers, timeout=30)
-            else:
-                return False, {"error": f"Unsupported method: {method}"}, 0
+                summary = data.get("summary", {})
+                sites = data.get("sites", [])
                 
-            try:
-                response_data = response.json()
-            except:
-                response_data = {"text": response.text, "status_code": response.status_code}
+                # Check summary fields
+                summary_valid = all(k in summary for k in [
+                    "total_sites", "total_sales_today", "total_sales_yesterday",
+                    "sales_change_pct", "total_litres_today", "total_litres_yesterday",
+                    "litres_change_pct", "total_reports_today", "sites_with_reports_today"
+                ])
                 
-            return response.status_code < 400, response_data, response.status_code
-            
-        except requests.exceptions.Timeout:
-            return False, {"error": "Request timeout"}, 0
-        except requests.exceptions.RequestException as e:
-            return False, {"error": f"Request failed: {str(e)}"}, 0
-
-    def test_user_creation_endpoint(self):
-        """Test P0: Production User Creation Endpoint (/api/users POST)"""
-        print("🧪 Testing P0: Production User Creation Endpoint")
-        
-        # Generate unique email to avoid duplicates
-        timestamp = int(time.time())
-        
-        # Test 1: Create operator user
-        operator_data = {
-            "name": f"E2E Test Operator {timestamp}",
-            "email": f"e2e-op-{timestamp}@example.com",
-            "password": "TestPass123!",
-            "role": "operator"
-        }
-        
-        success, response, status_code = self.make_request('POST', '/users', operator_data)
-        if success and 'id' in response:
-            self.created_users.append(response['id'])
-            self.log_test("POST /api/users - Create Operator", True, 
-                         f"Created operator with ID: {response['id']}")
-        else:
-            self.log_test("POST /api/users - Create Operator", False, 
-                         f"Status: {status_code}", response)
-            
-        # Test 2: Create staff user
-        staff_data = {
-            "name": f"E2E Test Staff {timestamp}",
-            "email": f"e2e-staff-{timestamp}@example.com", 
-            "password": "TestPass123!",
-            "role": "staff"
-        }
-        
-        success, response, status_code = self.make_request('POST', '/users', staff_data)
-        if success and 'id' in response:
-            self.created_users.append(response['id'])
-            self.log_test("POST /api/users - Create Staff", True,
-                         f"Created staff with ID: {response['id']}")
-        else:
-            self.log_test("POST /api/users - Create Staff", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 3: Missing fields validation
-        invalid_data = {"name": "Test User"}  # Missing email and role
-        success, response, status_code = self.make_request('POST', '/users', invalid_data)
-        if not success and status_code == 400:
-            self.log_test("POST /api/users - Missing Fields Validation", True,
-                         "Correctly rejected missing fields with 400")
-        else:
-            self.log_test("POST /api/users - Missing Fields Validation", False,
-                         f"Expected 400, got {status_code}", response)
-            
-        # Test 4: Duplicate email handling
-        success, response, status_code = self.make_request('POST', '/users', operator_data)
-        if not success and status_code == 500:
-            # Check if it's the expected email_exists error
-            error_msg = response.get('error', '').lower()
-            if 'email' in error_msg or 'duplicate' in error_msg or response.get('code') == 'email_exists':
-                self.log_test("POST /api/users - Duplicate Email Handling", True,
-                             "Correctly rejected duplicate email")
-            else:
-                self.log_test("POST /api/users - Duplicate Email Handling", False,
-                             f"Wrong error type: {response}", response)
-        else:
-            self.log_test("POST /api/users - Duplicate Email Handling", False,
-                         f"Expected 500 error, got {status_code}", response)
-
-    def test_user_listing_endpoint(self):
-        """Test P0: User Listing (/api/users GET) - admin client to bypass RLS"""
-        print("🧪 Testing P0: User Listing with Role Filtering")
-        
-        # Test 1: Get all staff users
-        success, response, status_code = self.make_request('GET', '/users', params={'role': 'staff'})
-        if success and isinstance(response, list):
-            staff_count = len(response)
-            self.log_test("GET /api/users?role=staff", True,
-                         f"Retrieved {staff_count} staff users")
-        else:
-            self.log_test("GET /api/users?role=staff", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 2: Get all operator users  
-        success, response, status_code = self.make_request('GET', '/users', params={'role': 'operator'})
-        if success and isinstance(response, list):
-            operator_count = len(response)
-            self.log_test("GET /api/users?role=operator", True,
-                         f"Retrieved {operator_count} operator users")
-        else:
-            self.log_test("GET /api/users?role=operator", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 3: Get all users (no role filter)
-        success, response, status_code = self.make_request('GET', '/users')
-        if success and isinstance(response, list):
-            total_count = len(response)
-            self.log_test("GET /api/users (all users)", True,
-                         f"Retrieved {total_count} total users")
-        else:
-            self.log_test("GET /api/users (all users)", False,
-                         f"Status: {status_code}", response)
-
-    def test_login_with_role_based_sites(self):
-        """Test P0: Operator Login Returns Sites (/api/auth/login)"""
-        print("🧪 Testing P0: Login with Role-Based Site Filtering")
-        
-        # Test 1: Owner login - should return 5 sites
-        owner_creds = TEST_CREDENTIALS["owner"]
-        success, response, status_code = self.make_request('POST', '/auth/login', {
-            'email': owner_creds['email'],
-            'password': owner_creds['password']
-        })
-        
-        if success and 'user' in response and 'sites' in response:
-            sites_count = len(response['sites'])
-            user_role = response['user'].get('role')
-            if user_role == 'owner' and sites_count == 5:
-                self.log_test("Owner Login - Site Count", True,
-                             f"Owner sees {sites_count} sites (expected 5)")
-            else:
-                self.log_test("Owner Login - Site Count", False,
-                             f"Owner role: {user_role}, sites: {sites_count}, expected 5 sites")
-        else:
-            self.log_test("Owner Login - Site Count", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 2: Operator login - should return 3 assigned sites
-        operator_creds = TEST_CREDENTIALS["operator"]
-        success, response, status_code = self.make_request('POST', '/auth/login', {
-            'email': operator_creds['email'],
-            'password': operator_creds['password']
-        })
-        
-        if success and 'user' in response and 'sites' in response:
-            sites_count = len(response['sites'])
-            user_role = response['user'].get('role')
-            if user_role == 'operator' and sites_count == 3:
-                self.log_test("Operator Login - Site Count", True,
-                             f"Operator sees {sites_count} sites (expected 3)")
-            else:
-                self.log_test("Operator Login - Site Count", False,
-                             f"Operator role: {user_role}, sites: {sites_count}, expected 3 sites")
-        else:
-            self.log_test("Operator Login - Site Count", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 3: Staff login - should return 1 assigned site
-        staff_creds = TEST_CREDENTIALS["staff"]
-        success, response, status_code = self.make_request('POST', '/auth/login', {
-            'email': staff_creds['email'],
-            'password': staff_creds['password']
-        })
-        
-        if success and 'user' in response and 'sites' in response:
-            sites_count = len(response['sites'])
-            user_role = response['user'].get('role')
-            if user_role == 'staff' and sites_count == 1:
-                self.log_test("Staff Login - Site Count", True,
-                             f"Staff sees {sites_count} sites (expected 1)")
-            else:
-                self.log_test("Staff Login - Site Count", False,
-                             f"Staff role: {user_role}, sites: {sites_count}, expected 1 sites")
-        else:
-            self.log_test("Staff Login - Site Count", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 4: Invalid credentials
-        success, response, status_code = self.make_request('POST', '/auth/login', {
-            'email': 'invalid@example.com',
-            'password': 'wrongpassword'
-        })
-        
-        if not success and status_code == 401:
-            self.log_test("Invalid Credentials Rejection", True,
-                         "Correctly rejected invalid credentials with 401")
-        else:
-            self.log_test("Invalid Credentials Rejection", False,
-                         f"Expected 401, got {status_code}", response)
-
-    def test_staff_assignments_crud(self):
-        """Test P0: Staff Site Assignments CRUD (/api/staff-assignments)"""
-        print("🧪 Testing P0: Staff Site Assignments CRUD")
-        
-        # Test 1: GET staff assignments by operatorId
-        success, response, status_code = self.make_request('GET', '/staff-assignments', 
-                                                          params={'operatorId': 'operator-001'})
-        if success and isinstance(response, list):
-            assignments_count = len(response)
-            self.log_test("GET /api/staff-assignments?operatorId=operator-001", True,
-                         f"Retrieved {assignments_count} staff assignments")
-            
-            # Verify enriched data structure
-            if assignments_count > 0 and 'staff' in response[0] and 'site' in response[0]:
-                self.log_test("Staff Assignments - Enriched Data", True,
-                             "Assignments include embedded staff and site objects")
-            elif assignments_count > 0:
-                self.log_test("Staff Assignments - Enriched Data", False,
-                             "Missing embedded staff/site objects in response")
-        else:
-            self.log_test("GET /api/staff-assignments?operatorId=operator-001", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 2: GET staff assignments by ownerId
-        success, response, status_code = self.make_request('GET', '/staff-assignments',
-                                                          params={'ownerId': 'owner-001'})
-        if success and isinstance(response, list):
-            owner_assignments_count = len(response)
-            self.log_test("GET /api/staff-assignments?ownerId=owner-001", True,
-                         f"Retrieved {owner_assignments_count} assignments scoped to owner's sites")
-        else:
-            self.log_test("GET /api/staff-assignments?ownerId=owner-001", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 3: POST new staff assignment
-        assignment_data = {
-            "staff_user_id": "staff-001",
-            "site_id": "site-001", 
-            "assigned_by_operator_id": "operator-001"
-        }
-        
-        success, response, status_code = self.make_request('POST', '/staff-assignments', assignment_data)
-        if success and 'id' in response:
-            assignment_id = response['id']
-            self.created_assignments.append(('staff', assignment_id))
-            self.log_test("POST /api/staff-assignments - Create", True,
-                         f"Created staff assignment with ID: {assignment_id}")
-            
-            # Test 4: Verify assignment appears in GET
-            success, response, status_code = self.make_request('GET', '/staff-assignments',
-                                                              params={'operatorId': 'operator-001'})
-            if success and any(a['id'] == assignment_id for a in response):
-                self.log_test("Staff Assignment - Verification", True,
-                             "New assignment appears in GET response")
-            else:
-                self.log_test("Staff Assignment - Verification", False,
-                             "New assignment not found in GET response")
+                # Check site count
+                site_count_valid = summary.get("total_sites") == 5 and len(sites) == 5
                 
-            # Test 5: DELETE assignment
-            success, response, status_code = self.make_request('DELETE', f'/staff-assignments/{assignment_id}')
-            if success:
-                self.log_test("DELETE /api/staff-assignments - Remove", True,
-                             f"Successfully deleted assignment {assignment_id}")
-                self.created_assignments.remove(('staff', assignment_id))
-            else:
-                self.log_test("DELETE /api/staff-assignments - Remove", False,
-                             f"Status: {status_code}", response)
-        else:
-            self.log_test("POST /api/staff-assignments - Create", False,
-                         f"Status: {status_code}", response)
-
-    def test_operator_assignments_crud(self):
-        """Test P0: Operator Site Assignments CRUD (/api/operator-assignments)"""
-        print("🧪 Testing P0: Operator Site Assignments CRUD")
-        
-        # Test 1: GET operator assignments by ownerId
-        success, response, status_code = self.make_request('GET', '/operator-assignments',
-                                                          params={'ownerId': 'owner-001'})
-        if success and isinstance(response, list):
-            assignments_count = len(response)
-            # Based on seed data, expect 5 assignments
-            if assignments_count == 5:
-                self.log_test("GET /api/operator-assignments?ownerId=owner-001", True,
-                             f"Retrieved {assignments_count} operator assignments (expected 5)")
-            else:
-                self.log_test("GET /api/operator-assignments?ownerId=owner-001", False,
-                             f"Retrieved {assignments_count} assignments, expected 5")
-        else:
-            self.log_test("GET /api/operator-assignments?ownerId=owner-001", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 2: POST new operator assignment
-        assignment_data = {
-            "operator_user_id": "operator-001",
-            "site_id": "site-004",  # Try assigning to a different site
-            "assigned_by_owner_id": "owner-001"
-        }
-        
-        success, response, status_code = self.make_request('POST', '/operator-assignments', assignment_data)
-        if success and 'id' in response:
-            assignment_id = response['id']
-            self.created_assignments.append(('operator', assignment_id))
-            self.log_test("POST /api/operator-assignments - Create", True,
-                         f"Created operator assignment with ID: {assignment_id}")
-            
-            # Test 3: DELETE assignment
-            success, response, status_code = self.make_request('DELETE', f'/operator-assignments/{assignment_id}')
-            if success:
-                self.log_test("DELETE /api/operator-assignments - Remove", True,
-                             f"Successfully deleted assignment {assignment_id}")
-                self.created_assignments.remove(('operator', assignment_id))
-            else:
-                self.log_test("DELETE /api/operator-assignments - Remove", False,
-                             f"Status: {status_code}", response)
-        else:
-            self.log_test("POST /api/operator-assignments - Create", False,
-                         f"Status: {status_code}", response)
-
-    def test_sites_with_userid_param(self):
-        """Test Sites GET supports userId param (/api/sites?userId=xxx)"""
-        print("🧪 Testing Sites GET with userId Parameter")
-        
-        # Test 1: Owner sites
-        success, response, status_code = self.make_request('GET', '/sites', params={'userId': 'owner-001'})
-        if success and isinstance(response, list):
-            sites_count = len(response)
-            if sites_count == 5:
-                self.log_test("GET /api/sites?userId=owner-001", True,
-                             f"Owner sees {sites_count} sites (expected 5)")
-            else:
-                self.log_test("GET /api/sites?userId=owner-001", False,
-                             f"Owner sees {sites_count} sites, expected 5")
-        else:
-            self.log_test("GET /api/sites?userId=owner-001", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 2: Operator sites
-        success, response, status_code = self.make_request('GET', '/sites', params={'userId': 'operator-001'})
-        if success and isinstance(response, list):
-            sites_count = len(response)
-            if sites_count == 3:
-                self.log_test("GET /api/sites?userId=operator-001", True,
-                             f"Operator sees {sites_count} sites (expected 3)")
-            else:
-                self.log_test("GET /api/sites?userId=operator-001", False,
-                             f"Operator sees {sites_count} sites, expected 3")
-        else:
-            self.log_test("GET /api/sites?userId=operator-001", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 3: Staff sites
-        success, response, status_code = self.make_request('GET', '/sites', params={'userId': 'staff-001'})
-        if success and isinstance(response, list):
-            sites_count = len(response)
-            if sites_count == 1:
-                self.log_test("GET /api/sites?userId=staff-001", True,
-                             f"Staff sees {sites_count} sites (expected 1)")
-            else:
-                self.log_test("GET /api/sites?userId=staff-001", False,
-                             f"Staff sees {sites_count} sites, expected 1")
-        else:
-            self.log_test("GET /api/sites?userId=staff-001", False,
-                         f"Status: {status_code}", response)
-            
-        # Test 4: Non-existent user
-        success, response, status_code = self.make_request('GET', '/sites', params={'userId': 'non-existent-id'})
-        if success and isinstance(response, list) and len(response) == 0:
-            self.log_test("GET /api/sites?userId=non-existent-id", True,
-                         "Non-existent user returns empty array (no crash)")
-        else:
-            self.log_test("GET /api/sites?userId=non-existent-id", False,
-                         f"Expected empty array, got: {response}")
-
-    def test_end_to_end_hierarchy_flow(self):
-        """Test End-to-end hierarchy flow simulation"""
-        print("🧪 Testing End-to-End Hierarchy Flow")
-        
-        timestamp = int(time.time())
-        test_operator_email = f"e2e-hierarchy-op-{timestamp}@example.com"
-        test_staff_email = f"e2e-hierarchy-staff-{timestamp}@example.com"
-        
-        # Step 1: Login as owner
-        owner_creds = TEST_CREDENTIALS["owner"]
-        success, login_response, status_code = self.make_request('POST', '/auth/login', {
-            'email': owner_creds['email'],
-            'password': owner_creds['password']
-        })
-        
-        if not success:
-            self.log_test("E2E Flow - Owner Login", False, f"Status: {status_code}", login_response)
-            return
-            
-        owner_sites = login_response.get('sites', [])
-        self.log_test("E2E Flow - Owner Login", True, f"Owner logged in, sees {len(owner_sites)} sites")
-        
-        # Step 2: Owner creates operator
-        operator_data = {
-            "name": f"E2E Test Operator {timestamp}",
-            "email": test_operator_email,
-            "password": "TestPass123!",
-            "role": "operator"
-        }
-        
-        success, operator_response, status_code = self.make_request('POST', '/users', operator_data)
-        if not success:
-            self.log_test("E2E Flow - Create Operator", False, f"Status: {status_code}", operator_response)
-            return
-            
-        operator_id = operator_response['id']
-        self.created_users.append(operator_id)
-        self.log_test("E2E Flow - Create Operator", True, f"Created operator: {operator_id}")
-        
-        # Step 3: Owner assigns sites to operator
-        if owner_sites:
-            site_id = owner_sites[0]['id']  # Assign first site
-            assignment_data = {
-                "operator_user_id": operator_id,
-                "site_id": site_id,
-                "assigned_by_owner_id": owner_creds['user_id']
-            }
-            
-            success, assignment_response, status_code = self.make_request('POST', '/operator-assignments', assignment_data)
-            if success:
-                assignment_id = assignment_response['id']
-                self.created_assignments.append(('operator', assignment_id))
-                self.log_test("E2E Flow - Assign Site to Operator", True, f"Assigned site {site_id} to operator")
+                # Check site structure
+                site_valid = True
+                if sites:
+                    site = sites[0]
+                    required_fields = ["id", "name", "owner_id", "status", "todayStats", 
+                                     "yesterdayStats", "fuelPrices", "competitorPrices"]
+                    site_valid = all(k in site for k in required_fields)
+                    
+                    # Check stats structure
+                    if "todayStats" in site:
+                        stats_fields = ["total_sales", "fuel_sales", "shop_sales", "total_litres",
+                                      "eftpos", "motorpass", "cash", "accounts", "report_count",
+                                      "shifts_covered", "latest_report_at", "latest_report_id"]
+                        site_valid = site_valid and all(k in site["todayStats"] for k in stats_fields)
                 
-                # Step 4: Login as operator to verify site access
-                success, op_login_response, status_code = self.make_request('POST', '/auth/login', {
-                    'email': test_operator_email,
-                    'password': 'TestPass123!'
-                })
+                passed = (has_user and has_date and has_summary and has_sites and 
+                         summary_valid and site_count_valid and site_valid)
                 
-                if success:
-                    operator_sites = op_login_response.get('sites', [])
-                    if len(operator_sites) == 1 and operator_sites[0]['id'] == site_id:
-                        self.log_test("E2E Flow - Operator Site Access", True, 
-                                     f"Operator now sees assigned site: {site_id}")
-                        
-                        # Step 5: Operator creates staff
-                        staff_data = {
-                            "name": f"E2E Test Staff {timestamp}",
-                            "email": test_staff_email,
-                            "password": "TestPass123!",
-                            "role": "staff"
-                        }
-                        
-                        success, staff_response, status_code = self.make_request('POST', '/users', staff_data)
-                        if success:
-                            staff_id = staff_response['id']
-                            self.created_users.append(staff_id)
-                            self.log_test("E2E Flow - Operator Creates Staff", True, f"Created staff: {staff_id}")
-                            
-                            # Step 6: Operator assigns site to staff
-                            staff_assignment_data = {
-                                "staff_user_id": staff_id,
-                                "site_id": site_id,
-                                "assigned_by_operator_id": operator_id
-                            }
-                            
-                            success, staff_assignment_response, status_code = self.make_request('POST', '/staff-assignments', staff_assignment_data)
-                            if success:
-                                staff_assignment_id = staff_assignment_response['id']
-                                self.created_assignments.append(('staff', staff_assignment_id))
-                                self.log_test("E2E Flow - Assign Site to Staff", True, f"Assigned site to staff")
-                                
-                                # Step 7: Login as staff to verify site access
-                                success, staff_login_response, status_code = self.make_request('POST', '/auth/login', {
-                                    'email': test_staff_email,
-                                    'password': 'TestPass123!'
-                                })
-                                
-                                if success:
-                                    staff_sites = staff_login_response.get('sites', [])
-                                    if len(staff_sites) == 1 and staff_sites[0]['id'] == site_id:
-                                        self.log_test("E2E Flow - Staff Site Access", True,
-                                                     f"Staff now sees assigned site: {site_id}")
-                                        self.log_test("E2E Flow - Complete Hierarchy", True,
-                                                     "Full Owner→Operator→Staff hierarchy flow successful")
-                                    else:
-                                        self.log_test("E2E Flow - Staff Site Access", False,
-                                                     f"Staff sees {len(staff_sites)} sites, expected 1")
-                                else:
-                                    self.log_test("E2E Flow - Staff Login", False, f"Status: {status_code}", staff_login_response)
-                            else:
-                                self.log_test("E2E Flow - Assign Site to Staff", False, f"Status: {status_code}", staff_assignment_response)
-                        else:
-                            self.log_test("E2E Flow - Operator Creates Staff", False, f"Status: {status_code}", staff_response)
-                    else:
-                        self.log_test("E2E Flow - Operator Site Access", False,
-                                     f"Operator sees {len(operator_sites)} sites, expected 1")
-                else:
-                    self.log_test("E2E Flow - Operator Login", False, f"Status: {status_code}", op_login_response)
+                log_test(
+                    "Owner portfolio with date=2026-04-13 returns correct shape",
+                    passed,
+                    f"Status: {response.status_code}, Sites: {len(sites)}, "
+                    f"Total Sales Today: ${summary.get('total_sales_today', 0):.2f}, "
+                    f"Reports Today: {summary.get('total_reports_today', 0)}"
+                )
             else:
-                self.log_test("E2E Flow - Assign Site to Operator", False, f"Status: {status_code}", assignment_response)
-        else:
-            self.log_test("E2E Flow - No Sites Available", False, "Owner has no sites to assign")
-
-    def cleanup_test_data(self):
-        """Clean up test users and assignments created during testing"""
-        print("🧹 Cleaning up test data...")
-        
-        # Clean up assignments first (foreign key dependencies)
-        for assignment_type, assignment_id in self.created_assignments:
-            endpoint = f"/{assignment_type}-assignments/{assignment_id}"
-            success, response, status_code = self.make_request('DELETE', endpoint)
-            if success:
-                print(f"   ✅ Deleted {assignment_type} assignment: {assignment_id}")
-            else:
-                print(f"   ❌ Failed to delete {assignment_type} assignment: {assignment_id}")
-        
-        # Clean up users
-        for user_id in self.created_users:
-            success, response, status_code = self.make_request('DELETE', f'/users/{user_id}')
-            if success:
-                print(f"   ✅ Deleted user: {user_id}")
-            else:
-                print(f"   ❌ Failed to delete user: {user_id}")
-
-    def run_all_tests(self):
-        """Run all backend tests"""
-        print("🚀 Starting Comprehensive FOPS Backend Testing")
-        print(f"📍 Testing against: {BASE_URL}")
-        print("=" * 60)
-        
-        try:
-            # Run all test suites
-            self.test_user_creation_endpoint()
-            self.test_user_listing_endpoint()
-            self.test_login_with_role_based_sites()
-            self.test_staff_assignments_crud()
-            self.test_operator_assignments_crud()
-            self.test_sites_with_userid_param()
-            self.test_end_to_end_hierarchy_flow()
-            
+                log_test("Owner portfolio with date=2026-04-13", False, f"Status: {response.status_code}")
         except Exception as e:
-            print(f"❌ CRITICAL ERROR during testing: {str(e)}")
-            self.log_test("CRITICAL_ERROR", False, str(e))
-        
-        finally:
-            # Always attempt cleanup
-            self.cleanup_test_data()
-            
-        # Print summary
-        self.print_summary()
+            log_test("Owner portfolio with date=2026-04-13", False, str(e))
+    
+    # Test 4: Operator with historical date (RBAC check)
+    if jwt_tokens.get("operator"):
+        try:
+            headers = {"Authorization": f"Bearer {jwt_tokens['operator']}"}
+            response = requests.get(
+                f"{BASE_URL}/api/portfolio?date=2026-04-13",
+                headers=headers
+            )
+            passed = response.status_code == 200
+            if passed:
+                data = response.json()
+                summary = data.get("summary", {})
+                sites = data.get("sites", [])
+                
+                # Operator should see only 3 sites
+                passed = summary.get("total_sites") == 3 and len(sites) == 3
+                
+                # Check site names (should be Brisbane, Gold Coast, Sunshine Coast)
+                site_names = [s.get("name", "") for s in sites]
+                expected_names = ["Brisbane Central", "Gold Coast", "Sunshine Coast"]
+                rbac_valid = all(any(exp in name for exp in expected_names) for name in site_names)
+                
+                passed = passed and rbac_valid
+                
+                log_test(
+                    "Operator portfolio shows only 3 assigned sites (RBAC)",
+                    passed,
+                    f"Status: {response.status_code}, Sites: {len(sites)}, Names: {site_names}"
+                )
+            else:
+                log_test("Operator portfolio RBAC", False, f"Status: {response.status_code}")
+        except Exception as e:
+            log_test("Operator portfolio RBAC", False, str(e))
+    
+    # Test 5: Staff with historical date (RBAC check)
+    if jwt_tokens.get("staff"):
+        try:
+            headers = {"Authorization": f"Bearer {jwt_tokens['staff']}"}
+            response = requests.get(
+                f"{BASE_URL}/api/portfolio?date=2026-04-13",
+                headers=headers
+            )
+            passed = response.status_code == 200
+            if passed:
+                data = response.json()
+                summary = data.get("summary", {})
+                sites = data.get("sites", [])
+                
+                # Staff should see only 1 site
+                passed = summary.get("total_sites") == 1 and len(sites) == 1
+                
+                # Check site name (should be Brisbane)
+                if sites:
+                    site_name = sites[0].get("name", "")
+                    passed = passed and "Brisbane" in site_name
+                
+                log_test(
+                    "Staff portfolio shows only 1 assigned site (RBAC)",
+                    passed,
+                    f"Status: {response.status_code}, Sites: {len(sites)}"
+                )
+            else:
+                log_test("Staff portfolio RBAC", False, f"Status: {response.status_code}")
+        except Exception as e:
+            log_test("Staff portfolio RBAC", False, str(e))
+    
+    # Test 6: Owner without date param (defaults to today)
+    if jwt_tokens.get("owner"):
+        try:
+            headers = {"Authorization": f"Bearer {jwt_tokens['owner']}"}
+            response = requests.get(f"{BASE_URL}/api/portfolio", headers=headers)
+            passed = response.status_code == 200
+            if passed:
+                data = response.json()
+                today = datetime.utcnow().strftime("%Y-%m-%d")
+                passed = data.get("date") == today
+                log_test(
+                    "Owner portfolio without date defaults to today",
+                    passed,
+                    f"Status: {response.status_code}, Date: {data.get('date')}, Expected: {today}"
+                )
+            else:
+                log_test("Owner portfolio without date", False, f"Status: {response.status_code}")
+        except Exception as e:
+            log_test("Owner portfolio without date", False, str(e))
+    
+    # Test 7: Status indicator logic validation
+    if jwt_tokens.get("owner"):
+        try:
+            headers = {"Authorization": f"Bearer {jwt_tokens['owner']}"}
+            response = requests.get(
+                f"{BASE_URL}/api/portfolio?date=2026-04-13",
+                headers=headers
+            )
+            if response.status_code == 200:
+                data = response.json()
+                sites = data.get("sites", [])
+                
+                # Check for different status types
+                statuses = [s.get("status") for s in sites]
+                has_critical = "critical" in statuses
+                has_warning = "warning" in statuses
+                has_good = "good" in statuses
+                
+                # Validate status logic for at least one site
+                status_logic_valid = True
+                for site in sites:
+                    status = site.get("status")
+                    today_stats = site.get("todayStats", {})
+                    yesterday_stats = site.get("yesterdayStats", {})
+                    
+                    report_count = today_stats.get("report_count", 0)
+                    today_sales = today_stats.get("total_sales", 0)
+                    yesterday_sales = yesterday_stats.get("total_sales", 0)
+                    
+                    # Validate critical status
+                    if status == "critical" and report_count > 0:
+                        status_logic_valid = False
+                        break
+                    
+                    # Validate warning status
+                    if status == "warning":
+                        if report_count == 0 or yesterday_sales == 0:
+                            status_logic_valid = False
+                            break
+                        if today_sales >= yesterday_sales * 0.8:
+                            status_logic_valid = False
+                            break
+                
+                passed = status_logic_valid and (has_good or has_critical or has_warning)
+                
+                log_test(
+                    "Status indicator logic validation",
+                    passed,
+                    f"Statuses found: {set(statuses)}, Logic valid: {status_logic_valid}"
+                )
+            else:
+                log_test("Status indicator logic", False, f"Status: {response.status_code}")
+        except Exception as e:
+            log_test("Status indicator logic", False, str(e))
 
-    def print_summary(self):
-        """Print test results summary"""
-        print("\n" + "=" * 60)
-        print("📊 TEST RESULTS SUMMARY")
-        print("=" * 60)
-        
-        total_tests = len(self.test_results)
-        passed_tests = len([r for r in self.test_results if r['success']])
-        failed_tests = total_tests - passed_tests
-        
-        print(f"Total Tests: {total_tests}")
-        print(f"✅ Passed: {passed_tests}")
-        print(f"❌ Failed: {failed_tests}")
-        print(f"Success Rate: {(passed_tests/total_tests*100):.1f}%")
-        
-        if failed_tests > 0:
-            print("\n🔍 FAILED TESTS:")
-            for result in self.test_results:
-                if not result['success']:
-                    print(f"   ❌ {result['test']}: {result['details']}")
-        
-        print("\n" + "=" * 60)
+def test_catch_all_routes():
+    """C) CATCH-ALL ROUTES (verify they work after vercel.json fix)"""
+    print("\n" + "="*80)
+    print("C) CATCH-ALL ROUTES TESTS")
+    print("="*80)
+    
+    routes = [
+        ("GET /api/sites?userId=owner-001", f"{BASE_URL}/api/sites?userId=owner-001", "GET", None, 5),
+        ("GET /api/sites?userId=operator-001", f"{BASE_URL}/api/sites?userId=operator-001", "GET", None, 3),
+        ("GET /api/reports", f"{BASE_URL}/api/reports", "GET", None, None),
+        ("GET /api/operator-assignments?ownerId=owner-001", f"{BASE_URL}/api/operator-assignments?ownerId=owner-001", "GET", None, None),
+        ("GET /api/staff-assignments?operatorId=operator-001", f"{BASE_URL}/api/staff-assignments?operatorId=operator-001", "GET", None, None),
+        ("GET /api/site-competitors?siteId=site-001", f"{BASE_URL}/api/site-competitors?siteId=site-001", "GET", None, None),
+        ("GET /api/fuel-price-entries?siteId=site-001", f"{BASE_URL}/api/fuel-price-entries?siteId=site-001", "GET", None, None),
+        ("GET /api/competitor-prices?siteId=site-001", f"{BASE_URL}/api/competitor-prices?siteId=site-001", "GET", None, None),
+        ("GET /api/daily-rollups?siteIds=site-001&date=2026-04-13", f"{BASE_URL}/api/daily-rollups?siteIds=site-001&date=2026-04-13", "GET", None, None),
+        ("GET /api/dashboard/stats?siteIds=site-001", f"{BASE_URL}/api/dashboard/stats?siteIds=site-001", "GET", None, None),
+        ("GET /api/site-field-configs?siteId=site-001", f"{BASE_URL}/api/site-field-configs?siteId=site-001", "GET", None, None),
+        ("GET /api/site-banking-formulas?siteId=site-001", f"{BASE_URL}/api/site-banking-formulas?siteId=site-001", "GET", None, None),
+        ("POST /api/banking/calculate", f"{BASE_URL}/api/banking/calculate", "POST", {"formula_json": '{"operations":[{"type":"field","value":"eftpos"},{"type":"operator","value":"+"},{"type":"field","value":"cash"}]}', "shift_data": {"eftpos": 100, "cash": 50}}, None),
+    ]
+    
+    for test_name, url, method, body, expected_count in routes:
+        try:
+            if method == "GET":
+                response = requests.get(url)
+            else:
+                response = requests.post(url, json=body)
+            
+            passed = response.status_code == 200
+            
+            if passed:
+                try:
+                    data = response.json()
+                    # Verify it's JSON, not HTML
+                    is_json = isinstance(data, (dict, list))
+                    passed = is_json
+                    
+                    # Check expected count if provided
+                    if expected_count is not None and isinstance(data, list):
+                        actual_count = len(data)
+                        passed = passed and actual_count == expected_count
+                        details = f"Status: {response.status_code}, Count: {actual_count}, Expected: {expected_count}"
+                    elif isinstance(data, dict) and "result" in data:
+                        details = f"Status: {response.status_code}, Result: {data.get('result')}"
+                    else:
+                        details = f"Status: {response.status_code}, Type: {type(data).__name__}"
+                    
+                    log_test(test_name, passed, details)
+                except:
+                    log_test(test_name, False, f"Status: {response.status_code}, Not JSON")
+            else:
+                log_test(test_name, False, f"Status: {response.status_code}")
+        except Exception as e:
+            log_test(test_name, False, str(e))
+
+def test_hierarchy_e2e(jwt_tokens: Dict[str, str]):
+    """D) FULL HIERARCHY E2E FLOW"""
+    print("\n" + "="*80)
+    print("D) FULL HIERARCHY E2E FLOW")
+    print("="*80)
+    
+    # Test 1: Owner logs in and fetches portfolio
+    if jwt_tokens.get("owner"):
+        try:
+            headers = {"Authorization": f"Bearer {jwt_tokens['owner']}"}
+            response = requests.get(f"{BASE_URL}/api/portfolio", headers=headers)
+            passed = response.status_code == 200
+            if passed:
+                data = response.json()
+                sites = data.get("sites", [])
+                passed = len(sites) == 5
+                log_test(
+                    "Owner fetches portfolio and sees all 5 sites",
+                    passed,
+                    f"Status: {response.status_code}, Sites: {len(sites)}"
+                )
+            else:
+                log_test("Owner fetches portfolio", False, f"Status: {response.status_code}")
+        except Exception as e:
+            log_test("Owner fetches portfolio", False, str(e))
+    
+    # Test 2: Owner fetches operators
+    try:
+        response = requests.get(f"{BASE_URL}/api/users?role=operator")
+        passed = response.status_code == 200
+        if passed:
+            data = response.json()
+            passed = isinstance(data, list) and len(data) > 0
+            log_test(
+                "Owner fetches list of operators",
+                passed,
+                f"Status: {response.status_code}, Count: {len(data) if isinstance(data, list) else 0}"
+            )
+        else:
+            log_test("Owner fetches operators", False, f"Status: {response.status_code}")
+    except Exception as e:
+        log_test("Owner fetches operators", False, str(e))
+    
+    # Test 3: Operator logs in and fetches portfolio
+    if jwt_tokens.get("operator"):
+        try:
+            headers = {"Authorization": f"Bearer {jwt_tokens['operator']}"}
+            response = requests.get(f"{BASE_URL}/api/portfolio", headers=headers)
+            passed = response.status_code == 200
+            if passed:
+                data = response.json()
+                sites = data.get("sites", [])
+                passed = len(sites) == 3
+                log_test(
+                    "Operator fetches portfolio and sees only 3 assigned sites",
+                    passed,
+                    f"Status: {response.status_code}, Sites: {len(sites)}"
+                )
+            else:
+                log_test("Operator fetches portfolio", False, f"Status: {response.status_code}")
+        except Exception as e:
+            log_test("Operator fetches portfolio", False, str(e))
+    
+    # Test 4: Operator fetches staff assignments
+    try:
+        response = requests.get(f"{BASE_URL}/api/staff-assignments?operatorId=operator-001")
+        passed = response.status_code == 200
+        if passed:
+            data = response.json()
+            passed = isinstance(data, list)
+            log_test(
+                "Operator fetches staff assignments",
+                passed,
+                f"Status: {response.status_code}, Count: {len(data) if isinstance(data, list) else 0}"
+            )
+        else:
+            log_test("Operator fetches staff assignments", False, f"Status: {response.status_code}")
+    except Exception as e:
+        log_test("Operator fetches staff assignments", False, str(e))
+    
+    # Test 5: Staff logs in and fetches portfolio
+    if jwt_tokens.get("staff"):
+        try:
+            headers = {"Authorization": f"Bearer {jwt_tokens['staff']}"}
+            response = requests.get(f"{BASE_URL}/api/portfolio", headers=headers)
+            passed = response.status_code == 200
+            if passed:
+                data = response.json()
+                sites = data.get("sites", [])
+                passed = len(sites) == 1
+                log_test(
+                    "Staff fetches portfolio and sees only 1 assigned site",
+                    passed,
+                    f"Status: {response.status_code}, Sites: {len(sites)}"
+                )
+            else:
+                log_test("Staff fetches portfolio", False, f"Status: {response.status_code}")
+        except Exception as e:
+            log_test("Staff fetches portfolio", False, str(e))
+
+def test_health_endpoint():
+    """E) /api/health (Sanity)"""
+    print("\n" + "="*80)
+    print("E) HEALTH ENDPOINT TEST")
+    print("="*80)
+    
+    try:
+        response = requests.get(f"{BASE_URL}/api/health")
+        passed = response.status_code == 200
+        if passed:
+            data = response.json()
+            version_marker = data.get("version_marker")
+            expected_marker = "fops-2026-05-09-portfolio-v2-bearer-04"
+            passed = version_marker == expected_marker
+            log_test(
+                "Health endpoint returns correct version marker",
+                passed,
+                f"Status: {response.status_code}, Marker: {version_marker}, Expected: {expected_marker}"
+            )
+        else:
+            log_test("Health endpoint", False, f"Status: {response.status_code}")
+    except Exception as e:
+        log_test("Health endpoint", False, str(e))
+
+def print_summary():
+    """Print test summary"""
+    print("\n" + "="*80)
+    print("TEST SUMMARY")
+    print("="*80)
+    
+    total = test_results["passed"] + test_results["failed"]
+    success_rate = (test_results["passed"] / total * 100) if total > 0 else 0
+    
+    print(f"Total Tests: {total}")
+    print(f"Passed: {test_results['passed']} ✅")
+    print(f"Failed: {test_results['failed']} ❌")
+    print(f"Success Rate: {success_rate:.1f}%")
+    
+    if test_results["failed"] > 0:
+        print("\nFailed Tests:")
+        for test in test_results["tests"]:
+            if not test["passed"]:
+                print(f"  ❌ {test['name']}")
+                if test["details"]:
+                    print(f"     {test['details']}")
+
+def main():
+    """Main test execution"""
+    print("="*80)
+    print("FOPS COMPREHENSIVE E2E BACKEND TESTING")
+    print("Testing against: " + BASE_URL)
+    print("="*80)
+    
+    # Run all test suites
+    jwt_tokens = test_auth_flows()
+    test_portfolio_endpoint(jwt_tokens)
+    test_catch_all_routes()
+    test_hierarchy_e2e(jwt_tokens)
+    test_health_endpoint()
+    
+    # Print summary
+    print_summary()
+    
+    # Return exit code based on results
+    return 0 if test_results["failed"] == 0 else 1
 
 if __name__ == "__main__":
-    tester = FOPSBackendTester()
-    tester.run_all_tests()
+    exit(main())
