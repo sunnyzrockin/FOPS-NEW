@@ -90,15 +90,37 @@ function aggregateReports(rows) {
   return out;
 }
 
-// Compute a site health status indicator based on today vs yesterday.
-//   critical = no reports submitted today
-//   warning  = reports submitted but sales dropped >20% vs yesterday
-//   good     = reports submitted and sales within normal range
+// Compute a site health status indicator based on today vs yesterday and
+// expected shift coverage.
+//   critical = no reports submitted today AND yesterday had reports
+//              (a quiet day with no historical activity is just 'good')
+//   warning  = either:
+//                a) some reports today but sales dropped >20% vs yesterday, OR
+//                b) expected shifts > covered shifts today (missing a shift)
+//   good     = all other cases (reports submitted and sales healthy, or no
+//              activity expected)
+//
+// `expectedShifts` is the count of unique shift types submitted yesterday
+// (best proxy for "this site normally runs N shifts/day"). If yesterday had
+// 2 shifts and today only 1 was covered, that's a coverage warning.
 function computeStatus(todayStats, yesterdayStats) {
-  if (todayStats.report_count === 0) return 'critical';
+  const todayShifts = todayStats.report_count;
+  const expectedShifts = (yesterdayStats.shifts_covered || []).length;
+  const coveredShifts = (todayStats.shifts_covered || []).length;
+
+  // No activity today — critical only if yesterday had activity.
+  if (todayShifts === 0) {
+    return expectedShifts > 0 ? 'critical' : 'good';
+  }
+
+  // Coverage gap: expected more shifts than we have today.
+  if (expectedShifts > coveredShifts) return 'warning';
+
+  // Sales dropped meaningfully vs yesterday.
   const y = yesterdayStats.total_sales;
   const t = todayStats.total_sales;
   if (y > 0 && t < y * 0.8) return 'warning';
+
   return 'good';
 }
 
@@ -130,7 +152,11 @@ function latestPerFuelType(entries) {
 // Auth: REQUIRED — `Authorization: Bearer <supabase-jwt>`
 //
 // Query params:
-//   date   (optional) — YYYY-MM-DD, defaults to today (UTC)
+//   date         (optional) — YYYY-MM-DD, defaults to today (UTC)
+//   competitors  (optional) — 'all' (default), 'topN' to keep only the N
+//                             nearest competitors per (site, fuel_type), or
+//                             'none' to omit competitorPrices entirely.
+//                             Examples: ?competitors=top3, ?competitors=none
 //
 // Role rules:
 //   owner    → all sites where sites.owner_id = me
@@ -181,6 +207,21 @@ export async function GET(request) {
     const dateParam = url.searchParams.get('date');
     const isoDate = dateParam || ymd(new Date());
     const yesterday = previousDate(isoDate);
+
+    // Parse `competitors` param: 'all' | 'none' | 'topN' (N>=1).
+    // Default = 'all'.
+    const competitorsParam = (url.searchParams.get('competitors') || 'all').toLowerCase();
+    let competitorsMode = 'all';
+    let competitorsTopN = null;
+    if (competitorsParam === 'none') {
+      competitorsMode = 'none';
+    } else if (/^top\d+$/i.test(competitorsParam)) {
+      const n = parseInt(competitorsParam.slice(3), 10);
+      if (Number.isFinite(n) && n > 0) {
+        competitorsMode = 'top';
+        competitorsTopN = n;
+      }
+    }
 
     // --- 2) Resolve sites visible to this user -----------------------------
     let sites = [];
@@ -254,30 +295,40 @@ export async function GET(request) {
       const cutoff = ymd(
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
       );
-      const [fp, cp, comps] = await Promise.all([
+      const queries = [
         db
           .from('fuel_price_entries')
           .select('id, site_id, fuel_type, price, date, entered_at')
           .in('site_id', siteIds)
           .gte('date', cutoff),
-        db
-          .from('competitor_fuel_prices')
-          .select(
-            'id, site_id, competitor_id, fuel_type, price, date, entered_at'
-          )
-          .in('site_id', siteIds)
-          .gte('date', cutoff),
-        db
-          .from('site_competitors')
-          .select('id, site_id, competitor_name, distance_km')
-          .in('site_id', siteIds),
-      ]);
+      ];
+      if (competitorsMode !== 'none') {
+        queries.push(
+          db
+            .from('competitor_fuel_prices')
+            .select(
+              'id, site_id, competitor_id, fuel_type, price, date, entered_at'
+            )
+            .in('site_id', siteIds)
+            .gte('date', cutoff),
+          db
+            .from('site_competitors')
+            .select('id, site_id, competitor_name, distance_km')
+            .in('site_id', siteIds)
+        );
+      }
+      const results = await Promise.all(queries);
+      const fp = results[0];
       if (fp.error) throw fp.error;
-      if (cp.error) throw cp.error;
-      if (comps.error) throw comps.error;
       fuelPriceRows = fp.data || [];
-      competitorPriceRows = cp.data || [];
-      competitors = comps.data || [];
+      if (competitorsMode !== 'none') {
+        const cp = results[1];
+        const comps = results[2];
+        if (cp.error) throw cp.error;
+        if (comps.error) throw comps.error;
+        competitorPriceRows = cp.data || [];
+        competitors = comps.data || [];
+      }
     }
 
     // Build a quick lookup for competitor metadata.
@@ -327,8 +378,25 @@ export async function GET(request) {
           if ((a.fuel_type || '') !== (b.fuel_type || '')) {
             return (a.fuel_type || '').localeCompare(b.fuel_type || '');
           }
+          // Within a fuel_type, sort by distance ascending (nearest first).
+          const da = a.distance_km ?? Number.POSITIVE_INFINITY;
+          const dbb = b.distance_km ?? Number.POSITIVE_INFINITY;
+          if (da !== dbb) return da - dbb;
           return (a.competitor_name || '').localeCompare(b.competitor_name || '');
         });
+
+      // If topN was requested, keep only the N nearest per fuel_type.
+      let scopedCompetitorPrices = competitorPrices;
+      if (competitorsMode === 'top' && competitorsTopN) {
+        const counts = new Map();
+        scopedCompetitorPrices = competitorPrices.filter((p) => {
+          const k = p.fuel_type || '';
+          const n = counts.get(k) || 0;
+          if (n >= competitorsTopN) return false;
+          counts.set(k, n + 1);
+          return true;
+        });
+      }
 
       return {
         id: site.id,
@@ -343,7 +411,7 @@ export async function GET(request) {
           date: p.date,
           entered_at: p.entered_at,
         })),
-        competitorPrices,
+        competitorPrices: scopedCompetitorPrices,
       };
     });
 

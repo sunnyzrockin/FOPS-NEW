@@ -5,21 +5,21 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // ============================================================================
-// /api/health — lightweight deployment verification endpoint
+// /api/health — lightweight liveness + deploy verification endpoint
 // ----------------------------------------------------------------------------
-// Bump VERSION_MARKER whenever you want to verify a new deploy reached prod.
-// After Vercel finishes building, GET /api/health on the live URL should
-// return the new marker. If it still shows the old marker, the deploy did
-// not include this commit.
+// Returns basic build info, useful for confirming which commit is live in
+// production and for uptime probes. No auth required.
 // ============================================================================
-const VERSION_MARKER = 'fops-2026-05-09-portfolio-v2-bearer-04';
-
 export async function GET() {
   return NextResponse.json(
     {
       status: 'ok',
       service: 'fops',
-      version_marker: VERSION_MARKER,
+      // Vercel injects this automatically on deployed builds; locally it's
+      // undefined which is fine.
+      commit_sha: process.env.VERCEL_GIT_COMMIT_SHA || null,
+      git_branch: process.env.VERCEL_GIT_COMMIT_REF || null,
+      vercel_env: process.env.VERCEL_ENV || null,
       build_time_iso: new Date().toISOString(),
       node_env: process.env.NODE_ENV || 'unknown',
       runtime: 'nodejs',

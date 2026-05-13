@@ -586,13 +586,84 @@ backend:
         agent: "testing"
         comment: "✅ VERCEL.JSON FIX VALIDATED - ALL CATCH-ALL ROUTES NOW WORKING! Tested 13 catch-all routes that were previously broken in production: GET /api/sites?userId=owner-001 returns 5 sites (JSON array), GET /api/sites?userId=operator-001 returns 3 sites, GET /api/reports returns JSON array, GET /api/operator-assignments?ownerId=owner-001 returns JSON array, GET /api/staff-assignments?operatorId=operator-001 returns JSON array, GET /api/site-competitors?siteId=site-001 returns JSON array, GET /api/fuel-price-entries?siteId=site-001 returns JSON array, GET /api/competitor-prices?siteId=site-001 returns JSON array, GET /api/daily-rollups?siteIds=site-001&date=2026-04-13 returns JSON array, GET /api/dashboard/stats?siteIds=site-001 returns JSON object, GET /api/site-field-configs?siteId=site-001 returns JSON array, GET /api/site-banking-formulas?siteId=site-001 returns JSON array, POST /api/banking/calculate returns JSON with result:150. All routes return proper JSON (not HTML), all status codes 200. Vercel.json rewrite removal fix is PRODUCTION-READY!"
 
+  - task: "NEW: /api/dashboard/site-stats (P0 fix — per-site bar-chart data for Owner Dashboard)"
+    implemented: true
+    working: false
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "P0 fix from frontend testing. Frontend was calling /api/dashboard/site-stats which 404'd. Added handler returning array of {siteId, siteCode, siteName, fuelSales, shopSales, totalSales, totalLitres, reportCount}. Query params: siteIds (csv), startDate, endDate. Aggregates shift_reports per site. Wired into GET dispatcher. Local verified: returns 5 sites with correct totals for date range. NEEDS TESTING."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL INFRASTRUCTURE ISSUE: Endpoint IS implemented and frontend IS calling it with correct parameters (/api/dashboard/site-stats?siteIds=site-001,site-002,site-003,site-004,site-005&startDate=2026-05-06&endDate=2026-05-13), but server keeps restarting due to memory pressure ('Server is approaching the used memory threshold, restarting...'). API calls fail with ERR_CONNECTION_RESET during server restart. When server is stable, endpoint returns 200. This is NOT a code issue - it's a server stability issue. Owner dashboard loads but shows blank data because API calls fail mid-request."
+
+  - task: "NEW: /api/dashboard/revenue-chart (P0 fix — daily revenue time-series for Owner Dashboard)"
+    implemented: true
+    working: false
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "P0 fix from frontend testing. Frontend was calling /api/dashboard/revenue-chart which 404'd. Added handler returning [{date: YYYY-MM-DD, revenue: number}] bucketed by day for the last N days (default 7, max 90, capped). Pads empty days with revenue:0. Local verified. NEEDS TESTING."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL INFRASTRUCTURE ISSUE: Endpoint IS implemented and frontend IS calling it with correct parameters (/api/dashboard/revenue-chart?siteIds=site-001,site-002,site-003,site-004,site-005&days=7), but server keeps restarting due to memory pressure. API calls fail with ERR_CONNECTION_RESET during server restart. This is NOT a code issue - it's a server stability issue preventing proper testing."
+
+  - task: "FIX: /api/fuel-price-comparison now accepts siteIds (plural)"
+    implemented: true
+    working: "NA"
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "P0 fix from frontend testing. Frontend sends ?siteIds=a,b,c but handler only accepted ?siteId=. Now accepts either — uses first ID from siteIds list. Was returning 400 for every fuel comparison call from Owner/Operator. Local verified: previously-failing call returns 200 with site+own_prices+competitors. NEEDS TESTING."
+      - working: "NA"
+        agent: "testing"
+        comment: "⚠️ UNABLE TO TEST: Frontend did NOT call /api/fuel-price-comparison during Owner dashboard load (0 calls observed). This endpoint was not triggered in the test scenario. Server stability issues prevented full dashboard load, so fuel price comparison may not have been reached. Cannot confirm if siteIds plural parameter fix is working without frontend calling it."
+
+  - task: "ENHANCEMENT: /api/portfolio ?competitors=top3|none param + expected_shifts vs covered_shifts rule"
+    implemented: true
+    working: "NA"
+    file: "/app/app/api/portfolio/route.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Two user-requested enhancements: 1) `?competitors=` query param: 'all' (default, all latest competitor prices ~72/site), 'topN' e.g. 'top3' (keeps only N nearest by distance_km per fuel_type, ~9/site), 'none' (skips fetch entirely). 2) Status indicator now flags 'warning' when expected_shifts (yesterday's unique shifts) > covered_shifts (today's). Also relaxed 'critical': only critical if no reports today AND yesterday had activity. Local verified: top3 returns 9 prices per site (3 per fuel_type, nearest first), none returns 0; status correctly identifies missing-shift coverage as warning. NEEDS TESTING."
+
+  - task: "CLEANUP: /api/health uses VERCEL_GIT_COMMIT_SHA instead of manual marker; README marker removed"
+    implemented: true
+    working: "NA"
+    file: "/app/app/api/health/route.js"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Cosmetic cleanup. Removed manual VERSION_MARKER constant. /api/health now returns commit_sha (VERCEL_GIT_COMMIT_SHA), git_branch (VERCEL_GIT_COMMIT_REF), vercel_env (VERCEL_ENV) — auto-populated on Vercel, null locally. Removed DEPLOY-PIPELINE-TEST-MARKER comment from README. Locally /api/health returns 200 with null commit_sha as expected."
+
+
 test_plan:
   current_focus:
-    - "NEW: /api/portfolio v2 (Bearer-auth, role-scoped dashboard summary)"
-    - "FIX: Removed bad vercel.json rewrite (was redirecting catch-all routes to /)"
-    - "Role-Based Access & Hierarchy (3-Tier)"
-    - "Site Assignments (Operator & Staff)"
-  stuck_tasks: []
+    - "CRITICAL: Server stability issue - memory threshold causing restarts during dashboard load"
+    - "ENHANCEMENT: /api/portfolio ?competitors=top3|none param + expected_shifts vs covered_shifts rule"
+    - "CLEANUP: /api/health uses VERCEL_GIT_COMMIT_SHA instead of manual marker; README marker removed"
+  stuck_tasks:
+    - "NEW: /api/dashboard/site-stats (P0 fix — per-site bar-chart data for Owner Dashboard)"
+    - "NEW: /api/dashboard/revenue-chart (P0 fix — daily revenue time-series for Owner Dashboard)"
   test_all: false
   test_priority: "high_first"
 
@@ -651,6 +722,9 @@ agent_communication:
     message: "🔧 PRODUCTION USER CREATION P0 BLOCKER RESOLVED + ASSIGNMENT FLOW HARDENED. Fixed multiple stacked issues that prevented Owner/Operator from creating downstream users on Vercel and assigning sites. CHANGES: 1) Created dedicated /api/users/route.js (lightweight, no xlsx) and /api/users/[id]/route.js with explicit runtime='nodejs' to prevent Vercel from inferring Edge runtime which is incompatible with Supabase admin client. 2) Fixed nested handleSignup inside handleRLSFix structural bug in catch-all (was block-scoped). 3) Refactored /lib/supabase.js to NOT throw at module load (was crashing whole route silently on Vercel). 4) Updated /api/auth/login to use supabaseAdmin so operator/staff sites are properly returned (was being blocked by RLS). 5) Refactored /api/staff-assignments GET to accept ?operatorId= and ?ownerId= query params (frontend doesn't send Bearer JWT). POST/DELETE now use supabaseAdmin. 6) Same refactor for /api/operator-assignments GET/POST/DELETE. 7) /api/sites GET now also accepts userId param and resolves role from DB. 8) Frontend StaffAccessManagement got cache:'no-store', defensive Array.isArray check, inline Debug panel + Refresh button. 9) Empty-state UX in Assign Sites dialog when operator has no sites. CRITICAL: Need backend testing of full Owner→Operator→Staff hierarchy flow: login, create operator, assign sites to operator, create staff (as operator), assign sites to staff, list verification at every level."
   - agent: "testing"
     message: "🎯 COMPREHENSIVE E2E FRONTEND TESTING COMPLETE - 3-TIER HIERARCHY FLOW VALIDATED! Results: 85% success rate (17/20 critical tests passed). ✅ AUTHENTICATION FLOWS: All 3 roles login successfully (Owner/Operator/Staff), invalid credentials properly rejected with error messages, session management working. ✅ ROLE-BASED ACCESS: Owner sees owner-specific interface, Operator dashboard shows Sarah Johnson with proper navigation tabs (Dashboard/Staff Management/Fuel Pricing/Form Fields/Banking), Staff dashboard shows Emma Wilson with Submit Report form. ✅ PERMISSION BOUNDARIES: Operators cannot access Sites/Operators tabs (owner-only), Staff limited to Submit Report/My Reports tabs. ✅ STAFF DASHBOARD: Complete shift report form with 14 input fields, site dropdown shows 1 assigned site (Brisbane Central), Live Calculations section with auto-updating formulas working. ✅ OPERATOR DASHBOARD: Stats cards visible, navigation tabs functional, role hierarchy confirmed. ❌ MINOR ISSUES: Some dashboards experience intermittent loading delays, Owner dashboard occasionally shows loading spinner. ❌ CRITICAL FINDING: JavaScript runtime errors cause dashboard loading issues in some sessions, but core functionality remains intact. CONCLUSION: 3-tier hierarchy (Owner→Operator→Staff) is FULLY FUNCTIONAL with proper role-based access control. Authentication, permissions, and user flows working correctly. Ready for pilot deployment with minor UI stability improvements needed."
+  - agent: "testing"
+    message: "❌ CRITICAL P0 BLOCKER - SERVER STABILITY ISSUE: Comprehensive UI testing reveals that the 3 P0 endpoint fixes ARE implemented and frontend IS calling them correctly, BUT the local Next.js server keeps restarting due to memory pressure ('Server is approaching the used memory threshold, restarting...'). Test results: 1) Login succeeds (POST /api/auth/login 200), 2) Dashboard page loads (GET /app 200), 3) First API call succeeds (GET /api/reports 200 in 1847ms), 4) Server hits memory threshold and restarts, 5) Subsequent API calls fail with ERR_CONNECTION_RESET (/api/dashboard/site-stats, /api/dashboard/revenue-chart). Frontend correctly calls: /api/dashboard/site-stats?siteIds=site-001,site-002,site-003,site-004,site-005&startDate=2026-05-06&endDate=2026-05-13 and /api/dashboard/revenue-chart?siteIds=site-001,site-002,site-003,site-004,site-005&days=7. Owner dashboard loads but shows blank data (no revenue, no charts, 0/5 sites) because API responses never complete. /api/fuel-price-comparison was NOT called (0 calls observed). This is NOT a code issue with the 3 fixed endpoints - it's an infrastructure issue. RECOMMENDATION: Test on production/Vercel where memory limits are higher, or increase local Node.js memory limit (NODE_OPTIONS=--max-old-space-size=4096)."
+
   - agent: "testing"
     message: "🎉 P0 PRODUCTION BLOCKER TESTING COMPLETE - OUTSTANDING SUCCESS! Comprehensive backend testing of Owner→Operator→Staff 3-tier hierarchy flow achieved 96.7% success rate (29/30 tests passed). ✅ ALL P0 TASKS WORKING: 1) POST /api/users creates operators/staff with auth+DB in single call, validates fields, handles duplicates, 2) GET /api/users?role filtering working (17 staff, 7 operators, 25 total), 3) Login returns correct site counts (Owner: 5, Operator: 3, Staff: 1), invalid credentials rejected, 4) Staff/Operator assignments CRUD fully functional with enriched data and query params, 5) Sites GET with userId param working perfectly, 6) END-TO-END HIERARCHY FLOW: Complete Owner→create operator→assign sites→operator creates staff→assign sites→staff login successful. Minor: One staff assignment POST failed due to existing constraint (expected). ALL CRITICAL PRODUCTION BLOCKERS RESOLVED. BACKEND IS PRODUCTION-READY!"
   - agent: "main"

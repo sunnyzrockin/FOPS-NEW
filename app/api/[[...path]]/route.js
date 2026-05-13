@@ -1469,6 +1469,126 @@ async function handleGetDashboardStats(request) {
   }
 }
 
+// /api/dashboard/site-stats?siteIds=...&startDate=...&endDate=...
+// Returns per-site aggregated stats for the Owner BarChart (Site Comparison).
+// Shape: [{ siteId, siteCode, siteName, fuelSales, shopSales, totalSales, totalLitres, reportCount }]
+async function handleGetDashboardSiteStats(request) {
+  try {
+    const url = new URL(request.url);
+    const siteIds = url.searchParams.get('siteIds');
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+
+    if (!siteIds) {
+      return NextResponse.json({ error: 'siteIds is required' }, { status: 400, headers: corsHeaders });
+    }
+
+    const siteIdArray = siteIds.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!siteIdArray.length) return NextResponse.json([], { headers: corsHeaders });
+
+    const db = supabaseAdmin || supabase;
+
+    // Fetch sites for code/name labels (used by chart X-axis)
+    const { data: sites, error: sitesErr } = await db
+      .from('sites')
+      .select('id, name, code')
+      .in('id', siteIdArray);
+    if (sitesErr) throw sitesErr;
+
+    // Fetch reports in date range
+    let reportsQuery = db
+      .from('shift_reports')
+      .select('site_id, total_sales, fuel_sales, shop_sales, total_litres')
+      .in('site_id', siteIdArray);
+    if (startDate) reportsQuery = reportsQuery.gte('date', startDate);
+    if (endDate) reportsQuery = reportsQuery.lte('date', endDate);
+    const { data: reports, error: reportsErr } = await reportsQuery;
+    if (reportsErr) throw reportsErr;
+
+    const result = (sites || []).map((site) => {
+      const siteReports = (reports || []).filter((r) => r.site_id === site.id);
+      const fuelSales = siteReports.reduce((acc, r) => acc + (Number(r.fuel_sales) || 0), 0);
+      const shopSales = siteReports.reduce((acc, r) => acc + (Number(r.shop_sales) || 0), 0);
+      const totalSales = siteReports.reduce((acc, r) => acc + (Number(r.total_sales) || 0), 0);
+      const totalLitres = siteReports.reduce((acc, r) => acc + (Number(r.total_litres) || 0), 0);
+      return {
+        siteId: site.id,
+        siteCode: site.code || site.name?.slice(0, 12) || site.id.slice(0, 8),
+        siteName: site.name,
+        fuelSales: Math.round(fuelSales * 100) / 100,
+        shopSales: Math.round(shopSales * 100) / 100,
+        totalSales: Math.round(totalSales * 100) / 100,
+        totalLitres: Math.round(totalLitres * 100) / 100,
+        reportCount: siteReports.length,
+      };
+    });
+
+    return NextResponse.json(result, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get dashboard site-stats error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch site stats', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+// /api/dashboard/revenue-chart?siteIds=...&days=7
+// Returns daily revenue time-series for the Owner LineChart (Revenue Trend).
+// Shape: [{ date: 'YYYY-MM-DD', revenue: number }]
+async function handleGetDashboardRevenueChart(request) {
+  try {
+    const url = new URL(request.url);
+    const siteIds = url.searchParams.get('siteIds');
+    const daysParam = parseInt(url.searchParams.get('days') || '7', 10);
+    const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(daysParam, 90) : 7;
+
+    if (!siteIds) {
+      return NextResponse.json({ error: 'siteIds is required' }, { status: 400, headers: corsHeaders });
+    }
+    const siteIdArray = siteIds.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!siteIdArray.length) return NextResponse.json([], { headers: corsHeaders });
+
+    // Build the window: last `days` days ending today (UTC).
+    const end = new Date();
+    const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+    const startIso = start.toISOString().slice(0, 10);
+    const endIso = end.toISOString().slice(0, 10);
+
+    const db = supabaseAdmin || supabase;
+    const { data: reports, error } = await db
+      .from('shift_reports')
+      .select('date, total_sales')
+      .in('site_id', siteIdArray)
+      .gte('date', startIso)
+      .lte('date', endIso);
+    if (error) throw error;
+
+    // Bucket by date
+    const buckets = new Map();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+      buckets.set(d.toISOString().slice(0, 10), 0);
+    }
+    for (const r of reports || []) {
+      const key = r.date;
+      if (!buckets.has(key)) continue;
+      buckets.set(key, buckets.get(key) + (Number(r.total_sales) || 0));
+    }
+    const result = Array.from(buckets.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, revenue]) => ({ date, revenue: Math.round(revenue * 100) / 100 }));
+
+    return NextResponse.json(result, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get dashboard revenue-chart error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch revenue chart', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
 // ============== FUEL PRICE INTELLIGENCE ==============
 async function handleGetSiteCompetitors(request) {
   try {
@@ -1714,11 +1834,17 @@ async function handleDeleteCompetitorPrice(priceId) {
 async function handleGetFuelPriceComparison(request) {
   try {
     const url = new URL(request.url);
-    const siteId = url.searchParams.get('siteId');
+    // Frontend sends `siteIds` (plural, comma-separated). Older callers send `siteId`.
+    // Accept either — fall back to first siteId in the list.
+    let siteId = url.searchParams.get('siteId');
+    if (!siteId) {
+      const ids = url.searchParams.get('siteIds');
+      if (ids) siteId = ids.split(',').map((s) => s.trim()).filter(Boolean)[0] || null;
+    }
     const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
     
     if (!siteId) {
-      return NextResponse.json({ error: 'siteId is required' }, { status: 400, headers: corsHeaders });
+      return NextResponse.json({ error: 'siteId or siteIds is required' }, { status: 400, headers: corsHeaders });
     }
     
     // Get own site info
@@ -1811,6 +1937,12 @@ export async function GET(request) {
   }
   if (path[0] === 'dashboard' && path[1] === 'stats') {
     return handleGetDashboardStats(request);
+  }
+  if (path[0] === 'dashboard' && path[1] === 'site-stats') {
+    return handleGetDashboardSiteStats(request);
+  }
+  if (path[0] === 'dashboard' && path[1] === 'revenue-chart') {
+    return handleGetDashboardRevenueChart(request);
   }
   if (path[0] === 'site-competitors') {
     return handleGetSiteCompetitors(request);
