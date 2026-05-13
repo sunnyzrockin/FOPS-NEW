@@ -276,9 +276,9 @@ frontend:
 
   - task: "Staff Dashboard"
     implemented: true
-    working: true
+    working: false
     file: "/app/app/page.js"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -291,12 +291,15 @@ frontend:
       - working: true
         agent: "testing"
         comment: "✅ POST-MEMORY-FIX RETEST: Staff dashboard (Emma Wilson) loads successfully with 1 assigned site (Brisbane Central). Submit Report form visible with all fields. Live Calculations panel shows 12 formula cards (all $0.00 initially, auto-updating). My Reports tab shows 5 historical reports with real revenue values ($5,947.07, $4,628.71, $5,202.25, $5,204.74, $7,983.76). Form field filling failed due to selector issues (not a functional bug). Core functionality working."
+      - working: false
+        agent: "testing"
+        comment: "❌ FINAL RE-VALIDATION: Staff dashboard loads with Emma Wilson identified, but form has CRITICAL ISSUE - only 1 numeric input found instead of expected 6+ inputs. Submit Report form appears incomplete or inputs not rendering correctly. My Reports tab loads successfully. This is a FRONTEND RENDERING BUG preventing staff from submitting complete shift reports."
 
   - task: "Operator Dashboard"
     implemented: true
     working: false
     file: "/app/app/page.js"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -309,12 +312,15 @@ frontend:
       - working: false
         agent: "testing"
         comment: "❌ POST-MEMORY-FIX RETEST: Operator dashboard shows ALL $0.00 metrics (Shop Sales, Fuel Sales, Total Revenue, Dips, Drive Offs all showing $0.00). APIs return 200 but data is not displaying. All 5 tabs (Dashboard, Staff Management, Fuel Pricing, Form Fields, Banking) load successfully. NO infinite spinner regression on Form Fields/Banking tabs (confirmed fixed). Tab navigation working. Issue is data display, not API connectivity."
+      - working: false
+        agent: "testing"
+        comment: "❌ FINAL RE-VALIDATION: Operator dashboard STILL showing ALL $0.00 metrics despite APIs returning real data. Verified /api/dashboard/stats returns $35,570.81 total_sales but frontend displays $0.00. Date range correctly set to 30 days (04/13/2026 to 05/13/2026). All 5 tabs load without infinite spinner. Role-based access working (cannot see Toowoomba/Cairns). CRITICAL FRONTEND DATA PROCESSING BUG - APIs work, frontend doesn't display data."
 
   - task: "Owner Dashboard - Base Features"
     implemented: true
     working: false
     file: "/app/app/page.js"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -327,6 +333,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL JAVASCRIPT ERROR BLOCKING OWNER DASHBOARD: TypeError 'priceData.find is not a function' in FuelPriceMapView component (line 1538). Red error overlay prevents all tab navigation (Sites, Operators, Fuel Prices, Dashboard tabs timeout). Root cause: /api/fuel-price-comparison returns single object instead of array when siteIds has multiple IDs. Dashboard loads, metrics show real values (NOT $0.00), 8 SVG charts render, but error overlay blocks interaction. All 3 P0 endpoints return 200 (site-stats, revenue-chart, fuel-price-comparison). Memory fix confirmed - no server restarts."
+      - working: false
+        agent: "testing"
+        comment: "❌ FINAL RE-VALIDATION: priceData.find error FIXED (no red overlay, no console errors, all tabs navigate), BUT Owner dashboard shows ALL $0.00 metrics despite APIs returning real data. Verified /api/dashboard/stats returns $35,570.81 total_sales but frontend displays $0.00. Date range correctly set to 30 days (04/13/2026 to 05/13/2026). Charts rendering (39 SVG elements). All tabs load successfully (Dashboard, Sites, Operators, Fuel Prices). CRITICAL FRONTEND DATA PROCESSING BUG - APIs work, frontend doesn't display data."
 
   - task: "Daily Rollup UI with Day/Shift Toggle"
     implemented: true
@@ -633,7 +642,7 @@ backend:
 
   - task: "FIX: /api/fuel-price-comparison now accepts siteIds (plural)"
     implemented: true
-    working: false
+    working: true
     file: "/app/app/api/[[...path]]/route.js"
     stuck_count: 1
     priority: "high"
@@ -648,6 +657,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL BUG: API returns 200 but returns SINGLE OBJECT instead of ARRAY when siteIds contains multiple IDs. Frontend expects array, causing TypeError: priceData.find is not a function in FuelPriceMapView component (line 1538). API currently only processes first siteId and returns single comparison object. MUST loop through all siteIds and return array of comparison objects. This is blocking Owner dashboard (red error overlay prevents tab navigation)."
+      - working: true
+        agent: "testing"
+        comment: "✅ FINAL RE-VALIDATION COMPLETE: priceData.find error is FIXED - no red error overlay, no console errors, Fuel Prices tab loads successfully with map view. All Owner tabs (Dashboard, Sites, Operators, Fuel Prices) navigate without errors. Memory fix confirmed - no server restarts during 12-second dashboard load. Charts rendering (39 SVG elements). No 4xx/5xx network errors."
 
   - task: "ENHANCEMENT: /api/portfolio ?competitors=top3|none param + expected_shifts vs covered_shifts rule"
     implemented: true
@@ -676,13 +688,15 @@ backend:
 
 test_plan:
   current_focus:
-    - "CRITICAL: /api/fuel-price-comparison must return ARRAY for multiple siteIds (currently returns single object)"
-    - "CRITICAL: Operator dashboard showing $0.00 metrics despite APIs returning 200"
+    - "CRITICAL: Owner/Operator dashboards showing $0.00 metrics - frontend data processing bug"
+    - "CRITICAL: Staff dashboard form only showing 1 input instead of 6+ inputs"
     - "Owner Dashboard - Base Features"
-  stuck_tasks:
-    - "FIX: /api/fuel-price-comparison now accepts siteIds (plural)"
     - "Operator Dashboard"
+    - "Staff Dashboard"
+  stuck_tasks:
     - "Owner Dashboard - Base Features"
+    - "Operator Dashboard"
+    - "Staff Dashboard"
   test_all: false
   test_priority: "high_first"
 
@@ -741,6 +755,8 @@ agent_communication:
     message: "🔧 PRODUCTION USER CREATION P0 BLOCKER RESOLVED + ASSIGNMENT FLOW HARDENED. Fixed multiple stacked issues that prevented Owner/Operator from creating downstream users on Vercel and assigning sites. CHANGES: 1) Created dedicated /api/users/route.js (lightweight, no xlsx) and /api/users/[id]/route.js with explicit runtime='nodejs' to prevent Vercel from inferring Edge runtime which is incompatible with Supabase admin client. 2) Fixed nested handleSignup inside handleRLSFix structural bug in catch-all (was block-scoped). 3) Refactored /lib/supabase.js to NOT throw at module load (was crashing whole route silently on Vercel). 4) Updated /api/auth/login to use supabaseAdmin so operator/staff sites are properly returned (was being blocked by RLS). 5) Refactored /api/staff-assignments GET to accept ?operatorId= and ?ownerId= query params (frontend doesn't send Bearer JWT). POST/DELETE now use supabaseAdmin. 6) Same refactor for /api/operator-assignments GET/POST/DELETE. 7) /api/sites GET now also accepts userId param and resolves role from DB. 8) Frontend StaffAccessManagement got cache:'no-store', defensive Array.isArray check, inline Debug panel + Refresh button. 9) Empty-state UX in Assign Sites dialog when operator has no sites. CRITICAL: Need backend testing of full Owner→Operator→Staff hierarchy flow: login, create operator, assign sites to operator, create staff (as operator), assign sites to staff, list verification at every level."
   - agent: "testing"
     message: "🎯 COMPREHENSIVE E2E FRONTEND TESTING COMPLETE - 3-TIER HIERARCHY FLOW VALIDATED! Results: 85% success rate (17/20 critical tests passed). ✅ AUTHENTICATION FLOWS: All 3 roles login successfully (Owner/Operator/Staff), invalid credentials properly rejected with error messages, session management working. ✅ ROLE-BASED ACCESS: Owner sees owner-specific interface, Operator dashboard shows Sarah Johnson with proper navigation tabs (Dashboard/Staff Management/Fuel Pricing/Form Fields/Banking), Staff dashboard shows Emma Wilson with Submit Report form. ✅ PERMISSION BOUNDARIES: Operators cannot access Sites/Operators tabs (owner-only), Staff limited to Submit Report/My Reports tabs. ✅ STAFF DASHBOARD: Complete shift report form with 14 input fields, site dropdown shows 1 assigned site (Brisbane Central), Live Calculations section with auto-updating formulas working. ✅ OPERATOR DASHBOARD: Stats cards visible, navigation tabs functional, role hierarchy confirmed. ❌ MINOR ISSUES: Some dashboards experience intermittent loading delays, Owner dashboard occasionally shows loading spinner. ❌ CRITICAL FINDING: JavaScript runtime errors cause dashboard loading issues in some sessions, but core functionality remains intact. CONCLUSION: 3-tier hierarchy (Owner→Operator→Staff) is FULLY FUNCTIONAL with proper role-based access control. Authentication, permissions, and user flows working correctly. Ready for pilot deployment with minor UI stability improvements needed."
+  - agent: "testing"
+    message: "🔍 FINAL RE-VALIDATION COMPLETE (May 13, 2026) - MIXED RESULTS! Tested all P0 fixes as requested. SUCCESS RATE: ~60% (12/20 tests passed). ✅ FIXES CONFIRMED WORKING: 1) Memory issue resolved - no server restarts during 12-second dashboard load, 2) priceData.find error FIXED - no red error overlay, no console errors, Fuel Prices tab loads with map view, 3) All tabs navigate successfully (Owner: Dashboard/Sites/Operators/Fuel Prices; Operator: Dashboard/Staff Management/Fuel Pricing/Form Fields/Banking), 4) Charts rendering (39 SVG elements), 5) No 4xx/5xx network errors, 6) Date range correctly set to 30 days (04/13/2026 to 05/13/2026), 7) Role-based access working (Operator cannot see Toowoomba/Cairns), 8) Authentication working for all 3 roles. ❌ CRITICAL ISSUES REMAIN: 1) Owner dashboard shows ALL $0.00 metrics despite /api/dashboard/stats returning $35,570.81 total_sales - FRONTEND DATA PROCESSING BUG, 2) Operator dashboard shows ALL $0.00 metrics - same frontend bug, 3) Staff dashboard form only shows 1 numeric input instead of expected 6+ inputs - FRONTEND RENDERING BUG. ROOT CAUSE: APIs return correct data but frontend fails to display it. This is NOT a backend issue - verified APIs work via curl. URGENT: Fix frontend state management/data mapping in OwnerDashboard, OperatorDashboard, and StaffDashboard components."
   - agent: "testing"
     message: "❌ CRITICAL P0 BLOCKER - SERVER STABILITY ISSUE: Comprehensive UI testing reveals that the 3 P0 endpoint fixes ARE implemented and frontend IS calling them correctly, BUT the local Next.js server keeps restarting due to memory pressure ('Server is approaching the used memory threshold, restarting...'). Test results: 1) Login succeeds (POST /api/auth/login 200), 2) Dashboard page loads (GET /app 200), 3) First API call succeeds (GET /api/reports 200 in 1847ms), 4) Server hits memory threshold and restarts, 5) Subsequent API calls fail with ERR_CONNECTION_RESET (/api/dashboard/site-stats, /api/dashboard/revenue-chart). Frontend correctly calls: /api/dashboard/site-stats?siteIds=site-001,site-002,site-003,site-004,site-005&startDate=2026-05-06&endDate=2026-05-13 and /api/dashboard/revenue-chart?siteIds=site-001,site-002,site-003,site-004,site-005&days=7. Owner dashboard loads but shows blank data (no revenue, no charts, 0/5 sites) because API responses never complete. /api/fuel-price-comparison was NOT called (0 calls observed). This is NOT a code issue with the 3 fixed endpoints - it's an infrastructure issue. RECOMMENDATION: Test on production/Vercel where memory limits are higher, or increase local Node.js memory limit (NODE_OPTIONS=--max-old-space-size=4096)."
   - agent: "testing"

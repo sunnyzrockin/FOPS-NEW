@@ -1834,62 +1834,179 @@ async function handleDeleteCompetitorPrice(priceId) {
 async function handleGetFuelPriceComparison(request) {
   try {
     const url = new URL(request.url);
-    // Frontend sends `siteIds` (plural, comma-separated). Older callers send `siteId`.
-    // Accept either — fall back to first siteId in the list.
-    let siteId = url.searchParams.get('siteId');
-    if (!siteId) {
-      const ids = url.searchParams.get('siteIds');
-      if (ids) siteId = ids.split(',').map((s) => s.trim()).filter(Boolean)[0] || null;
+    // Frontend sends ?siteIds=a,b,c (plural). Older callers send ?siteId=. Accept both.
+    let siteIdList = [];
+    const single = url.searchParams.get('siteId');
+    const plural = url.searchParams.get('siteIds');
+    if (plural) {
+      siteIdList = plural.split(',').map((s) => s.trim()).filter(Boolean);
+    } else if (single) {
+      siteIdList = [single];
     }
     const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
-    
-    if (!siteId) {
-      return NextResponse.json({ error: 'siteId or siteIds is required' }, { status: 400, headers: corsHeaders });
+
+    if (!siteIdList.length) {
+      return NextResponse.json(
+        { error: 'siteId or siteIds is required' },
+        { status: 400, headers: corsHeaders }
+      );
     }
-    
-    // Get own site info
-    const { data: site } = await (supabaseAdmin || supabase)
-      .from('sites')
-      .select('*')
-      .eq('id', siteId)
-      .single();
-    
-    // Get own fuel prices
-    const { data: ownPrices } = await (supabaseAdmin || supabase)
-      .from('fuel_price_entries')
-      .select('*')
-      .eq('site_id', siteId)
-      .eq('date', date);
-    
-    // Get competitors
-    const { data: competitors } = await (supabaseAdmin || supabase)
-      .from('site_competitors')
-      .select('*')
-      .eq('site_id', siteId);
-    
-    // Get competitor prices
-    const competitorIds = (competitors || []).map(c => c.id);
-    const { data: competitorPrices } = await (supabaseAdmin || supabase)
-      .from('competitor_fuel_prices')
-      .select('*')
-      .in('competitor_id', competitorIds)
-      .eq('date', date);
-    
-    // Build comparison
-    const comparison = {
-      site: site,
-      date: date,
-      own_prices: ownPrices || [],
-      competitors: (competitors || []).map(comp => ({
-        ...comp,
-        prices: (competitorPrices || []).filter(p => p.competitor_id === comp.id)
-      }))
-    };
-    
-    return NextResponse.json(comparison, { headers: corsHeaders });
+
+    const db = supabaseAdmin || supabase;
+
+    // Bulk fetch sites + own prices + competitors + competitor prices
+    const [sitesRes, ownPricesRes, compsRes] = await Promise.all([
+      db
+        .from('sites')
+        .select('id, name, code, latitude, longitude')
+        .in('id', siteIdList),
+      db
+        .from('fuel_price_entries')
+        .select('site_id, fuel_type, price, date, entered_at')
+        .in('site_id', siteIdList)
+        .eq('date', date),
+      db
+        .from('site_competitors')
+        .select('id, site_id, competitor_name, distance_km, latitude, longitude')
+        .in('site_id', siteIdList),
+    ]);
+    if (sitesRes.error) throw sitesRes.error;
+    if (ownPricesRes.error) throw ownPricesRes.error;
+    if (compsRes.error) throw compsRes.error;
+
+    const sites = sitesRes.data || [];
+    const ownPrices = ownPricesRes.data || [];
+    const competitors = compsRes.data || [];
+
+    const competitorIds = competitors.map((c) => c.id);
+    let competitorPrices = [];
+    if (competitorIds.length) {
+      const cpRes = await db
+        .from('competitor_fuel_prices')
+        .select('competitor_id, site_id, fuel_type, price, date, entered_at')
+        .in('competitor_id', competitorIds)
+        .eq('date', date);
+      if (cpRes.error) throw cpRes.error;
+      competitorPrices = cpRes.data || [];
+    }
+
+    const FUEL_TYPES = ['ULP', 'Premium', 'Diesel'];
+
+    // Build one comparison entry per site
+    const result = siteIdList.map((siteId) => {
+      const site = sites.find((s) => s.id === siteId) || { id: siteId };
+      const siteComps = competitors.filter((c) => c.site_id === siteId);
+      const siteCompPrices = competitorPrices.filter((p) => p.site_id === siteId);
+      const siteOwnPrices = ownPrices.filter((p) => p.site_id === siteId);
+
+      const fuelData = {};
+      const insights = [];
+
+      for (const ft of FUEL_TYPES) {
+        // Latest own price for this fuel type (today)
+        const own = siteOwnPrices
+          .filter((p) => p.fuel_type === ft)
+          .sort(
+            (a, b) =>
+              new Date(b.entered_at || 0).getTime() -
+              new Date(a.entered_at || 0).getTime()
+          )[0];
+
+        // Latest competitor price per competitor for this fuel type
+        const compByCompetitor = new Map();
+        for (const cp of siteCompPrices.filter((p) => p.fuel_type === ft)) {
+          const t = cp.entered_at ? new Date(cp.entered_at).getTime() : 0;
+          const cur = compByCompetitor.get(cp.competitor_id);
+          if (!cur || t > cur._t) compByCompetitor.set(cp.competitor_id, { ...cp, _t: t });
+        }
+        const compPriceList = Array.from(compByCompetitor.values()).map((cp) => {
+          const meta = siteComps.find((c) => c.id === cp.competitor_id) || {};
+          return {
+            competitor_id: cp.competitor_id,
+            competitor_name: meta.competitor_name || null,
+            distance_km: meta.distance_km ?? null,
+            latitude: meta.latitude ?? null,
+            longitude: meta.longitude ?? null,
+            price: cp.price,
+            entered_at: cp.entered_at,
+          };
+        });
+
+        const numericComps = compPriceList
+          .map((c) => Number(c.price))
+          .filter((n) => Number.isFinite(n));
+        const minCp = numericComps.length ? Math.min(...numericComps) : null;
+        const maxCp = numericComps.length ? Math.max(...numericComps) : null;
+        const ownPrice = own ? Number(own.price) : null;
+
+        const fmt = (n) =>
+          n === null || n === undefined
+            ? null
+            : (Math.round(n * 10) / 10).toFixed(1);
+        const diffMin =
+          ownPrice !== null && minCp !== null
+            ? Math.round((ownPrice - minCp) * 10) / 10
+            : null;
+        const diffMax =
+          ownPrice !== null && maxCp !== null
+            ? Math.round((ownPrice - maxCp) * 10) / 10
+            : null;
+
+        fuelData[ft] = {
+          own_price: ownPrice,
+          min_competitor_price: minCp,
+          max_competitor_price: maxCp,
+          competitor_count: compPriceList.length,
+          difference_from_min: diffMin === null ? null : (diffMin > 0 ? '+' : '') + diffMin.toFixed(1),
+          difference_from_max: diffMax === null ? null : (diffMax > 0 ? '+' : '') + diffMax.toFixed(1),
+          competitor_prices: compPriceList,
+        };
+
+        // Insight rule of thumb (cents per litre):
+        //   |diff| <= 0.5  → good
+        //   diff > 0.5 && <= 2.0  → neutral
+        //   diff > 2.0 && <= 4.0  → warning
+        //   diff > 4.0  → danger
+        //   diff < -0.5 → good (well below min)
+        if (diffMin !== null) {
+          let type = 'neutral';
+          let message = '';
+          if (diffMin <= 0.5) {
+            type = 'good';
+            message = `${ft} priced competitively (within 0.5¢ of nearest)`;
+          } else if (diffMin <= 2.0) {
+            type = 'neutral';
+            message = `${ft} slightly above lowest competitor (+${diffMin.toFixed(1)}¢)`;
+          } else if (diffMin <= 4.0) {
+            type = 'warning';
+            message = `${ft} significantly above nearest competitors (+${diffMin.toFixed(1)}¢)`;
+          } else {
+            type = 'danger';
+            message = `${ft} far above lowest competitor (+${diffMin.toFixed(1)}¢) — consider price review`;
+          }
+          insights.push({ type, fuel_type: ft, difference_from_min: diffMin, message });
+        }
+      }
+
+      return {
+        site_id: site.id,
+        site_name: site.name || null,
+        site_code: site.code || null,
+        latitude: site.latitude ?? null,
+        longitude: site.longitude ?? null,
+        date,
+        fuel_data: fuelData,
+        insights,
+      };
+    });
+
+    return NextResponse.json(result, { headers: corsHeaders });
   } catch (error) {
     console.error('Get fuel price comparison error:', error);
-    return NextResponse.json({ error: 'Failed to fetch fuel price comparison' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json(
+      { error: 'Failed to fetch fuel price comparison', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
 

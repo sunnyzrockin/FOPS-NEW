@@ -2476,7 +2476,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
   const [viewType, setViewType] = useState('daily');
   const [expandedRollup, setExpandedRollup] = useState(null);
   const [dateRange, setDateRange] = useState({
-    start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   });
   const [loading, setLoading] = useState(true);
@@ -3211,7 +3211,7 @@ function OperatorDashboard({ user, sites, activeTab }) {
   const [expandedRollup, setExpandedRollup] = useState(null);
   const [selectedSite, setSelectedSite] = useState('all');
   const [dateRange, setDateRange] = useState({
-    start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   });
   const [loading, setLoading] = useState(true);
