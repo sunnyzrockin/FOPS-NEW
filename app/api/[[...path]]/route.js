@@ -1423,49 +1423,135 @@ async function handleGetDashboardStats(request) {
     const siteIds = url.searchParams.get('siteIds');
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
-    
+
     if (!siteIds) {
       return NextResponse.json({ error: 'siteIds is required' }, { status: 400, headers: corsHeaders });
     }
-    
-    const siteIdArray = siteIds.split(',');
-    
-    let query = (supabaseAdmin || supabase)
+
+    const siteIdArray = siteIds.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!siteIdArray.length) {
+      return NextResponse.json({
+        totalShopSales: 0, totalFuelSales: 0, totalRevenue: 0,
+        totalDips: 0, totalDriveOffs: 0, totalBanking: 0,
+        totalReports: 0, pendingReports: 0, reviewedReports: 0,
+        topPerformingSite: null, lowestPerformingSite: null,
+        // legacy snake_case (kept for backward compatibility):
+        total_sales: 0, fuel_sales: 0, shop_sales: 0, total_litres: 0,
+        total_reports: 0, pending_reports: 0, reviewed_reports: 0,
+      }, { headers: corsHeaders });
+    }
+
+    const db = supabaseAdmin || supabase;
+
+    // Pull sites + reports in parallel
+    let reportsQuery = db
       .from('shift_reports')
-      .select('*')
+      .select('site_id, total_sales, fuel_sales, shop_sales, total_litres, total_revenue, eftpos, motorpass, cash, accounts, dips, drive_offs, status')
       .in('site_id', siteIdArray);
-    
-    if (startDate) query = query.gte('date', startDate);
-    if (endDate) query = query.lte('date', endDate);
-    
-    const { data: reports, error } = await query;
-    
-    if (error) throw error;
-    
-    const stats = {
-      total_sales: 0,
-      fuel_sales: 0,
-      shop_sales: 0,
-      total_litres: 0,
-      total_reports: reports?.length || 0,
-      pending_reports: 0,
-      reviewed_reports: 0
+    if (startDate) reportsQuery = reportsQuery.gte('date', startDate);
+    if (endDate) reportsQuery = reportsQuery.lte('date', endDate);
+
+    const [{ data: sites, error: sitesErr }, { data: reports, error: reportsErr }] = await Promise.all([
+      db.from('sites').select('id, name, code').in('id', siteIdArray),
+      reportsQuery,
+    ]);
+    if (sitesErr) throw sitesErr;
+    if (reportsErr) throw reportsErr;
+
+    // Aggregate totals
+    const totals = {
+      totalShopSales: 0,
+      totalFuelSales: 0,
+      totalRevenue: 0,
+      totalSales: 0,
+      totalLitres: 0,
+      totalDips: 0,
+      totalDriveOffs: 0,
+      totalBanking: 0,
+      totalReports: (reports || []).length,
+      pendingReports: 0,
+      reviewedReports: 0,
     };
-    
-    (reports || []).forEach(report => {
-      stats.total_sales += report.total_sales || 0;
-      stats.fuel_sales += report.fuel_sales || 0;
-      stats.shop_sales += report.shop_sales || 0;
-      stats.total_litres += report.total_litres || 0;
-      
-      if (report.status === 'pending') stats.pending_reports++;
-      if (report.status === 'reviewed') stats.reviewed_reports++;
+    const perSite = new Map();
+    for (const r of reports || []) {
+      const sales = Number(r.total_sales) || 0;
+      const fuel = Number(r.fuel_sales) || 0;
+      const shop = Number(r.shop_sales) || 0;
+      const litres = Number(r.total_litres) || 0;
+      const revenue = Number(r.total_revenue) || sales; // fall back to total_sales
+      const dips = Number(r.dips) || 0;
+      const driveOffs = Number(r.drive_offs) || 0;
+      const banking = (Number(r.eftpos) || 0) + (Number(r.motorpass) || 0) + (Number(r.cash) || 0) + (Number(r.accounts) || 0);
+
+      totals.totalShopSales += shop;
+      totals.totalFuelSales += fuel;
+      totals.totalRevenue += revenue;
+      totals.totalSales += sales;
+      totals.totalLitres += litres;
+      totals.totalDips += dips;
+      totals.totalDriveOffs += driveOffs;
+      totals.totalBanking += banking;
+      if (r.status === 'pending') totals.pendingReports += 1;
+      if (r.status === 'reviewed') totals.reviewedReports += 1;
+
+      if (!perSite.has(r.site_id)) {
+        perSite.set(r.site_id, { revenue: 0, totalSales: 0, reportCount: 0 });
+      }
+      const ps = perSite.get(r.site_id);
+      ps.revenue += revenue;
+      ps.totalSales += sales;
+      ps.reportCount += 1;
+    }
+
+    // Build top/lowest performing site
+    const siteRanking = (sites || []).map((s) => {
+      const agg = perSite.get(s.id) || { revenue: 0, totalSales: 0, reportCount: 0 };
+      return {
+        siteId: s.id,
+        siteName: s.name,
+        siteCode: s.code || s.name?.slice(0, 12) || s.id.slice(0, 8),
+        revenue: Math.round(agg.revenue * 100) / 100,
+        totalSales: Math.round(agg.totalSales * 100) / 100,
+        reportCount: agg.reportCount,
+      };
     });
-    
-    return NextResponse.json(stats, { headers: corsHeaders });
+    const ranked = siteRanking.filter((s) => s.reportCount > 0).sort((a, b) => b.revenue - a.revenue);
+    const topPerformingSite = ranked.length ? ranked[0] : null;
+    const lowestPerformingSite = ranked.length > 1 ? ranked[ranked.length - 1] : null;
+
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const response = {
+      // Frontend camelCase fields (what the StatCards read):
+      totalShopSales: r2(totals.totalShopSales),
+      totalFuelSales: r2(totals.totalFuelSales),
+      totalRevenue: r2(totals.totalRevenue),
+      totalDips: r2(totals.totalDips),
+      totalDriveOffs: r2(totals.totalDriveOffs),
+      totalBanking: r2(totals.totalBanking),
+      totalSales: r2(totals.totalSales),
+      totalLitres: r2(totals.totalLitres),
+      totalReports: totals.totalReports,
+      pendingReports: totals.pendingReports,
+      reviewedReports: totals.reviewedReports,
+      topPerformingSite,
+      lowestPerformingSite,
+      // Legacy snake_case (kept so any older callers don't break):
+      total_sales: r2(totals.totalSales),
+      fuel_sales: r2(totals.totalFuelSales),
+      shop_sales: r2(totals.totalShopSales),
+      total_litres: r2(totals.totalLitres),
+      total_reports: totals.totalReports,
+      pending_reports: totals.pendingReports,
+      reviewed_reports: totals.reviewedReports,
+    };
+
+    return NextResponse.json(response, { headers: corsHeaders });
   } catch (error) {
     console.error('Get dashboard stats error:', error);
-    return NextResponse.json({ error: 'Failed to fetch dashboard stats' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json(
+      { error: 'Failed to fetch dashboard stats', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
 
