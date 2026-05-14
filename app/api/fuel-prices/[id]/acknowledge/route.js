@@ -97,10 +97,11 @@ export async function POST(request, { params }) {
       }
 
       const nowIso = new Date().toISOString();
-      let newStatus = priceChange.status;
-      if (['pending', 'notified', 'escalated'].includes(priceChange.status)) {
-        newStatus = 'operator_accepted';
-      }
+      // Don't change `status` — the existing CHECK constraint doesn't allow
+      // 'operator_accepted'. Operator ack is tracked separately via
+      // operator_acked_at + operator_user_id, leaving the existing
+      // pending → notified → escalated → acknowledged lifecycle intact
+      // (acknowledged is reached when all staff ack).
 
       // Update the price change row
       const { error: updErr } = await supabase
@@ -108,7 +109,6 @@ export async function POST(request, { params }) {
         .update({
           operator_acked_at: nowIso,
           operator_user_id: operatorUserId,
-          status: newStatus,
         })
         .eq('id', id);
       if (updErr) throw updErr;
@@ -143,7 +143,7 @@ export async function POST(request, { params }) {
         price_change_id: id,
         operator: { id: operator.id, name: operator.name },
         operator_acked_at: nowIso,
-        status: newStatus,
+        status: priceChange.status,
         audit_row_id: ackRow?.id || null,
       }, { headers: corsHeaders });
     }
