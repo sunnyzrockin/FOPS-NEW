@@ -39,10 +39,9 @@ WITH ranked AS (
     name,
     is_active,
     created_at,
-    updated_at,
     ROW_NUMBER() OVER (
       PARTITION BY site_id, LOWER(TRIM(name))
-      ORDER BY COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC
+      ORDER BY created_at DESC NULLS LAST, id DESC
     ) AS rn
   FROM public.site_banking_formulas
 )
@@ -52,7 +51,7 @@ SELECT
   COUNT(*)             AS total_rows_in_group,
   COUNT(*) - 1         AS rows_that_will_be_deleted,
   MAX(CASE WHEN rn = 1 THEN id END)         AS keeper_id,
-  MAX(CASE WHEN rn = 1 THEN updated_at END) AS keeper_updated_at
+  MAX(CASE WHEN rn = 1 THEN created_at END) AS keeper_created_at
 FROM ranked
 GROUP BY site_id, name
 HAVING COUNT(*) > 1
@@ -74,7 +73,7 @@ BEGIN
       id,
       ROW_NUMBER() OVER (
         PARTITION BY site_id, LOWER(TRIM(name))
-        ORDER BY COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC
+        ORDER BY created_at DESC NULLS LAST, id DESC
       ) AS rn
     FROM public.site_banking_formulas
   ),
@@ -90,7 +89,7 @@ BEGIN
       id,
       ROW_NUMBER() OVER (
         PARTITION BY site_id, LOWER(TRIM(name))
-        ORDER BY COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC
+        ORDER BY created_at DESC NULLS LAST, id DESC
       ) AS rn
     FROM public.site_banking_formulas
   )
