@@ -63,7 +63,26 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
       try {
         const res = await fetch(`/api/banking-formulas?siteId=${form.site_id}`);
         const data = await res.json();
-        setFormulas((Array.isArray(data) ? data : []).filter((f) => f.visible_to_staff));
+        const list = (Array.isArray(data) ? data : []).filter((f) => f.visible_to_staff);
+
+        // Dedupe by formula name. Duplicates can accumulate in the
+        // banking_formulas table (no UNIQUE constraint on (site_id, name)
+        // historically). Keep the newest row per name so any recent
+        // edits the operator made win. Falls back to the only row if
+        // updated_at is missing.
+        const newestByName = new Map();
+        for (const f of list) {
+          const key = (f.name || '').trim().toLowerCase() || f.id;
+          const existing = newestByName.get(key);
+          if (!existing) {
+            newestByName.set(key, f);
+          } else {
+            const tsNew = new Date(f.updated_at || f.created_at || 0).getTime();
+            const tsOld = new Date(existing.updated_at || existing.created_at || 0).getTime();
+            if (tsNew >= tsOld) newestByName.set(key, f);
+          }
+        }
+        setFormulas(Array.from(newestByName.values()));
       } catch (err) {
         console.error('Failed to load formulas:', err);
       }
