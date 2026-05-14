@@ -1758,6 +1758,7 @@ function OperatorPriceChangeNotifications({ user, sites }) {
   const [pendingChanges, setPendingChanges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notifying, setNotifying] = useState(null);
+  const [accepting, setAccepting] = useState(null);
 
   const loadPendingChanges = async () => {
     try {
@@ -1799,6 +1800,28 @@ function OperatorPriceChangeNotifications({ user, sites }) {
       console.error(err);
     } finally {
       setNotifying(null);
+    }
+  };
+
+  const handleAcceptPriceChange = async (priceChangeId) => {
+    setAccepting(priceChangeId);
+    try {
+      const res = await fetch(`/api/fuel-prices/${priceChangeId}/acknowledge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operatorUserId: user.id }),
+      });
+      if (res.ok) {
+        await loadPendingChanges();
+      } else {
+        const error = await res.json().catch(() => ({}));
+        alert(`Error: ${error.error || 'Failed to accept price change'}`);
+      }
+    } catch (err) {
+      alert('Failed to accept price change');
+      console.error(err);
+    } finally {
+      setAccepting(null);
     }
   };
 
@@ -1911,7 +1934,15 @@ function OperatorPriceChangeNotifications({ user, sites }) {
 
                   <div className="flex items-center justify-between pt-2">
                     <div className="text-sm text-muted-foreground">
-                      {acknowledgedCount > 0 && (
+                      {pc.operator_acked_at && (
+                        <span className="text-green-700 font-medium flex items-center gap-1">
+                          <CheckCircle className="h-4 w-4" />
+                          {pc.operator_user_id === user.id
+                            ? `You accepted on ${formatDateTime(pc.operator_acked_at)}`
+                            : `Accepted by operator on ${formatDateTime(pc.operator_acked_at)}`}
+                        </span>
+                      )}
+                      {!pc.operator_acked_at && acknowledgedCount > 0 && (
                         <span className="text-green-600 font-medium">
                           ✓ {acknowledgedCount} staff acknowledged
                         </span>
@@ -1928,24 +1959,47 @@ function OperatorPriceChangeNotifications({ user, sites }) {
                       )}
                     </div>
 
-                    {isNotified ? (
-                      <div className="flex items-center gap-2 text-sm text-green-600">
-                        <CheckCircle className="h-4 w-4" />
-                        Staff notified {formatDateTime(isNotified)}
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={() => handleNotifyStaff(pc.id)}
-                        disabled={notifying === pc.id}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        {notifying === pc.id ? (
-                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Notifying...</>
-                        ) : (
-                          <><AlertCircle className="mr-2 h-4 w-4" /> Notify Staff</>
-                        )}
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {/* Operator Accept button — primary action */}
+                      {pc.operator_acked_at ? (
+                        <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Accepted
+                        </Badge>
+                      ) : (
+                        <Button
+                          onClick={() => handleAcceptPriceChange(pc.id)}
+                          disabled={accepting === pc.id}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {accepting === pc.id ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Accepting...</>
+                          ) : (
+                            <><CheckCircle className="mr-2 h-4 w-4" /> Accept Price Change</>
+                          )}
+                        </Button>
+                      )}
+
+                      {/* Notify Staff button — secondary action */}
+                      {isNotified ? (
+                        <div className="flex items-center gap-2 text-sm text-green-600">
+                          <CheckCircle className="h-4 w-4" />
+                          Staff notified {formatDateTime(isNotified)}
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={() => handleNotifyStaff(pc.id)}
+                          disabled={notifying === pc.id}
+                          variant="outline"
+                        >
+                          {notifying === pc.id ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Notifying...</>
+                          ) : (
+                            <><AlertCircle className="mr-2 h-4 w-4" /> Notify Staff</>
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -3942,10 +3996,38 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setUser(null);
-    setSites([]);
-    localStorage.removeItem('workflowlite_user');
-    localStorage.removeItem('workflowlite_sites');
+    // 1) Clear local state + localStorage IMMEDIATELY so UI never hangs.
+    try {
+      setUser(null);
+      setSites([]);
+      localStorage.removeItem('workflowlite_user');
+      localStorage.removeItem('workflowlite_sites');
+    } catch {}
+
+    // 2) Best-effort: sign out of Supabase + clear server session. Don't
+    //    block on these — the redirect must happen even if they fail.
+    try {
+      // Fire-and-forget; capped at ~2s so a slow API never delays the user.
+      const supabasePromise = (async () => {
+        try {
+          const { createBrowserClient } = await import('@/lib/supabase');
+          const sb = createBrowserClient();
+          await sb.auth.signOut();
+        } catch {}
+      })();
+      const apiPromise = fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      Promise.race([
+        Promise.allSettled([supabasePromise, apiPromise]),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]).finally(() => {});
+    } catch {}
+
+    // 3) Redirect immediately. window.location.href forces a full reload so
+    //    every piece of React state, cached fetches, and stale auth tokens
+    //    are flushed.
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   };
 
   const refreshSites = async () => {

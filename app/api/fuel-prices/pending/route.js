@@ -58,7 +58,10 @@ export async function GET(request) {
             )
           `)
           .in('site_id', siteIds)
-          .in('status', ['notified', 'escalated'])
+          // Show pending, notified, escalated, AND operator_accepted (keep visible
+          // with "Accepted" badge for the last 14 days so operator can see history)
+          .in('status', ['pending', 'notified', 'escalated', 'operator_accepted'])
+          .gte('created_at', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
           .order('created_at', { ascending: false });
 
         pendingChanges = data || [];
