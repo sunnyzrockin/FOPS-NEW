@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import supabase, { supabaseAdmin, supabaseStatus } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
+import { verifyAuth } from '@/lib/auth-helpers';
 // xlsx moved to dedicated /api/export route to keep catch-all bundle small.
 
 // CRITICAL: Force Node.js runtime on Vercel (NOT edge).
@@ -1206,17 +1207,50 @@ async function handleGetReports(request) {
 
 async function handleCreateReport(request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
 
-    // Basic validation: surface clear 400s instead of opaque 500s
     if (!body || typeof body !== 'object') {
       return NextResponse.json(
         { error: 'Request body must be JSON' },
         { status: 400, headers: corsHeaders }
       );
     }
-    const required = ['site_id', 'date', 'shift_type', 'submitted_by_user_id'];
-    const missing = required.filter((k) => !body[k]);
+
+    // -------- Field-name flexibility --------
+    // Accept BOTH `date` and `shift_date` (DB column is `date`).
+    // Accept BOTH `shift_type` and `shiftType` (just in case).
+    const date = body.date || body.shift_date || null;
+    const shift_type = body.shift_type || body.shiftType || null;
+    const site_id = body.site_id || body.siteId || null;
+
+    // -------- Auth: prefer JWT, fall back to body for backward compat --------
+    // If a valid Bearer token is provided, use that user — DO NOT trust
+    // `submitted_by_user_id` from the request body (security: prevents
+    // a caller from posting reports on behalf of someone else).
+    // If no token is present, fall back to body.submitted_by_user_id so
+    // existing internal callers / tools keep working.
+    let submitted_by_user_id = null;
+    let authed_user = null;
+    const hasBearer = !!request.headers.get('authorization');
+    if (hasBearer) {
+      const auth = await verifyAuth(request);
+      if (!auth.ok) {
+        const r = auth.response;
+        Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+        return r;
+      }
+      authed_user = auth.user;
+      submitted_by_user_id = auth.user.id;
+    } else {
+      submitted_by_user_id = body.submitted_by_user_id || body.submittedByUserId || null;
+    }
+
+    // -------- Required field validation --------
+    const missing = [];
+    if (!site_id) missing.push('site_id');
+    if (!date) missing.push('date');
+    if (!shift_type) missing.push('shift_type');
+    if (!submitted_by_user_id) missing.push('submitted_by_user_id (or Authorization Bearer token)');
     if (missing.length) {
       return NextResponse.json(
         { error: `Missing required field(s): ${missing.join(', ')}` },
@@ -1224,11 +1258,33 @@ async function handleCreateReport(request) {
       );
     }
 
+    // -------- Build insert payload --------
+    // Allow-list spread: take everything from body EXCEPT alias keys we already
+    // normalized, then merge in our normalized + trusted values.
+    const {
+      date: _d,
+      shift_date: _sd,
+      shift_type: _st,
+      shiftType: _shiftType,
+      site_id: _siteId,
+      siteId: _siteIdAlias,
+      submitted_by_user_id: _submitted,
+      submittedByUserId: _submittedAlias,
+      id: _id, // ignore client-supplied id
+      submitted_at: _submittedAt, // we set this ourselves
+      status: _status, // we always start as 'pending'
+      ...rest
+    } = body;
+
     const newReport = {
+      ...rest,
       id: uuidv4(),
-      ...body,
+      site_id,
+      date,
+      shift_type,
+      submitted_by_user_id,
       status: 'pending',
-      submitted_at: new Date().toISOString()
+      submitted_at: new Date().toISOString(),
     };
 
     const { data: report, error: reportError } = await (supabaseAdmin || supabase)
@@ -1239,11 +1295,10 @@ async function handleCreateReport(request) {
 
     if (reportError) {
       console.error('Create report - insert error:', reportError);
-      // Duplicate-key (same site_id + date + shift_type already submitted)
       if (reportError.code === '23505') {
         return NextResponse.json(
           {
-            error: 'A report for this site, date, and shift already exists.',
+            error: `A ${shift_type} report for site ${site_id} on ${date} has already been submitted.`,
             detail: reportError.details || null,
             code: 'duplicate_report',
             existing_constraint: 'shift_reports_site_id_date_shift_type_key',
@@ -1251,7 +1306,6 @@ async function handleCreateReport(request) {
           { status: 409, headers: corsHeaders }
         );
       }
-      // Foreign key violation
       if (reportError.code === '23503') {
         return NextResponse.json(
           {
@@ -1262,7 +1316,6 @@ async function handleCreateReport(request) {
           { status: 400, headers: corsHeaders }
         );
       }
-      // Not-null / check / column not exist
       return NextResponse.json(
         {
           error: 'Database rejected the report.',
@@ -1277,24 +1330,22 @@ async function handleCreateReport(request) {
     const { data: formulas } = await (supabaseAdmin || supabase)
       .from('site_banking_formulas')
       .select('*')
-      .eq('site_id', body.site_id)
+      .eq('site_id', site_id)
       .eq('is_active', true)
       .eq('visible_to_staff', true);
 
     if (formulas && formulas.length > 0) {
       const formulaResults = [];
-
       for (const formula of formulas) {
-        const calcResult = await calculateFormula(formula.formula_json, body);
+        const calcResult = await calculateFormula(formula.formula_json, newReport);
         formulaResults.push({
           id: uuidv4(),
           shift_report_id: report.id,
           formula_id: formula.id,
           formula_name: formula.name,
-          result_value: calcResult
+          result_value: calcResult,
         });
       }
-
       if (formulaResults.length > 0) {
         await (supabaseAdmin || supabase)
           .from('shift_formula_results')
