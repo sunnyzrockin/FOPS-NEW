@@ -1165,22 +1165,46 @@ function ShiftReportForm({ user, sites, onSuccess }) {
 
     setLoading(true);
     try {
+      // Grab the current Supabase JWT so the backend can identify the
+      // submitter from the token (rather than trusting body.submitted_by_user_id).
+      let bearer = null;
+      try {
+        const { createBrowserClient } = await import('@/lib/supabase');
+        const sb = createBrowserClient();
+        const { data } = await sb.auth.getSession();
+        bearer = data?.session?.access_token || null;
+      } catch (e) {
+        console.warn('Could not read Supabase session, will fail without Bearer', e);
+      }
+
+      if (!bearer) {
+        alert('Your session has expired. Please log in again.');
+        if (typeof window !== 'undefined') window.location.href = '/login';
+        return;
+      }
+
       const res = await fetch('/api/reports', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, submitted_by_user_id: user.id })
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${bearer}`,
+        },
+        // Submit form fields ONLY — backend pulls submitter id from JWT.
+        body: JSON.stringify(form),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
         setSuccess(true);
-        // Reset form but keep site and date
         const resetForm = { site_id: form.site_id, date: form.date, shift_type: 'Morning' };
         fieldConfigs.forEach(f => { resetForm[f.key] = ''; });
         setForm(resetForm);
         onSuccess?.();
         setTimeout(() => setSuccess(false), 3000);
+      } else if (res.status === 401) {
+        alert('Your session has expired. Please log in again.');
+        if (typeof window !== 'undefined') window.location.href = '/login';
       } else if (res.status === 409 || data.code === 'duplicate_report') {
         alert(
           `A ${form.shift_type} report for this site on ${form.date} has already been submitted.\n\n` +

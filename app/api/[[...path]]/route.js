@@ -1223,34 +1223,23 @@ async function handleCreateReport(request) {
     const shift_type = body.shift_type || body.shiftType || null;
     const site_id = body.site_id || body.siteId || null;
 
-    // -------- Auth: prefer JWT, fall back to body for backward compat --------
-    // If a valid Bearer token is provided, use that user — DO NOT trust
-    // `submitted_by_user_id` from the request body (security: prevents
-    // a caller from posting reports on behalf of someone else).
-    // If no token is present, fall back to body.submitted_by_user_id so
-    // existing internal callers / tools keep working.
-    let submitted_by_user_id = null;
-    let authed_user = null;
-    const hasBearer = !!request.headers.get('authorization');
-    if (hasBearer) {
-      const auth = await verifyAuth(request);
-      if (!auth.ok) {
-        const r = auth.response;
-        Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
-        return r;
-      }
-      authed_user = auth.user;
-      submitted_by_user_id = auth.user.id;
-    } else {
-      submitted_by_user_id = body.submitted_by_user_id || body.submittedByUserId || null;
+    // -------- Auth: Bearer token REQUIRED --------
+    // We never trust `submitted_by_user_id` from the request body — it would
+    // let any client post reports on behalf of any user. The submitter's
+    // identity is taken exclusively from the Supabase JWT.
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
     }
+    const submitted_by_user_id = auth.user.id;
 
     // -------- Required field validation --------
     const missing = [];
     if (!site_id) missing.push('site_id');
-    if (!date) missing.push('date');
+    if (!date) missing.push('date (or shift_date)');
     if (!shift_type) missing.push('shift_type');
-    if (!submitted_by_user_id) missing.push('submitted_by_user_id (or Authorization Bearer token)');
     if (missing.length) {
       return NextResponse.json(
         { error: `Missing required field(s): ${missing.join(', ')}` },
