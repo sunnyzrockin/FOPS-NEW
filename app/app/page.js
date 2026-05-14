@@ -1162,7 +1162,7 @@ function ShiftReportForm({ user, sites, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    
+
     setLoading(true);
     try {
       const res = await fetch('/api/reports', {
@@ -1170,7 +1170,9 @@ function ShiftReportForm({ user, sites, onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, submitted_by_user_id: user.id })
       });
-      
+
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
         setSuccess(true);
         // Reset form but keep site and date
@@ -1179,9 +1181,16 @@ function ShiftReportForm({ user, sites, onSuccess }) {
         setForm(resetForm);
         onSuccess?.();
         setTimeout(() => setSuccess(false), 3000);
+      } else if (res.status === 409 || data.code === 'duplicate_report') {
+        alert(
+          `A ${form.shift_type} report for this site on ${form.date} has already been submitted.\n\n` +
+          `Tip: try a different shift type or date, or ask your operator to delete the existing one.`
+        );
       } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to submit report');
+        alert(
+          (data.error || 'Failed to submit report') +
+          (data.detail ? `\n\nDetail: ${data.detail}` : '')
+        );
       }
     } catch (err) { alert('Failed to submit report: ' + err.message); }
     finally { setLoading(false); }

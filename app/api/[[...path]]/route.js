@@ -1207,22 +1207,72 @@ async function handleGetReports(request) {
 async function handleCreateReport(request) {
   try {
     const body = await request.json();
-    
+
+    // Basic validation: surface clear 400s instead of opaque 500s
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { error: 'Request body must be JSON' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+    const required = ['site_id', 'date', 'shift_type', 'submitted_by_user_id'];
+    const missing = required.filter((k) => !body[k]);
+    if (missing.length) {
+      return NextResponse.json(
+        { error: `Missing required field(s): ${missing.join(', ')}` },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
     const newReport = {
       id: uuidv4(),
       ...body,
       status: 'pending',
       submitted_at: new Date().toISOString()
     };
-    
+
     const { data: report, error: reportError } = await (supabaseAdmin || supabase)
       .from('shift_reports')
       .insert([newReport])
       .select()
       .single();
-    
-    if (reportError) throw reportError;
-    
+
+    if (reportError) {
+      console.error('Create report - insert error:', reportError);
+      // Duplicate-key (same site_id + date + shift_type already submitted)
+      if (reportError.code === '23505') {
+        return NextResponse.json(
+          {
+            error: 'A report for this site, date, and shift already exists.',
+            detail: reportError.details || null,
+            code: 'duplicate_report',
+            existing_constraint: 'shift_reports_site_id_date_shift_type_key',
+          },
+          { status: 409, headers: corsHeaders }
+        );
+      }
+      // Foreign key violation
+      if (reportError.code === '23503') {
+        return NextResponse.json(
+          {
+            error: 'Referenced site or user does not exist.',
+            detail: reportError.details || reportError.message,
+            code: 'foreign_key_violation',
+          },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+      // Not-null / check / column not exist
+      return NextResponse.json(
+        {
+          error: 'Database rejected the report.',
+          detail: reportError.message,
+          code: reportError.code || 'db_error',
+        },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
     // Calculate and save formula results if visible to staff
     const { data: formulas } = await (supabaseAdmin || supabase)
       .from('site_banking_formulas')
@@ -1230,10 +1280,10 @@ async function handleCreateReport(request) {
       .eq('site_id', body.site_id)
       .eq('is_active', true)
       .eq('visible_to_staff', true);
-    
+
     if (formulas && formulas.length > 0) {
       const formulaResults = [];
-      
+
       for (const formula of formulas) {
         const calcResult = await calculateFormula(formula.formula_json, body);
         formulaResults.push({
@@ -1244,18 +1294,24 @@ async function handleCreateReport(request) {
           result_value: calcResult
         });
       }
-      
+
       if (formulaResults.length > 0) {
         await (supabaseAdmin || supabase)
           .from('shift_formula_results')
           .insert(formulaResults);
       }
     }
-    
-    return NextResponse.json(report, { headers: corsHeaders });
+
+    return NextResponse.json(report, { status: 201, headers: corsHeaders });
   } catch (error) {
-    console.error('Create report error:', error);
-    return NextResponse.json({ error: 'Failed to create report' }, { status: 500, headers: corsHeaders });
+    console.error('Create report - unhandled error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to create report',
+        detail: error?.message || String(error),
+      },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
 
