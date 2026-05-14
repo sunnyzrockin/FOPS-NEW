@@ -1,0 +1,269 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Loader2, Save } from 'lucide-react';
+import { formatCurrency } from '@/lib/format';
+
+/**
+ * BankingFormulaBuilder — premium calculator-style formula builder. Lets an
+ * operator compose a banking formula by clicking fields + operators, with
+ * live preview against sample data. Saves via /api/banking-formulas.
+ *
+ * Self-contained; owns its own state. Extracted from /app/app/app/page.js.
+ */
+export default function BankingFormulaBuilder({ siteId, userId, onClose, existingFormula }) {
+  const [name, setName] = useState(existingFormula?.name || 'Banking Calculation');
+  const [resultLabel, setResultLabel] = useState(existingFormula?.result_label || 'Banking Total');
+  const [operations, setOperations] = useState(() => {
+    if (existingFormula?.formula_json) {
+      try {
+        return JSON.parse(existingFormula.formula_json).operations || [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+  const [saving, setSaving] = useState(false);
+  const [testResult, setTestResult] = useState(0);
+
+  const availableFields = [
+    { key: 'fuel_sales', label: 'Fuel Sales' },
+    { key: 'shop_sales', label: 'Shop Sales' },
+    { key: 'eftpos', label: 'EFTPOS' },
+    { key: 'motorpass', label: 'Motorpass' },
+    { key: 'cash', label: 'Cash' },
+    { key: 'accounts', label: 'Accounts' },
+    { key: 'beverages', label: 'Beverages' },
+    { key: 'hot_food', label: 'Hot Food' },
+    { key: 'drive_offs', label: 'Drive Offs' },
+    { key: 'dips', label: 'Dips' },
+    { key: 'total_litres', label: 'Total Litres' },
+  ];
+
+  const operators = [
+    { value: '+', label: '+', color: 'bg-green-100 text-green-700 hover:bg-green-200' },
+    { value: '-', label: '−', color: 'bg-red-100 text-red-700 hover:bg-red-200' },
+    { value: '*', label: '×', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
+    { value: '/', label: '÷', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
+  ];
+
+  const addField = (field) => {
+    if (operations.length > 0 && operations[operations.length - 1].type !== 'operator') {
+      setOperations([
+        ...operations,
+        { type: 'operator', value: '+' },
+        { type: 'field', value: field.key, label: field.label },
+      ]);
+    } else {
+      setOperations([...operations, { type: 'field', value: field.key, label: field.label }]);
+    }
+  };
+
+  const addOperator = (op) => {
+    if (operations.length > 0 && operations[operations.length - 1].type !== 'operator') {
+      setOperations([...operations, { type: 'operator', value: op }]);
+    }
+  };
+
+  const addNumber = () => {
+    const num = prompt('Enter a number:');
+    if (num && !isNaN(parseFloat(num))) {
+      if (operations.length > 0 && operations[operations.length - 1].type !== 'operator') {
+        setOperations([
+          ...operations,
+          { type: 'operator', value: '+' },
+          { type: 'number', value: parseFloat(num) },
+        ]);
+      } else {
+        setOperations([...operations, { type: 'number', value: parseFloat(num) }]);
+      }
+    }
+  };
+
+  const removeOperation = (index) => {
+    const newOps = [...operations];
+    newOps.splice(index, 1);
+    if (newOps.length > 0 && newOps[0].type === 'operator') newOps.shift();
+    if (newOps.length > 0 && newOps[newOps.length - 1].type === 'operator') newOps.pop();
+    setOperations(newOps);
+  };
+
+  const clearAll = () => setOperations([]);
+
+  // Live test calculation with sample data
+  useEffect(() => {
+    const sampleData = {
+      fuel_sales: 3500, shop_sales: 850, eftpos: 2800, motorpass: 500, cash: 350,
+      accounts: 500, beverages: 300, hot_food: 200, drive_offs: 0, dips: 15000,
+      total_litres: 2000,
+    };
+    let result = 0;
+    let currentOp = '+';
+
+    for (const op of operations) {
+      if (op.type === 'operator') {
+        currentOp = op.value;
+      } else {
+        const value = op.type === 'field' ? (sampleData[op.value] || 0) : (parseFloat(op.value) || 0);
+        switch (currentOp) {
+          case '+': result += value; break;
+          case '-': result -= value; break;
+          case '*': result *= value; break;
+          case '/': result = value !== 0 ? result / value : result; break;
+        }
+      }
+    }
+    setTestResult(Math.round(result * 100) / 100);
+  }, [operations]);
+
+  const handleSave = async () => {
+    if (operations.length === 0) {
+      alert('Please add at least one field to the formula');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const url = existingFormula ? `/api/banking-formulas/${existingFormula.id}` : '/api/banking-formulas';
+      const method = existingFormula ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          site_id: siteId,
+          name,
+          formula_json: JSON.stringify({ operations }),
+          result_label: resultLabel,
+          created_by_user_id: userId,
+        }),
+      });
+
+      if (res.ok) {
+        onClose(true);
+      } else {
+        alert('Failed to save formula');
+      }
+    } catch (err) {
+      alert('Error saving formula: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>Formula Name</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Daily Banking" className="mt-1" />
+        </div>
+        <div>
+          <Label>Result Label</Label>
+          <Input value={resultLabel} onChange={(e) => setResultLabel(e.target.value)} placeholder="e.g., Banking Total" className="mt-1" />
+        </div>
+      </div>
+
+      {/* Formula Display */}
+      <div className="min-h-[80px] p-4 bg-gradient-to-r from-slate-100 to-slate-50 rounded-2xl border-2 border-dashed border-slate-300">
+        {operations.length === 0 ? (
+          <p className="text-slate-400 text-center py-4">Click fields below to build your formula</p>
+        ) : (
+          <div className="flex flex-wrap gap-2 items-center">
+            {operations.map((op, idx) => (
+              <div key={idx} className="group relative">
+                {op.type === 'operator' ? (
+                  <span className="inline-flex items-center justify-center w-10 h-10 text-lg font-bold bg-white rounded-xl shadow-sm border">
+                    {op.value === '*' ? '×' : op.value === '/' ? '÷' : op.value}
+                  </span>
+                ) : op.type === 'field' ? (
+                  <span className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-xl font-medium shadow-sm">
+                    {op.label || op.value}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-4 py-2 bg-amber-100 text-amber-700 rounded-xl font-medium shadow-sm">
+                    {op.value}
+                  </span>
+                )}
+                <button
+                  onClick={() => removeOperation(idx)}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Live Result */}
+      <div className="p-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white">
+        <p className="text-sm opacity-90">Live Preview (with sample data)</p>
+        <p className="text-3xl font-bold">{formatCurrency(testResult)}</p>
+      </div>
+
+      {/* Operators */}
+      <div>
+        <Label className="text-xs text-muted-foreground mb-2 block">Operators</Label>
+        <div className="flex gap-2">
+          {operators.map((op) => (
+            <button
+              key={op.value}
+              onClick={() => addOperator(op.value)}
+              className={`w-12 h-12 rounded-xl font-bold text-xl transition-all ${op.color} shadow-sm hover:shadow-md`}
+            >
+              {op.label}
+            </button>
+          ))}
+          <button
+            onClick={addNumber}
+            className="px-4 h-12 rounded-xl font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all shadow-sm"
+          >
+            123
+          </button>
+          <button
+            onClick={clearAll}
+            className="px-4 h-12 rounded-xl font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all shadow-sm ml-auto"
+          >
+            Clear All
+          </button>
+        </div>
+      </div>
+
+      {/* Available Fields */}
+      <div>
+        <Label className="text-xs text-muted-foreground mb-2 block">Available Fields</Label>
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+          {availableFields.map((field) => (
+            <button
+              key={field.key}
+              onClick={() => addField(field)}
+              className="px-3 py-2.5 rounded-xl text-sm font-medium bg-slate-100 hover:bg-blue-100 hover:text-blue-700 transition-all text-left"
+            >
+              {field.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-3 pt-4">
+        <Button variant="outline" onClick={() => onClose(false)} className="flex-1">
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+          Save Formula
+        </Button>
+      </div>
+    </div>
+  );
+}

@@ -50,8 +50,9 @@ While functional and tested, this monolith is hard to maintain. The refactor pla
 - ⬜ Move ONE small self-contained component as proof-of-pattern
 
 ### Phase B — Extract leaf components (1 session each, low risk)
-- ⬜ `BankingFormulaBuilder` (~200 lines, self-contained, no parent state)
-- ⬜ `MorningPriceBrief` (~80 lines, used in multiple places)
+- ✅ `BankingFormulaBuilder` (~200 lines, self-contained, no parent state) — extracted to `/app/components/operator/banking/banking-formula-builder.jsx`
+- ✅ `MorningPriceBrief` (~80 lines, used in multiple places) — extracted to `/app/components/shared/morning-price-brief.jsx`
+- ✅ Shared `formatCurrency` / `formatDate` / `formatDateTime` extracted to `/app/lib/format.js`
 
 ### Phase C — Extract feature managers (medium risk, needs prop drilling carefully)
 - ⬜ `BankingManagement` (depends on BankingFormulaBuilder)
