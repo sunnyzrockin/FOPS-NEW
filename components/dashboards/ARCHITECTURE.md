@@ -64,7 +64,10 @@ While functional and tested, this monolith is hard to maintain. The refactor pla
 - ✅ **Batch 1**: Shared UI leaves — `Header`, `StatCard`, `ViewToggle`, `DailyRollupRow`, `ReportRow`, `ReportDetail`, `ExportDialog` → `/app/components/shared/*`
 - ✅ **Batch 2a**: `ShiftReportForm` → `/app/components/staff/`, `StaffPriceChangeBanner` → `/app/components/staff/`, `SiteManagement` → `/app/components/owner/`, `authedFetch` → `/app/lib/authed-fetch.js`, legacy `UserManagement` deleted (dead code)
 - ✅ **Batch 2b**: Fuel-pricing family — `LeafletMapInner`, `LeafletMapClient`, `FuelPriceMapView`, `FuelPriceComparisonSection`, `OperatorPriceChangeNotifications`, `PriceChangeHistory`, `FuelPriceEntry`, `CompetitorManagement`, `FuelPricingManagement`, `OwnerFuelPriceManagement` → `/app/components/fuel-pricing/*`
-- ⬜ **Batch 2c**: 3 dashboard wrappers (`OwnerDashboard`, `OperatorDashboard`, `StaffDashboard`) + `LoginPage`
+- ✅ **Batch 2c**: `OwnerDashboard`, `OperatorDashboard`, `StaffDashboard`, `LoginPage` → `/app/components/{owner,operator,staff,auth}/*`. `page.js` rewritten as 162-line slim role-router.
+
+### Phase E — Slim `page.js` to <200 lines (auth + role-router only)
+- ✅ **DONE**: `page.js` is now **162 lines** containing only: hydration from localStorage, the 5-min escalation poller, logout flow, refreshSites, and the role-routed JSX (`<Header>` + `<{Staff|Operator|Owner}Dashboard>`).
 
 ### Phase E — Slim page.js to just routing
 - ⬜ Keep only auth check + role-based dashboard switch
