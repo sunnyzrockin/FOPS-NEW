@@ -1305,10 +1305,14 @@ async function handleCreateReport(request) {
           { status: 400, headers: corsHeaders }
         );
       }
+      // Not-null / check / column not exist — surface the DB message in the
+      // primary error field so it's visible even to consumers that only read
+      // `error` and ignore `detail`.
       return NextResponse.json(
         {
-          error: 'Database rejected the report.',
+          error: `Database rejected the report: ${reportError.message}`,
           detail: reportError.message,
+          hint: reportError.hint || null,
           code: reportError.code || 'db_error',
         },
         { status: 400, headers: corsHeaders }
