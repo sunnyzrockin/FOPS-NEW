@@ -1166,15 +1166,72 @@ async function handleBankingCalculate(request) {
 // ============== SHIFT REPORTS ==============
 async function handleGetReports(request) {
   try {
+    // -------- Auth: Bearer token REQUIRED --------
+    // GET /api/reports is now role-scoped via the requester's JWT.
+    //   owner    → all reports for sites they own
+    //   operator → reports for sites assigned to them (operator_site_assignments)
+    //   staff    → reports they submitted themselves (submitted_by_user_id = me)
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const me = auth.user;
+
     const url = new URL(request.url);
-    const userId = url.searchParams.get('userId');
-    const siteId = url.searchParams.get('siteId');
-    const siteIds = url.searchParams.get('siteIds');
+    const reqSiteId = url.searchParams.get('siteId');
+    const reqSiteIds = url.searchParams.get('siteIds');
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
     const status = url.searchParams.get('status');
-    
-    let query = (supabaseAdmin || supabase)
+
+    const db = supabaseAdmin || supabase;
+
+    // -------- Resolve which sites this caller can see --------
+    let scopedSiteIds = null; // null = no site filter (e.g. staff filter by user)
+    if (me.role === 'staff') {
+      // Staff: only their own reports (we'll filter by submitted_by_user_id
+      // below — no site scope needed)
+    } else if (me.role === 'owner') {
+      const { data, error } = await db
+        .from('sites')
+        .select('id')
+        .eq('owner_id', me.id);
+      if (error) throw error;
+      scopedSiteIds = (data || []).map((s) => s.id);
+    } else if (me.role === 'operator') {
+      const { data, error } = await db
+        .from('operator_site_assignments')
+        .select('site_id')
+        .eq('operator_user_id', me.id);
+      if (error) throw error;
+      scopedSiteIds = (data || []).map((a) => a.site_id);
+    } else {
+      return NextResponse.json(
+        { error: `Unknown role: ${me.role}` },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    // -------- Intersect requested filter with scope --------
+    let effectiveSiteIds = scopedSiteIds;
+    if (reqSiteId || reqSiteIds) {
+      const requested = reqSiteIds
+        ? reqSiteIds.split(',').map((s) => s.trim()).filter(Boolean)
+        : [reqSiteId];
+      if (me.role === 'staff') {
+        // staff can't filter by site (they only see their own reports regardless)
+      } else {
+        const allowed = new Set(scopedSiteIds || []);
+        const filtered = requested.filter((id) => allowed.has(id));
+        // If they asked for sites they don't have access to, return empty
+        // (don't 403 — could be a legitimate broad query with some out-of-scope items)
+        effectiveSiteIds = filtered;
+      }
+    }
+
+    let query = db
       .from('shift_reports')
       .select(`
         *,
@@ -1183,25 +1240,31 @@ async function handleGetReports(request) {
       `)
       .order('date', { ascending: false })
       .order('shift_type', { ascending: true });
-    
-    if (userId) query = query.eq('submitted_by_user_id', userId);
-    if (siteId) query = query.eq('site_id', siteId);
-    if (siteIds) {
-      const siteIdArray = siteIds.split(',');
-      query = query.in('site_id', siteIdArray);
+
+    if (me.role === 'staff') {
+      query = query.eq('submitted_by_user_id', me.id);
+    } else {
+      // Owner/Operator must be scoped to their allowed sites
+      if (!effectiveSiteIds || effectiveSiteIds.length === 0) {
+        return NextResponse.json([], { headers: corsHeaders });
+      }
+      query = query.in('site_id', effectiveSiteIds);
     }
+
     if (startDate) query = query.gte('date', startDate);
     if (endDate) query = query.lte('date', endDate);
     if (status) query = query.eq('status', status);
-    
-    const { data, error } = await query.limit(200);
-    
+
+    const { data, error } = await query.limit(500);
     if (error) throw error;
-    
+
     return NextResponse.json(data || [], { headers: corsHeaders });
   } catch (error) {
     console.error('Get reports error:', error);
-    return NextResponse.json({ error: 'Failed to fetch reports' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json(
+      { error: 'Failed to fetch reports', detail: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
 

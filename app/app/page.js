@@ -42,6 +42,35 @@ const formatDateTime = (dateStr) => {
   return new Date(dateStr).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+// authedFetch — wraps fetch with the current Supabase JWT in the Authorization
+// header. Use this for any backend endpoint that requires `verifyAuth`
+// (e.g. POST /api/reports, GET /api/reports, /api/portfolio, etc.).
+// If the session is missing or expired, returns a synthetic 401 Response.
+async function authedFetch(input, init = {}) {
+  let token = null;
+  try {
+    const { createBrowserClient } = await import('@/lib/supabase');
+    const sb = createBrowserClient();
+    const { data } = await sb.auth.getSession();
+    token = data?.session?.access_token || null;
+  } catch (e) {
+    console.warn('authedFetch: could not read Supabase session', e);
+  }
+  if (!token) {
+    // No session — bounce the user back to /login on the caller's side.
+    return new Response(
+      JSON.stringify({ error: 'No active session', code: 'no_session' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  const headers = new Headers(init.headers || {});
+  headers.set('Authorization', `Bearer ${token}`);
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  return fetch(input, { ...init, headers });
+}
+
 // ============== LOGIN PAGE ==============
 function LoginPage({ onLogin, loading }) {
   const [email, setEmail] = useState('');
@@ -1165,31 +1194,10 @@ function ShiftReportForm({ user, sites, onSuccess }) {
 
     setLoading(true);
     try {
-      // Grab the current Supabase JWT so the backend can identify the
-      // submitter from the token (rather than trusting body.submitted_by_user_id).
-      let bearer = null;
-      try {
-        const { createBrowserClient } = await import('@/lib/supabase');
-        const sb = createBrowserClient();
-        const { data } = await sb.auth.getSession();
-        bearer = data?.session?.access_token || null;
-      } catch (e) {
-        console.warn('Could not read Supabase session, will fail without Bearer', e);
-      }
-
-      if (!bearer) {
-        alert('Your session has expired. Please log in again.');
-        if (typeof window !== 'undefined') window.location.href = '/login';
-        return;
-      }
-
-      const res = await fetch('/api/reports', {
+      // authedFetch injects Authorization: Bearer <jwt>. The backend pulls
+      // submitter id from the JWT — do NOT send submitted_by_user_id in body.
+      const res = await authedFetch('/api/reports', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${bearer}`,
-        },
-        // Submit form fields ONLY — backend pulls submitter id from JWT.
         body: JSON.stringify(form),
       });
 
@@ -1213,7 +1221,7 @@ function ShiftReportForm({ user, sites, onSuccess }) {
       } else {
         alert(
           (data.error || 'Failed to submit report') +
-          (data.detail ? `\n\nDetail: ${data.detail}` : '')
+          (data.detail && !String(data.error || '').includes(data.detail) ? `\n\nDetail: ${data.detail}` : '')
         );
       }
     } catch (err) { alert('Failed to submit report: ' + err.message); }
@@ -2577,7 +2585,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
       const [statsRes, dailyRes, shiftsRes, siteStatsRes, chartRes] = await Promise.all([
         fetch(`/api/dashboard/stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         fetch(`/api/daily-rollups?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        fetch(`/api/reports?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/reports?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         fetch(`/api/dashboard/site-stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         fetch(`/api/dashboard/revenue-chart?siteIds=${siteIds}&days=7`)
       ]);
@@ -3310,7 +3318,7 @@ function OperatorDashboard({ user, sites, activeTab }) {
     try {
       const siteFilter = selectedSite === 'all' ? siteIds : selectedSite;
       const [reportsRes, dailyRes, statsRes] = await Promise.all([
-        fetch(`/api/reports?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/reports?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         fetch(`/api/daily-rollups?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         fetch(`/api/dashboard/stats?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`)
       ]);
@@ -3908,9 +3916,11 @@ function StaffDashboard({ user, sites, activeTab }) {
 
   const loadReports = useCallback(async () => {
     try {
-      const res = await fetch(`/api/reports?userId=${user.id}`);
+      // Staff view: backend derives scope from the JWT (returns only this
+      // user's submitted reports). No need to send userId in the query.
+      const res = await authedFetch('/api/reports');
       const data = await res.json();
-      setReports(data);
+      setReports(Array.isArray(data) ? data : []);
     } catch (err) { console.error('Failed to load reports:', err); }
     finally { setLoading(false); }
   }, [user.id]);
