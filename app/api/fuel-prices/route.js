@@ -1,23 +1,82 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// GET /api/fuel-prices - List all fuel price changes with filters
+// GET /api/fuel-prices — Bearer-required, role-scoped list of fuel price changes
 export async function GET(request) {
   try {
+    // 1) Auth REQUIRED — Bearer token
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const me = auth.user;
+
     const { searchParams } = new URL(request.url);
-    const siteId = searchParams.get('siteId');
-    const userId = searchParams.get('userId');
+    const reqSiteId = searchParams.get('siteId');
     const status = searchParams.get('status');
-    const role = searchParams.get('role');
+
+    // 2) Resolve which sites this caller can see from their JWT role
+    let scopedSiteIds = [];
+    if (me.role === 'owner') {
+      const { data, error } = await supabase
+        .from('sites')
+        .select('id')
+        .eq('owner_id', me.id);
+      if (error) throw error;
+      scopedSiteIds = (data || []).map((s) => s.id);
+    } else if (me.role === 'operator') {
+      const { data, error } = await supabase
+        .from('operator_site_assignments')
+        .select('site_id')
+        .eq('operator_user_id', me.id);
+      if (error) throw error;
+      scopedSiteIds = (data || []).map((a) => a.site_id);
+    } else if (me.role === 'staff') {
+      const { data, error } = await supabase
+        .from('staff_site_assignments')
+        .select('site_id')
+        .eq('staff_user_id', me.id);
+      if (error) throw error;
+      scopedSiteIds = (data || []).map((a) => a.site_id);
+    } else {
+      return NextResponse.json(
+        { error: `Unknown role: ${me.role}` },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    // 3) Optional siteId filter (must be in scope)
+    if (reqSiteId) {
+      if (!scopedSiteIds.includes(reqSiteId)) {
+        return NextResponse.json([], { headers: corsHeaders });
+      }
+      scopedSiteIds = [reqSiteId];
+    }
+    if (!scopedSiteIds.length) {
+      return NextResponse.json([], { headers: corsHeaders });
+    }
 
     let query = supabase
       .from('fuel_price_changes')
@@ -25,6 +84,7 @@ export async function GET(request) {
         *,
         site:sites(id, name, code),
         created_by:users!created_by_user_id(id, name, email, role),
+        operator_acked_by:users!operator_user_id(id, name, email),
         notifications:fuel_price_notifications(
           id,
           operator:users!operator_user_id(id, name, email),
@@ -44,69 +104,59 @@ export async function GET(request) {
           resolved_at
         )
       `)
+      .in('site_id', scopedSiteIds)
       .order('created_at', { ascending: false });
 
-    // Filter by site if provided
-    if (siteId) {
-      query = query.eq('site_id', siteId);
-    }
-
-    // Filter by status if provided
-    if (status) {
-      query = query.eq('status', status);
-    }
+    if (status) query = query.eq('status', status);
 
     const { data: priceChanges, error } = await query;
-
     if (error) throw error;
 
-    // Filter based on role
-    let filteredChanges = priceChanges;
-    if (role === 'operator' && userId) {
-      // Get operator's sites
-      const { data: operatorSites } = await supabase
-        .from('operator_site_assignments')
-        .select('site_id')
-        .eq('operator_user_id', userId);
-      
-      const siteIds = operatorSites?.map(s => s.site_id) || [];
-      filteredChanges = priceChanges.filter(pc => siteIds.includes(pc.site_id));
-    } else if (role === 'staff' && userId) {
-      // Get staff's sites
-      const { data: staffSites } = await supabase
-        .from('staff_site_assignments')
-        .select('site_id')
-        .eq('staff_user_id', userId);
-      
-      const siteIds = staffSites?.map(s => s.site_id) || [];
-      filteredChanges = priceChanges.filter(pc => siteIds.includes(pc.site_id));
-    }
-
-    return NextResponse.json(filteredChanges);
+    return NextResponse.json(priceChanges || [], { headers: corsHeaders });
   } catch (error) {
     console.error('Error fetching fuel prices:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
 
-// POST /api/fuel-prices - Create new fuel price change (Owner only)
+// POST /api/fuel-prices — Bearer-required, owner role only
 export async function POST(request) {
   try {
+    // 1) Auth REQUIRED
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const me = auth.user;
+    if (me.role !== 'owner') {
+      return NextResponse.json(
+        { error: 'Only owners can create fuel price changes', role: me.role },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
     const body = await request.json();
-    const { siteId, fuelType, oldPrice, newPrice, effectiveDatetime, createdByUserId, notes } = body;
+    const { siteId, fuelType, oldPrice, newPrice, effectiveDatetime, notes } = body;
+    // createdByUserId is taken from JWT, NOT from body (security)
+    const createdByUserId = me.id;
 
     // Validation
-    if (!siteId || !fuelType || !newPrice || !effectiveDatetime || !createdByUserId) {
+    if (!siteId || !fuelType || !newPrice || !effectiveDatetime) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
+        { error: 'Missing required fields: siteId, fuelType, newPrice, effectiveDatetime' },
+        { status: 400, headers: corsHeaders }
       );
     }
 
     if (!['ULP', 'PULP', 'Diesel'].includes(fuelType)) {
       return NextResponse.json(
         { error: 'Invalid fuel type. Must be ULP, PULP, or Diesel' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
