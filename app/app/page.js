@@ -2420,11 +2420,12 @@ function OwnerFuelPriceManagement({ user, sites }) {
 
   const loadPriceChanges = async () => {
     try {
-      const res = await fetch('/api/fuel-prices');
+      const res = await authedFetch('/api/fuel-prices');
       const data = await res.json();
-      setPriceChanges(data);
+      setPriceChanges(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load price changes:', err);
+      setPriceChanges([]);
     } finally {
       setLoadingChanges(false);
     }
