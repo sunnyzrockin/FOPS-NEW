@@ -3,26 +3,14 @@ import { NextResponse } from 'next/server';
 export async function middleware(req) {
   const url = req.nextUrl;
   const { pathname } = url;
-  const host = req.headers.get('host') || '';
 
   // ============================================================
-  // SAFETY NET: redirect www.fopsapp.com → fopsapp.com (apex)
+  // NOTE: apex (fopsapp.com) → www (www.fopsapp.com) redirection
+  // is handled by VERCEL at the edge (308 Permanent). We do NOT
+  // re-do it here — running the redirect in middleware ALSO would
+  // create an infinite loop with Vercel's redirect. The apex/www
+  // problem is resolved as long as users land on www.
   // ============================================================
-  // We set the apex as the canonical domain. If users land on the
-  // www subdomain (browser autocomplete, old bookmarks), redirect
-  // them BEFORE any fetch fires, so all subsequent /api calls
-  // happen on the same origin and don't lose POST bodies on a 307.
-  //
-  // Set CANONICAL_HOST in env to override (e.g. for staging).
-  if (process.env.NODE_ENV === 'production') {
-    const canonical = (process.env.CANONICAL_HOST || 'fopsapp.com').toLowerCase();
-    const lowerHost = host.toLowerCase();
-    if (lowerHost === `www.${canonical}`) {
-      const redirectUrl = new URL(url);
-      redirectUrl.host = canonical;
-      return NextResponse.redirect(redirectUrl, 308);
-    }
-  }
 
   // Skip middleware for API routes, static files
   if (
