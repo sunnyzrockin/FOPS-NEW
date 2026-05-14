@@ -1847,10 +1847,9 @@ function OperatorPriceChangeNotifications({ user, sites }) {
   const handleAcceptPriceChange = async (priceChangeId) => {
     setAccepting(priceChangeId);
     try {
-      const res = await fetch(`/api/fuel-prices/${priceChangeId}/acknowledge`, {
+      const res = await authedFetch(`/api/fuel-prices/${priceChangeId}/acknowledge`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operatorUserId: user.id }),
+        body: JSON.stringify({}),
       });
       if (res.ok) {
         await loadPendingChanges();
@@ -2438,9 +2437,8 @@ function OwnerFuelPriceManagement({ user, sites }) {
     try {
       const effectiveDatetime = `${effectiveDate}T${effectiveTime}:00`;
       
-      const res = await fetch('/api/fuel-prices', {
+      const res = await authedFetch('/api/fuel-prices', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           siteId: selectedSite,
           fuelType,
@@ -3941,10 +3939,9 @@ function StaffPriceChangeBanner({ user }) {
   const handleAcknowledge = async (priceChangeId) => {
     setAcknowledging(priceChangeId);
     try {
-      const res = await fetch(`/api/fuel-prices/${priceChangeId}/acknowledge`, {
+      const res = await authedFetch(`/api/fuel-prices/${priceChangeId}/acknowledge`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffUserId: user.id })
+        body: JSON.stringify({})
       });
 
       if (res.ok) {
@@ -4236,10 +4233,12 @@ export default function App() {
   const refreshSites = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/sites?userId=${user.id}`);
+      const res = await authedFetch('/api/sites');
       const data = await res.json();
-      setSites(data);
-      localStorage.setItem('workflowlite_sites', JSON.stringify(data));
+      setSites(Array.isArray(data) ? data : []);
+      if (Array.isArray(data)) {
+        localStorage.setItem('workflowlite_sites', JSON.stringify(data));
+      }
     } catch (err) { console.error('Failed to refresh sites:', err); }
   };
 

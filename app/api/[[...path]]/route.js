@@ -772,9 +772,14 @@ async function handleDeleteStaffAssignment(assignmentId) {
 // ============== SITES ==============
 async function handleGetSites(request) {
   try {
-    const url = new URL(request.url);
-    const ownerId = url.searchParams.get('ownerId');
-    const userId = url.searchParams.get('userId');
+    // 1) Auth REQUIRED — Bearer token. Reject 401 if missing/invalid.
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const currentUser = auth.user;
 
     // Use admin client to bypass RLS issues
     const { createClient } = await import('@supabase/supabase-js');
@@ -783,81 +788,40 @@ async function handleGetSites(request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // Get the authenticated user from the Authorization header
-    const authHeader = request.headers.get('Authorization');
-    let currentUser = null;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      try {
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (user && !error) {
-          const { data: userData } = await supabaseAdmin
-            .from('users')
-            .select('*')
-            .eq('auth_user_id', user.id)
-            .single();
-          currentUser = userData;
-        }
-      } catch (e) {
-        console.log('Token verification failed:', e);
-      }
-    }
-
-    // If no Bearer token but a userId/ownerId is supplied, treat that as the
-    // identifying user and look up their role from the DB so we can apply
-    // the correct scoping. This lets the frontend (which doesn't currently
-    // forward the JWT) refresh sites via /api/sites?userId=<id>.
-    if (!currentUser && userId) {
-      const { data: userData } = await supabaseAdmin
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      if (userData) currentUser = userData;
-    }
-
     let query = supabaseAdmin.from('sites').select('*');
 
-    // Apply role-based filtering in application logic
-    if (currentUser) {
-      if (currentUser.role === 'owner') {
-        query = query.eq('owner_id', currentUser.id);
-      } else if (currentUser.role === 'operator') {
-        const { data: assignments } = await supabaseAdmin
-          .from('operator_site_assignments')
-          .select('site_id')
-          .eq('operator_user_id', currentUser.id);
-
-        if (assignments && assignments.length > 0) {
-          const siteIds = assignments.map(a => a.site_id);
-          query = query.in('id', siteIds);
-        } else {
-          return NextResponse.json([], { headers: corsHeaders });
-        }
-      } else if (currentUser.role === 'staff') {
-        const { data: assignments } = await supabaseAdmin
-          .from('staff_site_assignments')
-          .select('site_id')
-          .eq('staff_user_id', currentUser.id);
-
-        if (assignments && assignments.length > 0) {
-          const siteIds = assignments.map(a => a.site_id);
-          query = query.in('id', siteIds);
-        } else {
-          return NextResponse.json([], { headers: corsHeaders });
-        }
+    // 2) Apply role-based filtering strictly from the verified JWT user.
+    //    Query-string userId/ownerId is IGNORED for security.
+    if (currentUser.role === 'owner') {
+      query = query.eq('owner_id', currentUser.id);
+    } else if (currentUser.role === 'operator') {
+      const { data: assignments } = await supabaseAdmin
+        .from('operator_site_assignments')
+        .select('site_id')
+        .eq('operator_user_id', currentUser.id);
+      if (assignments && assignments.length > 0) {
+        query = query.in('id', assignments.map(a => a.site_id));
+      } else {
+        return NextResponse.json([], { headers: corsHeaders });
       }
-    } else if (ownerId) {
-      // Fallback for non-authenticated requests with ownerId
-      query = query.eq('owner_id', ownerId);
+    } else if (currentUser.role === 'staff') {
+      const { data: assignments } = await supabaseAdmin
+        .from('staff_site_assignments')
+        .select('site_id')
+        .eq('staff_user_id', currentUser.id);
+      if (assignments && assignments.length > 0) {
+        query = query.in('id', assignments.map(a => a.site_id));
+      } else {
+        return NextResponse.json([], { headers: corsHeaders });
+      }
     } else {
-      // No authentication and no identifier, return empty
-      return NextResponse.json([], { headers: corsHeaders });
+      return NextResponse.json(
+        { error: `Unknown role: ${currentUser.role}` },
+        { status: 403, headers: corsHeaders }
+      );
     }
 
     const { data, error } = await query;
-
     if (error) throw error;
 
     return NextResponse.json(data || [], { headers: corsHeaders });

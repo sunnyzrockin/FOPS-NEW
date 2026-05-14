@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth } from '@/lib/auth-helpers';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -19,58 +24,51 @@ export async function OPTIONS() {
 // ============================================================================
 // POST /api/fuel-prices/[id]/acknowledge
 //
-// Unified endpoint — handles BOTH staff and operator acknowledgments.
+// SECURED — Bearer token REQUIRED. The acting user is taken from the JWT,
+// NOT from the request body. Body fields like staffUserId/operatorUserId are
+// IGNORED for security (previously this was spoofable).
 //
-// Body (one of):
-//   { staffUserId: "<uuid>" }     → staff ack (legacy flow)
-//   { operatorUserId: "<uuid>" }  → operator ack (new flow)
+// Branch logic, derived from JWT role:
+//   • role=staff           → staff acknowledgement
+//   • role=operator|owner  → operator acknowledgement
 //
-// Staff ack flow (unchanged):
-//   - Verifies staff is assigned to the price change's site
-//   - Idempotent (returns existing record if already acked)
-//   - If ALL assigned staff have acked → marks status='acknowledged' and
-//     resolves all open escalations.
-//
-// Operator ack flow (new):
-//   - Sets fuel_price_changes.operator_acked_at = NOW(), operator_user_id
-//   - Advances status to 'operator_accepted' if currently pending/notified/escalated
-//   - Idempotent (returns existing record if already acked by same operator)
-//   - Inserts audit row in fuel_price_acknowledgements with role='operator'
-//   - Resolves any open operator-level escalations.
+// Optional body: { as: 'operator' | 'staff' } can override the default for
+// 'owner' callers who want to ack a site as either path. Owners default to
+// operator-style ack.
 // ============================================================================
 export async function POST(request, { params }) {
   try {
+    // 1) Auth REQUIRED
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const me = auth.user;
+
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const { staffUserId, operatorUserId } = body || {};
+    const asOverride = body?.as; // 'operator' | 'staff' | undefined
 
-    if (!staffUserId && !operatorUserId) {
+    // 2) Decide branch from JWT role (NOT from body user IDs)
+    let branch;
+    if (me.role === 'staff') {
+      branch = 'staff';
+    } else if (me.role === 'operator') {
+      branch = 'operator';
+    } else if (me.role === 'owner') {
+      branch = asOverride === 'staff' ? 'staff' : 'operator';
+    } else {
       return NextResponse.json(
-        { error: 'staffUserId or operatorUserId required' },
-        { status: 400, headers: corsHeaders }
+        { error: `Role '${me.role}' cannot acknowledge price changes` },
+        { status: 403, headers: corsHeaders }
       );
     }
 
     // ----- Operator ack branch -------------------------------------------
-    if (operatorUserId) {
-      // Verify operator exists and has correct role
-      const { data: operator, error: opErr } = await supabase
-        .from('users')
-        .select('id, name, role')
-        .eq('id', operatorUserId)
-        .single();
-      if (opErr || !operator) {
-        return NextResponse.json(
-          { error: 'Operator not found', operatorUserId },
-          { status: 404, headers: corsHeaders }
-        );
-      }
-      if (operator.role !== 'operator' && operator.role !== 'owner') {
-        return NextResponse.json(
-          { error: 'Only operators or owners can acknowledge as operator', role: operator.role },
-          { status: 403, headers: corsHeaders }
-        );
-      }
+    if (branch === 'operator') {
+      const operatorUserId = me.id;
 
       const { data: priceChange, error: pcErr } = await supabase
         .from('fuel_price_changes')
@@ -84,26 +82,36 @@ export async function POST(request, { params }) {
         );
       }
 
+      // If operator (not owner), ensure they're assigned to this site
+      if (me.role === 'operator') {
+        const { data: assignment } = await supabase
+          .from('operator_site_assignments')
+          .select('site_id')
+          .eq('operator_user_id', operatorUserId)
+          .eq('site_id', priceChange.site_id)
+          .maybeSingle();
+        if (!assignment) {
+          return NextResponse.json(
+            { error: 'Operator is not assigned to this site' },
+            { status: 403, headers: corsHeaders }
+          );
+        }
+      }
+
       // Idempotent check
       if (priceChange.operator_acked_at && priceChange.operator_user_id === operatorUserId) {
         return NextResponse.json({
           success: true,
           already_acknowledged: true,
           price_change_id: id,
-          operator: { id: operator.id, name: operator.name },
+          operator: { id: me.id, name: me.name },
           operator_acked_at: priceChange.operator_acked_at,
           status: priceChange.status,
         }, { headers: corsHeaders });
       }
 
       const nowIso = new Date().toISOString();
-      // Don't change `status` — the existing CHECK constraint doesn't allow
-      // 'operator_accepted'. Operator ack is tracked separately via
-      // operator_acked_at + operator_user_id, leaving the existing
-      // pending → notified → escalated → acknowledged lifecycle intact
-      // (acknowledged is reached when all staff ack).
 
-      // Update the price change row
       const { error: updErr } = await supabase
         .from('fuel_price_changes')
         .update({
@@ -141,14 +149,16 @@ export async function POST(request, { params }) {
         success: true,
         already_acknowledged: false,
         price_change_id: id,
-        operator: { id: operator.id, name: operator.name },
+        operator: { id: me.id, name: me.name },
         operator_acked_at: nowIso,
         status: priceChange.status,
         audit_row_id: ackRow?.id || null,
       }, { headers: corsHeaders });
     }
 
-    // ----- Staff ack branch (existing, unchanged behaviour) --------------
+    // ----- Staff ack branch ----------------------------------------------
+    const staffUserId = me.id;
+
     const { data: priceChange } = await supabase
       .from('fuel_price_changes')
       .select('site_id')
@@ -162,21 +172,24 @@ export async function POST(request, { params }) {
       );
     }
 
-    const { data: assignment } = await supabase
-      .from('staff_site_assignments')
-      .select('*')
-      .eq('staff_user_id', staffUserId)
-      .eq('site_id', priceChange.site_id)
-      .single();
+    // Staff must be assigned to the site
+    if (me.role === 'staff') {
+      const { data: assignment } = await supabase
+        .from('staff_site_assignments')
+        .select('*')
+        .eq('staff_user_id', staffUserId)
+        .eq('site_id', priceChange.site_id)
+        .single();
 
-    if (!assignment) {
-      return NextResponse.json(
-        { error: 'Staff not assigned to this site' },
-        { status: 403, headers: corsHeaders }
-      );
+      if (!assignment) {
+        return NextResponse.json(
+          { error: 'Staff not assigned to this site' },
+          { status: 403, headers: corsHeaders }
+        );
+      }
     }
 
-    // Check if already acknowledged
+    // Idempotent: if already acknowledged, return existing
     const { data: existing } = await supabase
       .from('fuel_price_acknowledgements')
       .select('*')
@@ -205,7 +218,7 @@ export async function POST(request, { params }) {
 
     if (insertError) throw insertError;
 
-    // If all staff acknowledged, update status + resolve escalations
+    // If all assigned staff have acknowledged → mark status acknowledged + resolve escalations
     const { data: allStaff } = await supabase
       .from('staff_site_assignments')
       .select('staff_user_id')
