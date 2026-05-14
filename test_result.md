@@ -848,3 +848,20 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ RBAC VERIFIED: Owner JWT returns 5 sites and all price changes for owned sites. Operator JWT returns 3 assigned sites and price changes for those sites only. Staff JWT returns 1 assigned site and price changes for that site only. All role-based filtering working correctly. Regression tests confirm login returns correct site counts (owner:5, operator:3, staff:1) and portfolio endpoint works for all roles."
+
+frontend:
+  - task: "P0 BLOCKER: GET /api/fuel-prices must use authedFetch (Owner Fuel Prices tab)"
+    implemented: false
+    working: false
+    file: "/app/app/app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL BUG FOUND: OwnerFuelPriceManagement component (line 2423) uses regular fetch() instead of authedFetch() for GET /api/fuel-prices. This causes 401 errors because the backend correctly requires Bearer tokens via verifyAuth. Network analysis confirms: Authorization header MISSING on GET requests. This triggers cascading failure: TypeError 'priceChanges.slice is not a function' at line 2611 because 401 response returns error object, not array. Red error overlay blocks all UI interaction. FIX REQUIRED: Change line 2423 from 'await fetch('/api/fuel-prices')' to 'await authedFetch('/api/fuel-prices')'. Backend is correctly secured, frontend is not sending tokens."
+
+agent_communication:
+  - agent: "testing"
+    message: "❌ BEARER TOKEN SMOKE TEST FAILED - CRITICAL FRONTEND BUG BLOCKING FUEL PRICES FLOW. Tested Owner login + Fuel Prices tab per review request. FINDINGS: 1) GET /api/fuel-prices returns 401 with MISSING Authorization header (confirmed via network capture), 2) Root cause: OwnerFuelPriceManagement.loadPriceChanges() at line 2423 uses fetch() instead of authedFetch(), 3) Cascading error: TypeError 'priceChanges.slice is not a function' causes red error overlay, 4) Backend correctly requires Bearer tokens (verifyAuth working), 5) POST /api/fuel-prices correctly uses authedFetch (line 2440), 6) POST /api/fuel-prices/{id}/acknowledge correctly uses authedFetch (lines 1850, 3942), 7) GET /api/sites correctly uses authedFetch (line 4236). POSITIVE: Backend security implementation is correct - all 3 endpoints properly locked down with verifyAuth, JWT extraction working (no body params used). BLOCKER: Owner cannot view Fuel Prices tab due to this bug. Unable to test Operator/Staff flows due to UI crash. FIX: Change line 2423 to use authedFetch()."
