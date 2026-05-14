@@ -55,10 +55,10 @@ While functional and tested, this monolith is hard to maintain. The refactor pla
 - ✅ Shared `formatCurrency` / `formatDate` / `formatDateTime` extracted to `/app/lib/format.js`
 
 ### Phase C — Extract feature managers (medium risk, needs prop drilling carefully)
-- ⬜ `BankingManagement` (depends on BankingFormulaBuilder)
-- ⬜ `FieldConfiguration` (~150 lines)
-- ⬜ `StaffAccessManagement` (~600 lines, has debug panel state)
-- ⬜ `OperatorManagement` (~520 lines, owner-side equivalent)
+- ✅ `BankingManagement` — extracted to `/app/components/operator/banking/banking-management.jsx`
+- ✅ `FieldConfiguration` — extracted to `/app/components/operator/field-configuration.jsx`
+- ✅ `StaffAccessManagement` — extracted to `/app/components/operator/staff-access-management.jsx`
+- ✅ `OperatorManagement` — extracted to `/app/components/owner/operator-management.jsx`
 
 ### Phase D — Extract dashboards (highest risk, lots of state passing)
 - ⬜ `OwnerDashboard`
