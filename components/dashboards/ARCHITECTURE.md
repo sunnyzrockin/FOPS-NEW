@@ -61,9 +61,8 @@ While functional and tested, this monolith is hard to maintain. The refactor pla
 - ✅ `OperatorManagement` — extracted to `/app/components/owner/operator-management.jsx`
 
 ### Phase D — Extract dashboards (highest risk, lots of state passing)
-- ⬜ `OwnerDashboard`
-- ⬜ `OperatorDashboard`
-- ⬜ `StaffDashboard`
+- ✅ **Batch 1**: Shared UI leaves — `Header`, `StatCard`, `ViewToggle`, `DailyRollupRow`, `ReportRow`, `ReportDetail`, `ExportDialog` → `/app/components/shared/*`
+- ⬜ **Batch 2**: `ShiftReportForm`, `StaffPriceChangeBanner`, the 10-component fuel-pricing family, `SiteManagement`, and the 3 dashboard wrappers (`OwnerDashboard`, `OperatorDashboard`, `StaffDashboard`)
 
 ### Phase E — Slim page.js to just routing
 - ⬜ Keep only auth check + role-based dashboard switch
