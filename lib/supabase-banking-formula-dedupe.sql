@@ -44,7 +44,7 @@ WITH ranked AS (
       PARTITION BY site_id, LOWER(TRIM(name))
       ORDER BY COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC
     ) AS rn
-  FROM public.banking_formulas
+  FROM public.site_banking_formulas
 )
 SELECT
   site_id,
@@ -76,7 +76,7 @@ BEGIN
         PARTITION BY site_id, LOWER(TRIM(name))
         ORDER BY COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC
       ) AS rn
-    FROM public.banking_formulas
+    FROM public.site_banking_formulas
   ),
   victims AS (
     SELECT id FROM ranked WHERE rn > 1
@@ -92,9 +92,9 @@ BEGIN
         PARTITION BY site_id, LOWER(TRIM(name))
         ORDER BY COALESCE(updated_at, created_at) DESC NULLS LAST, id DESC
       ) AS rn
-    FROM public.banking_formulas
+    FROM public.site_banking_formulas
   )
-  DELETE FROM public.banking_formulas
+  DELETE FROM public.site_banking_formulas
    WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 
   RAISE NOTICE 'Done. % duplicate(s) deleted.', victim_count;
@@ -110,14 +110,14 @@ END $$;
 
 -- Option A (recommended) — strict: no two formulas with the same name
 -- on the same site, period, regardless of is_active.
-CREATE UNIQUE INDEX IF NOT EXISTS banking_formulas_site_name_key
-  ON public.banking_formulas (site_id, LOWER(TRIM(name)));
+CREATE UNIQUE INDEX IF NOT EXISTS site_banking_formulas_site_name_key
+  ON public.site_banking_formulas (site_id, LOWER(TRIM(name)));
 
 -- Option B — looser: allows inactive rows to share names with new active
 -- ones (useful if you "soft-delete" by toggling is_active and want to
 -- create a fresh formula with the same name). Uncomment if you prefer.
--- CREATE UNIQUE INDEX IF NOT EXISTS banking_formulas_site_name_active_key
---   ON public.banking_formulas (site_id, LOWER(TRIM(name)))
+-- CREATE UNIQUE INDEX IF NOT EXISTS site_banking_formulas_site_name_active_key
+--   ON public.site_banking_formulas (site_id, LOWER(TRIM(name)))
 --   WHERE is_active = true;
 
 
@@ -125,7 +125,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS banking_formulas_site_name_key
 -- STEP 4 — VERIFY: no dupes remain
 -- =====================================================
 SELECT site_id, name, COUNT(*) AS rows
-FROM public.banking_formulas
+FROM public.site_banking_formulas
 GROUP BY site_id, name
 HAVING COUNT(*) > 1
 ORDER BY rows DESC;
