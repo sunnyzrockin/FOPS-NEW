@@ -39,6 +39,7 @@ export async function GET(request) {
             *,
             site:sites(id, name, code),
             created_by:users!created_by_user_id(id, name, email),
+            operator_acked_by:users!operator_user_id(id, name, email),
             notifications:fuel_price_notifications!inner(
               id,
               notified_at,
@@ -83,6 +84,7 @@ export async function GET(request) {
             *,
             site:sites(id, name, code),
             created_by:users!created_by_user_id(id, name, email),
+            operator_acked_by:users!operator_user_id(id, name, email),
             notifications:fuel_price_notifications(
               id,
               staff_notified_at
