@@ -63,7 +63,8 @@ While functional and tested, this monolith is hard to maintain. The refactor pla
 ### Phase D — Extract dashboards (highest risk, lots of state passing)
 - ✅ **Batch 1**: Shared UI leaves — `Header`, `StatCard`, `ViewToggle`, `DailyRollupRow`, `ReportRow`, `ReportDetail`, `ExportDialog` → `/app/components/shared/*`
 - ✅ **Batch 2a**: `ShiftReportForm` → `/app/components/staff/`, `StaffPriceChangeBanner` → `/app/components/staff/`, `SiteManagement` → `/app/components/owner/`, `authedFetch` → `/app/lib/authed-fetch.js`, legacy `UserManagement` deleted (dead code)
-- ⬜ **Batch 2b**: Fuel-pricing family (10 components, ~1200 lines) + 3 dashboard wrappers
+- ✅ **Batch 2b**: Fuel-pricing family — `LeafletMapInner`, `LeafletMapClient`, `FuelPriceMapView`, `FuelPriceComparisonSection`, `OperatorPriceChangeNotifications`, `PriceChangeHistory`, `FuelPriceEntry`, `CompetitorManagement`, `FuelPricingManagement`, `OwnerFuelPriceManagement` → `/app/components/fuel-pricing/*`
+- ⬜ **Batch 2c**: 3 dashboard wrappers (`OwnerDashboard`, `OperatorDashboard`, `StaffDashboard`) + `LoginPage`
 
 ### Phase E — Slim page.js to just routing
 - ⬜ Keep only auth check + role-based dashboard switch
