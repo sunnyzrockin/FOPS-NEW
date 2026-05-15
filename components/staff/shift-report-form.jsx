@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
-  ClipboardList, CheckCircle, Calculator, RefreshCw, Loader2, FileText,
+  ClipboardList, CheckCircle, Calculator, RefreshCw, Loader2, FileText, Droplets, Truck,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
@@ -174,6 +174,14 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
         setSuccess(true);
         const resetForm = { site_id: form.site_id, date: form.date, shift_type: 'Morning' };
         fieldConfigs.forEach((f) => { resetForm[f.key] = ''; });
+        // Phase 3: also clear dip-litre fields so they don't get re-submitted
+        // on a subsequent shift.
+        resetForm.dip_ulp_litres = '';
+        resetForm.dip_diesel_litres = '';
+        resetForm.dip_premium_litres = '';
+        resetForm.delivery_ulp_litres = '';
+        resetForm.delivery_diesel_litres = '';
+        resetForm.delivery_premium_litres = '';
         setForm(resetForm);
         onSuccess?.();
         setTimeout(() => setSuccess(false), 3000);
@@ -304,6 +312,75 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
               </div>
             </>
           )}
+
+          <Separator />
+
+          <div>
+            <h3 className="font-medium mb-2 flex items-center gap-2">
+              <Droplets className="h-4 w-4 text-cyan-600" />
+              Fuel Tank Dips (Litres)
+              <Badge variant="outline" className="text-xs">Optional</Badge>
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Record current tank levels in litres. These automatically appear on the Fuel Inventory dashboard so your operator and owner can plan deliveries. Leave blank if you didn't take a dip this shift.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm">ULP level (L)</Label>
+                <Input
+                  type="number" step="0.01" inputMode="decimal" placeholder="e.g. 18500"
+                  value={form.dip_ulp_litres || ''}
+                  onChange={(e) => handleChange('dip_ulp_litres', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Diesel level (L)</Label>
+                <Input
+                  type="number" step="0.01" inputMode="decimal" placeholder="e.g. 12300"
+                  value={form.dip_diesel_litres || ''}
+                  onChange={(e) => handleChange('dip_diesel_litres', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Premium level (L)</Label>
+                <Input
+                  type="number" step="0.01" inputMode="decimal" placeholder="(if sold)"
+                  value={form.dip_premium_litres || ''}
+                  onChange={(e) => handleChange('dip_premium_litres', e.target.value)}
+                />
+              </div>
+            </div>
+            <h4 className="text-sm font-medium mt-5 mb-2 flex items-center gap-2 text-muted-foreground">
+              <Truck className="h-4 w-4" />
+              Deliveries received this shift (L) — leave 0 if none
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm">ULP delivery</Label>
+                <Input
+                  type="number" step="0.01" inputMode="decimal" placeholder="0"
+                  value={form.delivery_ulp_litres || ''}
+                  onChange={(e) => handleChange('delivery_ulp_litres', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Diesel delivery</Label>
+                <Input
+                  type="number" step="0.01" inputMode="decimal" placeholder="0"
+                  value={form.delivery_diesel_litres || ''}
+                  onChange={(e) => handleChange('delivery_diesel_litres', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Premium delivery</Label>
+                <Input
+                  type="number" step="0.01" inputMode="decimal" placeholder="0"
+                  value={form.delivery_premium_litres || ''}
+                  onChange={(e) => handleChange('delivery_premium_litres', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
 
           <Separator />
 

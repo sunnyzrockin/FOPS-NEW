@@ -1505,6 +1505,15 @@ async function handleCreateReport(request) {
       id: _id, // ignore client-supplied id
       submitted_at: _submittedAt, // we set this ourselves
       status: _status, // we always start as 'pending'
+      // -------- Phase 3 wiring: dip-reading fields are NOT columns on
+      // shift_reports. Strip them out of the spread; we'll forward them
+      // to a dip_readings insert after the shift report is saved.
+      dip_ulp_litres,
+      dip_diesel_litres,
+      dip_premium_litres,
+      delivery_ulp_litres,
+      delivery_diesel_litres,
+      delivery_premium_litres,
       ...rest
     } = body;
 
@@ -1587,6 +1596,65 @@ async function handleCreateReport(request) {
           .from('shift_formula_results')
           .insert(formulaResults);
       }
+    }
+
+    // -------- Phase 3 wiring: persist any tank-level / delivery values
+    // from the shift report into the dip_readings table so the Fuel
+    // Inventory dashboard stays in sync. Non-blocking: errors here are
+    // logged but the shift report itself stays successful.
+    try {
+      const toNum = (v) => (v === '' || v == null ? null : Number(v));
+      const toNumZero = (v) => (v === '' || v == null ? 0 : Number(v));
+      const levels = {
+        ulp: toNum(dip_ulp_litres),
+        diesel: toNum(dip_diesel_litres),
+        premium: toNum(dip_premium_litres),
+      };
+      const deliveries = {
+        ulp: toNumZero(delivery_ulp_litres),
+        diesel: toNumZero(delivery_diesel_litres),
+        premium: toNumZero(delivery_premium_litres),
+      };
+      const anyLevel = Object.values(levels).some((v) => v != null);
+      const anyDelivery = Object.values(deliveries).some((v) => v > 0);
+
+      if (anyLevel || anyDelivery) {
+        // Map shift type to a sensible time-of-day so the reading lands
+        // on a chronologically correct moment of the shift date.
+        const hourByShift = { Morning: 8, Afternoon: 14, Night: 22 };
+        const hour = hourByShift[shift_type] ?? 12;
+        const readingDate = new Date(`${date}T00:00:00`);
+        readingDate.setHours(hour, 0, 0, 0);
+
+        const dipRow = {
+          id: uuidv4(),
+          site_id,
+          // Reuse the submitter user id (column is named operator_user_id
+          // for legacy reasons but semantically it's "logged_by"). Staff
+          // submissions therefore appear under the staff member who
+          // logged them; operators and owners can still edit/delete via
+          // the Fuel Inventory dashboard.
+          operator_user_id: submitted_by_user_id,
+          reading_label: `${shift_type} shift`,
+          reading_time: readingDate.toISOString(),
+          ulp_litres: levels.ulp,
+          diesel_litres: levels.diesel,
+          premium_litres: levels.premium,
+          deliveries_ulp_litres: deliveries.ulp,
+          deliveries_diesel_litres: deliveries.diesel,
+          deliveries_premium_litres: deliveries.premium,
+          notes: `Auto-logged from ${shift_type} shift report ${report.id}`,
+        };
+
+        const { error: dipErr } = await (supabaseAdmin || supabase)
+          .from('dip_readings')
+          .insert([dipRow]);
+        if (dipErr) {
+          console.error('Create report - dip insert failed (non-fatal):', dipErr);
+        }
+      }
+    } catch (dipBlockErr) {
+      console.error('Create report - dip block crashed (non-fatal):', dipBlockErr);
     }
 
     return NextResponse.json(report, { status: 201, headers: corsHeaders });
