@@ -11,6 +11,10 @@
 --  sites that don't sell a particular grade can omit it. Additional
 --  grades (e.g. E10, AdBlue) can be added later as new columns.
 --
+--  IMPORTANT: sites.id and users.id are TEXT in this database (not UUID),
+--  so we match that. The id of dip_readings is a TEXT column carrying a
+--  v4 UUID string (same pattern as other tables — see supabase-schema.sql).
+--
 --  HOW TO RUN
 --    Supabase Dashboard → SQL Editor → New query → paste this whole file →
 --    Run. Idempotent: safe to re-run.
@@ -20,9 +24,9 @@
 -- STEP 1 — Create the dip_readings table
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.dip_readings (
-  id                         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-  site_id                    UUID         NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
-  operator_user_id           UUID         NOT NULL REFERENCES public.users(id),
+  id                         TEXT         PRIMARY KEY DEFAULT uuid_generate_v4()::TEXT,
+  site_id                    TEXT         NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
+  operator_user_id           TEXT         NOT NULL REFERENCES public.users(id),
 
   -- Free-text label for when the reading was taken (e.g. "Morning", "PM",
   -- "After delivery"). User asked for free-text not strict AM/PM.
@@ -96,7 +100,7 @@ SELECT column_name, data_type, is_nullable, column_default
    AND table_name   = 'dip_readings'
  ORDER BY ordinal_position;
 
--- Expected 13 columns: id, site_id, operator_user_id, reading_label,
+-- Expected 14 rows: id, site_id, operator_user_id, reading_label,
 -- reading_time, ulp_litres, diesel_litres, premium_litres,
 -- deliveries_ulp_litres, deliveries_diesel_litres,
 -- deliveries_premium_litres, notes, created_at, updated_at.
