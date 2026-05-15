@@ -18,6 +18,7 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
         { id: 'sites', label: 'Sites', icon: Building2 },
         { id: 'operators', label: 'Operators', icon: Users },
+        { id: 'submissions', label: 'Banking Submissions', icon: ClipboardList },
         { id: 'fuel-prices', label: 'Fuel Prices', icon: Fuel },
       ]
     : user.role === 'operator'
@@ -25,6 +26,7 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
         { id: 'staff', label: 'Staff Management', icon: Users },
         { id: 'pricing', label: 'Fuel Pricing', icon: Fuel },
+        { id: 'submissions', label: 'Banking Submissions', icon: ClipboardList },
         { id: 'fields', label: 'Form Fields', icon: Settings },
         { id: 'banking', label: 'Banking', icon: Calculator },
       ]

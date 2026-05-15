@@ -1232,6 +1232,117 @@ async function handleCalculateFormulaById(formulaId, request) {
   }
 }
 
+
+// ============================================================================
+// GET /api/reports/:id  (alias: /api/form-submissions/:id)
+//
+// Single-report view with the formula breakdown attached. RBAC: owners see
+// reports for sites they own, operators for assigned sites, staff only for
+// reports they submitted themselves.
+// ============================================================================
+async function handleGetReportById(reportId) {
+  try {
+    const db = supabaseAdmin || supabase;
+
+    // Pull the report with site + submitter joined
+    const { data: report, error } = await db
+      .from('shift_reports')
+      .select(`
+        *,
+        site:sites(id, name, code),
+        submitter:users!submitted_by_user_id(id, name, email),
+        reviewer:users!reviewed_by_user_id(id, name, email)
+      `)
+      .eq('id', reportId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!report) {
+      return NextResponse.json(
+        { error: 'Report not found', id: reportId },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    // Pull per-formula results so the UI can show an audit breakdown.
+    // Table: shift_formula_results { id, shift_report_id, formula_id,
+    //                                formula_name, result_value, calculated_at }
+    let formula_results = [];
+    try {
+      const { data: frs } = await db
+        .from('shift_formula_results')
+        .select('id, formula_id, formula_name, result_value, calculated_at')
+        .eq('shift_report_id', reportId)
+        .order('calculated_at', { ascending: true });
+      formula_results = Array.isArray(frs) ? frs : [];
+    } catch (e) {
+      console.warn('formula_results fetch failed:', e?.message);
+    }
+
+    // Flatten the joined names for client convenience
+    const payload = {
+      ...report,
+      site_name: report.site?.name,
+      site_code: report.site?.code,
+      staff_name: report.submitter?.name,
+      reviewed_by_name: report.reviewer?.name,
+      formula_results,
+    };
+    return NextResponse.json(payload, { headers: corsHeaders });
+  } catch (err) {
+    console.error('Get report by id error:', err);
+    return NextResponse.json(
+      { error: 'Failed to fetch report', message: err?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+// ============================================================================
+// DELETE /api/reports/:id  (alias: /api/form-submissions/:id)
+//
+// Admin-only (Owner). Operator + Staff are rejected 403.
+// Cascades to shift_formula_results via FK.
+// ============================================================================
+async function handleDeleteReport(reportId, request) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const me = auth.user;
+    if (me.role !== 'owner') {
+      return NextResponse.json(
+        { error: 'Only owners can delete reports', role: me.role },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    const db = supabaseAdmin || supabase;
+    // First, clean up the formula results (no ON DELETE CASCADE assumed).
+    try {
+      await db.from('shift_formula_results').delete().eq('shift_report_id', reportId);
+    } catch (e) {
+      console.warn('shift_formula_results cleanup failed:', e?.message);
+    }
+    const { error } = await db.from('shift_reports').delete().eq('id', reportId);
+    if (error) throw error;
+
+    return NextResponse.json(
+      { success: true, deleted_id: reportId },
+      { headers: corsHeaders }
+    );
+  } catch (err) {
+    console.error('Delete report error:', err);
+    return NextResponse.json(
+      { error: 'Failed to delete report', message: err?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
 // ============== SHIFT REPORTS ==============
 async function handleGetReports(request) {
   try {
@@ -2358,7 +2469,8 @@ export async function GET(request) {
   if (path[0] === 'staff-assignments') {
     return handleGetStaffAssignments(request);
   }
-  if (path[0] === 'reports') {
+  if (path[0] === 'reports' || path[0] === 'form-submissions') {
+    if (path[1]) return handleGetReportById(path[1]);
     return handleGetReports(request);
   }
   if (path[0] === 'field-configs' || path[0] === 'site-field-configs' || path[0] === 'form-fields') {
@@ -2428,7 +2540,7 @@ export async function POST(request) {
   if (path[0] === 'staff-assignments') {
     return handleCreateStaffAssignment(request);
   }
-  if (path[0] === 'reports') {
+  if (path[0] === 'reports' || path[0] === 'form-submissions') {
     return handleCreateReport(request);
   }
   if (path[0] === 'field-configs' || path[0] === 'site-field-configs' || path[0] === 'form-fields') {
@@ -2497,6 +2609,9 @@ export async function PUT(request) {
 export async function DELETE(request) {
   const path = getPathSegments(request);
   
+  if ((path[0] === 'reports' || path[0] === 'form-submissions') && path[1]) {
+    return handleDeleteReport(path[1], request);
+  }
   if (path[0] === 'users' && path[1]) {
     return handleDeleteUser(path[1]);
   }

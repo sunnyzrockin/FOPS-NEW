@@ -27,6 +27,7 @@ import SiteManagement from '@/components/owner/site-management';
 import OperatorManagement from '@/components/owner/operator-management';
 import OwnerFuelPriceManagement from '@/components/fuel-pricing/owner-fuel-price-management';
 import FuelPriceComparisonSection from '@/components/fuel-pricing/fuel-price-comparison-section';
+import BankingSubmissions from '@/components/shared/banking-submissions';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -108,6 +109,10 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
 
   if (activeTab === 'fuel-prices') {
     return <OwnerFuelPriceManagement user={user} sites={sites} />;
+  }
+
+  if (activeTab === 'submissions') {
+    return <BankingSubmissions user={user} sites={sites} currentUserRole="owner" />;
   }
 
   if (selectedReport) {
