@@ -29,6 +29,7 @@ import OwnerFuelPriceManagement from '@/components/fuel-pricing/owner-fuel-price
 import FuelPriceComparisonSection from '@/components/fuel-pricing/fuel-price-comparison-section';
 import BankingSubmissions from '@/components/shared/banking-submissions';
 import FuelInventoryDashboard from '@/components/owner/fuel-inventory-dashboard';
+import LiveFuelPricesDashboard from '@/components/fuel-pricing/live-fuel-prices-dashboard';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -118,6 +119,10 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
 
   if (activeTab === 'fuel-inventory') {
     return <FuelInventoryDashboard user={user} sites={sites} />;
+  }
+
+  if (activeTab === 'live-prices') {
+    return <LiveFuelPricesDashboard />;
   }
 
   if (selectedReport) {

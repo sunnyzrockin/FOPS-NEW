@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import {
   Fuel, LogOut, BarChart3, Building2, Users, Settings, Calculator,
-  ClipboardList, FileText, Droplets,
+  ClipboardList, FileText, Droplets, Map,
 } from 'lucide-react';
 
 /**
@@ -20,6 +20,7 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
         { id: 'operators', label: 'Operators', icon: Users },
         { id: 'submissions', label: 'Banking Submissions', icon: ClipboardList },
         { id: 'fuel-inventory', label: 'Fuel Inventory', icon: Droplets },
+        { id: 'live-prices', label: 'QLD Live Prices', icon: Map },
         { id: 'fuel-prices', label: 'Fuel Prices', icon: Fuel },
       ]
     : user.role === 'operator'

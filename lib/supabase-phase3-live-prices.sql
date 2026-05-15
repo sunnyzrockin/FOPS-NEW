@@ -1,25 +1,31 @@
 -- ============================================================================
---  FOPS — Phase 3 (Live Fuel Prices): DB schema for live-pricing intelligence
+--  FOPS — Phase 3 (Live Fuel Prices, v2): QLD-wide live pricing schema
 -- ============================================================================
---  Adds three tables to support real-time competitor / market pricing:
---    1. fuel_prices_live       — current cache, 1 row per (owned-site,
---                                competitor-station, fuel-type). Updated by
---                                the QLD FPM provider every 15 minutes.
---    2. fuel_prices_history    — append-only snapshot, one row per
---                                (owned-site, fuel-type, sampled_at). Used
---                                for the 7-day trend chart.
---    3. fuel_price_sync_meta   — per-site sync bookkeeping: last_fetched,
---                                next_refresh, last_error, retry_count.
+--  v2 simplifications vs original plan:
+--    * No per-site comparison card → no need for site-keyed cache
+--    * No 7-day history chart      → no fuel_prices_history table
+--    * Single map view of ALL QLD stations with live prices + filters
 --
---  Backfills lat/long for the 5 Sunstate QLD sites so the provider has
---  somewhere to centre the radius search. Idempotent throughout.
+--  Tables:
+--    1. fuel_stations           — master metadata for every QLD station
+--                                 we've ever seen (siteId, brand, address,
+--                                 lat/long, region). Upserted on sync.
+--    2. fuel_prices_live        — 1 row per (station_id, fuel_type). Updated
+--                                 on every sync. The map reads from this.
+--    3. fuel_price_sync_meta    — single global bookkeeping row tracking
+--                                 the last successful sync timestamp,
+--                                 status, station/price counts.
+--
+--  Lat/long backfill for the 5 Sunstate sites is kept (harmless,
+--  idempotent) in case future work re-introduces an owned-site comparison.
 --
 --  HOW TO RUN
 --    Supabase Dashboard → SQL Editor → New query → paste this file → Run.
+--    "Run without RLS" — same pattern as the rest of the operational tables.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- STEP 1 — Backfill site coordinates (idempotent)
+-- STEP 1 — Backfill site coordinates (idempotent; safe to re-run)
 -- ----------------------------------------------------------------------------
 UPDATE public.sites SET latitude = -27.4705, longitude = 153.0268
   WHERE id = 'site-001' AND (latitude IS NULL OR longitude IS NULL);
@@ -33,107 +39,82 @@ UPDATE public.sites SET latitude = -16.8766, longitude = 145.7781
   WHERE id = 'site-005' AND (latitude IS NULL OR longitude IS NULL);
 
 -- ----------------------------------------------------------------------------
--- STEP 2 — fuel_prices_live (current cache, refreshed every ~15 min)
+-- STEP 2 — fuel_stations: master metadata for QLD stations
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.fuel_stations (
+  -- The upstream provider's station ID. QLD FPM uses int8; we store as
+  -- TEXT for portability across providers (NSW, NSW, mock, etc.).
+  station_id   TEXT         PRIMARY KEY,
+  provider     TEXT         NOT NULL DEFAULT 'qld_fpm',
+
+  name         TEXT         NOT NULL,
+  brand        TEXT,
+  address      TEXT,
+  region       TEXT,             -- "Brisbane", "Gold Coast", "Cairns", ...
+  postcode     TEXT,
+
+  latitude     NUMERIC(10,7) NOT NULL,
+  longitude    NUMERIC(10,7) NOT NULL,
+
+  is_open      BOOLEAN      NOT NULL DEFAULT true,
+
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_region ON public.fuel_stations (region);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_brand  ON public.fuel_stations (brand);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_geo    ON public.fuel_stations (latitude, longitude);
+
+-- ----------------------------------------------------------------------------
+-- STEP 3 — fuel_prices_live: current price per (station, fuel)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.fuel_prices_live (
   id                  TEXT         PRIMARY KEY DEFAULT uuid_generate_v4()::TEXT,
 
-  -- The owned site this row is "near". Used for fast lookups by site_id.
-  site_id             TEXT         NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
+  station_id          TEXT         NOT NULL REFERENCES public.fuel_stations(station_id) ON DELETE CASCADE,
+  fuel_type           TEXT         NOT NULL,  -- 'ULP91','U95','U98','Diesel','E10','LPG'
 
-  -- Standard fuel type code. We use the canonical QLD FPM short names:
-  -- 'ULP91', 'U95', 'U98', 'Diesel', 'E10', 'LPG'. Extensible.
-  fuel_type           TEXT         NOT NULL,
-
-  -- Competitor / market station details. station_id is the upstream
-  -- provider's site ID (QLD FPM uses an integer; we store as TEXT for
-  -- portability).
-  station_id          TEXT         NOT NULL,
-  station_name        TEXT,
-  station_brand       TEXT,
-  station_address     TEXT,
-  station_latitude    NUMERIC(10,7),
-  station_longitude   NUMERIC(10,7),
-
-  -- Distance in km from the owned site (computed by the provider service).
-  distance_km         NUMERIC(8,3),
-
-  -- Price in cents/L (e.g. 1847 = $1.847). Native unit for QLD FPM.
+  -- Price in cents/L. 1847 = $1.847.
   price_cents         INT          NOT NULL,
-  -- Convenience generated column for dollars-per-litre.
   price_aud           NUMERIC(6,3) GENERATED ALWAYS AS (price_cents::NUMERIC / 100) STORED,
 
-  -- Time the upstream provider reported this price (NOT our cache time).
   provider_updated_at TIMESTAMPTZ,
-
-  -- When we cached this row locally.
   cached_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-
-  -- True when this row is being served past its TTL (provider was
-  -- unreachable on last sync). The provider service flips this on.
   is_stale            BOOLEAN      NOT NULL DEFAULT false,
-
-  -- Which provider produced this row ('qld_fpm', 'nsw_fuelcheck', 'mock').
   provider            TEXT         NOT NULL DEFAULT 'qld_fpm',
 
-  -- Each (site, station, fuel) combo has exactly one current cache row.
-  UNIQUE (site_id, station_id, fuel_type)
+  UNIQUE (station_id, fuel_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_fuel_prices_live_site_fuel
-  ON public.fuel_prices_live (site_id, fuel_type);
-CREATE INDEX IF NOT EXISTS idx_fuel_prices_live_cached_at
-  ON public.fuel_prices_live (cached_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_prices_live_fuel       ON public.fuel_prices_live (fuel_type);
+CREATE INDEX IF NOT EXISTS idx_fuel_prices_live_cached_at  ON public.fuel_prices_live (cached_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_prices_live_station    ON public.fuel_prices_live (station_id);
 
 -- ----------------------------------------------------------------------------
--- STEP 3 — fuel_prices_history (append-only, drives 7-day trend chart)
--- ----------------------------------------------------------------------------
--- We aggregate per (owned-site, fuel-type, sampled_at) so the chart is
--- cheap to render. Three scalars per snapshot:
---   own_price   — the operator's posted price for that site/fuel (from the
---                 existing fuel_price_entries table; can be NULL if unset)
---   market_avg  — arithmetic mean of competitor prices within radius
---   market_low  — cheapest competitor price within radius
-CREATE TABLE IF NOT EXISTS public.fuel_prices_history (
-  id                  TEXT         PRIMARY KEY DEFAULT uuid_generate_v4()::TEXT,
-  site_id             TEXT         NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
-  fuel_type           TEXT         NOT NULL,
-  sampled_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-
-  own_price_cents     INT,
-  market_avg_cents    INT,
-  market_low_cents    INT,
-
-  -- How many competitor stations contributed to this snapshot.
-  station_count       INT          NOT NULL DEFAULT 0,
-
-  provider            TEXT         NOT NULL DEFAULT 'qld_fpm'
-);
-
-CREATE INDEX IF NOT EXISTS idx_fuel_prices_history_site_fuel_time
-  ON public.fuel_prices_history (site_id, fuel_type, sampled_at DESC);
-CREATE INDEX IF NOT EXISTS idx_fuel_prices_history_sampled_at
-  ON public.fuel_prices_history (sampled_at DESC);
-
--- ----------------------------------------------------------------------------
--- STEP 4 — fuel_price_sync_meta (per-site sync bookkeeping)
+-- STEP 4 — fuel_price_sync_meta: single-row global bookkeeping
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.fuel_price_sync_meta (
-  site_id             TEXT         PRIMARY KEY REFERENCES public.sites(id) ON DELETE CASCADE,
-  last_fetched_at     TIMESTAMPTZ,
-  next_refresh_at     TIMESTAMPTZ,
-  last_status         TEXT         NOT NULL DEFAULT 'never',  -- 'ok' | 'error' | 'stale' | 'never'
-  last_error          TEXT,
-  retry_count         INT          NOT NULL DEFAULT 0,
-  station_count       INT          NOT NULL DEFAULT 0,
-  provider            TEXT         NOT NULL DEFAULT 'qld_fpm'
+  id                 TEXT         PRIMARY KEY DEFAULT 'global',
+  provider           TEXT         NOT NULL DEFAULT 'qld_fpm',
+  last_fetched_at    TIMESTAMPTZ,
+  next_refresh_at    TIMESTAMPTZ,
+  last_status        TEXT         NOT NULL DEFAULT 'never',  -- 'ok'|'error'|'stale'|'never'
+  last_error         TEXT,
+  retry_count        INT          NOT NULL DEFAULT 0,
+  station_count      INT          NOT NULL DEFAULT 0,
+  price_count        INT          NOT NULL DEFAULT 0
 );
+
+-- Seed the single global row so upsert-by-id logic just works.
+INSERT INTO public.fuel_price_sync_meta (id) VALUES ('global')
+  ON CONFLICT (id) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
 -- STEP 5 — RLS DISABLED (match existing operational tables; API enforces)
 -- ----------------------------------------------------------------------------
+ALTER TABLE public.fuel_stations         DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fuel_prices_live      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_prices_history   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fuel_price_sync_meta  DISABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
@@ -147,12 +128,15 @@ SELECT id, name, latitude, longitude
 SELECT table_name, COUNT(*) AS column_count
   FROM information_schema.columns
  WHERE table_schema = 'public'
-   AND table_name IN ('fuel_prices_live', 'fuel_prices_history', 'fuel_price_sync_meta')
+   AND table_name IN ('fuel_stations', 'fuel_prices_live', 'fuel_price_sync_meta')
  GROUP BY table_name
  ORDER BY table_name;
 
+SELECT * FROM public.fuel_price_sync_meta;
+
 -- Expected:
---   site-001..site-005 each with a populated latitude/longitude
---   fuel_prices_live      → ~17 columns
---   fuel_prices_history   → ~9 columns
---   fuel_price_sync_meta  → ~8 columns
+--   site-001..site-005 all with populated lat/long
+--   fuel_stations         → ~12 columns
+--   fuel_prices_live      → ~9 columns
+--   fuel_price_sync_meta  → ~9 columns
+--   fuel_price_sync_meta has exactly 1 row with id='global', last_status='never'

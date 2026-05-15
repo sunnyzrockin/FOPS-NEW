@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import supabase, { supabaseAdmin, supabaseStatus } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { verifyAuth, requireRole } from '@/lib/auth-helpers';
+import { maybeSync } from '@/lib/fuel-pricing/sync-service';
 // xlsx moved to dedicated /api/export route to keep catch-all bundle small.
 
 // CRITICAL: Force Node.js runtime on Vercel (NOT edge).
@@ -3055,6 +3056,190 @@ async function handleDeleteDip(id, request) {
 
 
 
+// ============== LIVE FUEL PRICES (Phase 3: All-QLD Map) ==============
+//
+// All endpoints are owner-only. Reads call maybeSync() first which is a
+// no-op if the cache is fresher than FUEL_CACHE_TTL_SECONDS (default 15m).
+//
+//   GET  /api/fuel-prices-live/stations  ?fuel_type=&region=&brand=&max_price=
+//   GET  /api/fuel-prices-live/filters   (distinct regions + brands for the
+//                                         filter dropdowns)
+//   POST /api/fuel-prices-live/sync      (force refresh; manual button)
+//   GET  /api/fuel-prices-live/status    (sync_meta for the "Updated XX ago"
+//                                         banner)
+
+async function handleGetLiveStations(request) {
+  try {
+    const auth = await requireRole(request, ['owner']);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+
+    // Trigger lazy sync (no-op if cache is fresh).
+    let syncMeta = null;
+    try {
+      syncMeta = await maybeSync({ force: false });
+    } catch (syncErr) {
+      console.error('[fuel-prices-live] maybeSync threw:', syncErr);
+    }
+
+    const url = new URL(request.url);
+    const fuelType = url.searchParams.get('fuel_type');     // required for map
+    const region   = url.searchParams.get('region');
+    const brand    = url.searchParams.get('brand');
+    const maxPrice = url.searchParams.get('max_price');     // dollars (e.g. 1.85)
+
+    // Always require a fuel_type so we can return exactly one price per
+    // station (the map UI needs a single value per marker).
+    if (!fuelType) {
+      return NextResponse.json(
+        { error: 'fuel_type query param is required (e.g. ULP91, Diesel)' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    let q = supabaseAdmin
+      .from('fuel_prices_live')
+      .select(`
+        price_cents, is_stale, provider_updated_at, cached_at,
+        station:fuel_stations!inner (
+          station_id, name, brand, address, region, postcode,
+          latitude, longitude
+        )
+      `)
+      .eq('fuel_type', fuelType)
+      .limit(5000);
+
+    // Push as many filters as we can down to the DB by joining on the
+    // station table. Supabase's PostgREST allows dotted column filters.
+    if (region) q = q.eq('station.region', region);
+    if (brand)  q = q.eq('station.brand', brand);
+    if (maxPrice) {
+      const cents = Math.round(parseFloat(maxPrice) * 100);
+      if (!Number.isNaN(cents) && cents > 0) {
+        q = q.lte('price_cents', cents);
+      }
+    }
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    const rows = (data || [])
+      .filter((r) => r.station && r.station.latitude != null && r.station.longitude != null)
+      .map((r) => ({
+        station_id: r.station.station_id,
+        name: r.station.name,
+        brand: r.station.brand,
+        address: r.station.address,
+        region: r.station.region,
+        postcode: r.station.postcode,
+        latitude: Number(r.station.latitude),
+        longitude: Number(r.station.longitude),
+        fuel_type: fuelType,
+        price_cents: r.price_cents,
+        price_aud: r.price_cents / 100,
+        is_stale: r.is_stale,
+        provider_updated_at: r.provider_updated_at,
+        cached_at: r.cached_at,
+      }));
+
+    return NextResponse.json(
+      { count: rows.length, stations: rows, sync: syncMeta || null },
+      { headers: corsHeaders }
+    );
+  } catch (error) {
+    console.error('Get live stations error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch live stations', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+async function handleGetLiveFilters(request) {
+  try {
+    const auth = await requireRole(request, ['owner']);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+
+    // Lazy sync first so the dropdowns are populated even on the very
+    // first owner page-load.
+    try { await maybeSync({ force: false }); } catch (e) { console.error(e); }
+
+    const { data, error } = await supabaseAdmin
+      .from('fuel_stations')
+      .select('region, brand')
+      .limit(5000);
+    if (error) throw error;
+
+    const regions = Array.from(new Set((data || []).map((r) => r.region).filter(Boolean))).sort();
+    const brands  = Array.from(new Set((data || []).map((r) => r.brand).filter(Boolean))).sort();
+    const fuelTypes = ['ULP91', 'E10', 'U95', 'U98', 'Diesel', 'LPG'];
+
+    return NextResponse.json(
+      { regions, brands, fuel_types: fuelTypes },
+      { headers: corsHeaders }
+    );
+  } catch (error) {
+    console.error('Get live filters error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch filters', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+async function handlePostLiveSync(request) {
+  try {
+    const auth = await requireRole(request, ['owner']);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+
+    const meta = await maybeSync({ force: true });
+    return NextResponse.json({ ok: true, sync: meta || null }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Manual sync error:', error);
+    return NextResponse.json(
+      { ok: false, error: 'Sync failed', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+async function handleGetLiveStatus(request) {
+  try {
+    const auth = await requireRole(request, ['owner']);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+
+    const { data } = await supabaseAdmin
+      .from('fuel_price_sync_meta')
+      .select('*')
+      .eq('id', 'global')
+      .maybeSingle();
+    return NextResponse.json(data || {}, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get live status error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch sync status', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+
+
 // ============== REQUEST ROUTING ==============
 export async function GET(request) {
   const path = getPathSegments(request);
@@ -3120,6 +3305,11 @@ export async function GET(request) {
     if (path[1] === 'trends') return handleGetDipsTrends(request);
     return handleGetDips(request);
   }
+  if (path[0] === 'fuel-prices-live') {
+    if (path[1] === 'stations') return handleGetLiveStations(request);
+    if (path[1] === 'filters')  return handleGetLiveFilters(request);
+    if (path[1] === 'status')   return handleGetLiveStatus(request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -3181,6 +3371,9 @@ export async function POST(request) {
   }
   if (path[0] === 'dips') {
     return handleCreateDip(request);
+  }
+  if (path[0] === 'fuel-prices-live' && path[1] === 'sync') {
+    return handlePostLiveSync(request);
   }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
