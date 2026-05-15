@@ -186,8 +186,10 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
         onSuccess?.();
         setTimeout(() => setSuccess(false), 3000);
       } else if (res.status === 401) {
-        alert('Your session has expired. Please log in again.');
-        if (typeof window !== 'undefined') window.location.href = '/login';
+        // Don't hard-redirect — authedFetch already retried with a fresh
+        // token. If we're still 401 it's a real expiry, but kicking the
+        // user out unprompted is jarring. Show a clear message instead.
+        alert('Your session has expired. Please refresh the page and log in again.');
       } else if (res.status === 409 || data.code === 'duplicate_report') {
         alert(
           `A ${form.shift_type} report for this site on ${form.date} has already been submitted.\n\n` +

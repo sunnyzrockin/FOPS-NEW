@@ -30,10 +30,9 @@ export default function PriceChangeHistory({ user, sites }) {
       if (siteFilter !== 'all') q.set('siteId', siteFilter);
       const res = await authedFetch(`/api/fuel-prices/history?${q.toString()}`);
       if (!res.ok) {
-        if (res.status === 401) {
-          if (typeof window !== 'undefined') window.location.href = '/login';
-          return;
-        }
+        // Don't hard-redirect on 401 — authedFetch already retried with a
+        // refreshed token. Falling through with an empty list lets the user
+        // refresh/retry instead of being booted out on a transient hiccup.
         const err = await res.json().catch(() => ({}));
         console.warn('history load failed:', err);
         setRows([]);

@@ -35,6 +35,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
 
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [expandedDetail, setExpandedDetail] = useState({}); // {reportId: detailPayload}
   const [loadingDetail, setLoadingDetail] = useState(null);
@@ -49,19 +50,26 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
 
   const loadSubmissions = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const siteFilterIds = siteFilter === 'all' ? siteIds : siteFilter;
       const res = await authedFetch(
         `/api/form-submissions?siteIds=${siteFilterIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`
       );
       if (!res.ok) {
-        if (res.status === 401 && typeof window !== 'undefined') {
-          window.location.href = '/login';
-          return;
-        }
+        // DO NOT hard-redirect on 401 here — authedFetch already retried
+        // with a refreshed token. If the user is genuinely signed out the
+        // auth context guard on /app will kick in. Showing an inline error
+        // avoids surprise logouts on tab switches caused by transient
+        // session glitches.
         const err = await res.json().catch(() => ({}));
         console.warn('submissions load failed:', err);
         setSubmissions([]);
+        if (res.status === 401) {
+          setLoadError('Your session has expired. Please refresh the page or click the tab again.');
+        } else {
+          setLoadError(err.message || err.error || `Failed to load submissions (HTTP ${res.status})`);
+        }
         return;
       }
       const data = await res.json();
@@ -69,6 +77,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
     } catch (e) {
       console.error('submissions load error:', e);
       setSubmissions([]);
+      setLoadError(e.message || 'Network error');
     } finally {
       setLoading(false);
     }
@@ -236,6 +245,14 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
           <CardDescription>Click a row to expand the audit breakdown.</CardDescription>
         </CardHeader>
         <CardContent>
+          {loadError && !loading && (
+            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" /> {loadError}
+              <Button size="sm" variant="outline" className="ml-auto h-7" onClick={loadSubmissions}>
+                Retry
+              </Button>
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
