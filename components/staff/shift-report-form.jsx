@@ -47,6 +47,14 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
         setFieldConfigs(
           (Array.isArray(data) ? data : [])
             .filter((f) => f.is_enabled)
+            // Visibility filter (staff context): show field if visibility
+            // is 'all' or 'staff_only'. Hide 'owner_only' fields like
+            // "Cash" that staff shouldn't enter. Default to 'all' if the
+            // column hasn't been migrated yet (back-compat).
+            .filter((f) => {
+              const v = f.visibility || 'all';
+              return v === 'all' || v === 'staff_only';
+            })
             .sort((a, b) => a.display_order - b.display_order)
         );
       } catch (err) {

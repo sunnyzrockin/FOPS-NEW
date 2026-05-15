@@ -23,7 +23,12 @@ export default function FieldConfiguration({ user, sites }) {
   const [saving, setSaving] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [newField, setNewField] = useState({ label: '', field_type: 'number' });
+  const [newField, setNewField] = useState({
+    label: '',
+    field_type: 'number',
+    visibility: 'all',
+    is_mandatory: false,
+  });
 
   const loadFields = useCallback(async () => {
     if (!selectedSite) {
@@ -91,6 +96,8 @@ export default function FieldConfiguration({ user, sites }) {
           key: fieldKey,
           label: newField.label,
           field_type: newField.field_type,
+          visibility: newField.visibility || 'all',
+          is_mandatory: !!newField.is_mandatory,
           display_order: fields.length + 1,
           is_core: false,
           is_enabled: true,
@@ -104,7 +111,7 @@ export default function FieldConfiguration({ user, sites }) {
         alert(`Failed to add field: ${detail}${hint}`);
         return;
       }
-      setNewField({ label: '', field_type: 'number' });
+      setNewField({ label: '', field_type: 'number', visibility: 'all', is_mandatory: false });
       setShowAddField(false);
       loadFields();
     } catch (err) {
@@ -168,8 +175,8 @@ export default function FieldConfiguration({ user, sites }) {
       {showAddField && (
         <Card className="border-blue-200 bg-blue-50">
           <CardContent className="pt-4">
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-4">
                 <Label>Field Label</Label>
                 <Input
                   value={newField.label}
@@ -178,7 +185,7 @@ export default function FieldConfiguration({ user, sites }) {
                   className="mt-1"
                 />
               </div>
-              <div className="w-40">
+              <div className="sm:col-span-2">
                 <Label>Type</Label>
                 <Select value={newField.field_type} onValueChange={(v) => setNewField({ ...newField, field_type: v })}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -188,12 +195,32 @@ export default function FieldConfiguration({ user, sites }) {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleAddField} disabled={adding}>
-                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
-              </Button>
-              <Button variant="ghost" onClick={() => setShowAddField(false)}>
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="sm:col-span-3">
+                <Label>Visibility</Label>
+                <Select value={newField.visibility} onValueChange={(v) => setNewField({ ...newField, visibility: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Everyone</SelectItem>
+                    <SelectItem value="staff_only">Staff only</SelectItem>
+                    <SelectItem value="owner_only">Owner / Operator only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-2 pt-6">
+                <Switch
+                  checked={!!newField.is_mandatory}
+                  onCheckedChange={(v) => setNewField({ ...newField, is_mandatory: v })}
+                />
+                <Label className="text-sm cursor-pointer">Required</Label>
+              </div>
+              <div className="sm:col-span-1 flex gap-1 justify-end">
+                <Button onClick={handleAddField} disabled={adding} size="sm">
+                  {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => setShowAddField(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -221,7 +248,7 @@ export default function FieldConfiguration({ user, sites }) {
               className={`${field.is_core ? 'border-blue-200 bg-blue-50/50' : ''} ${!field.is_enabled ? 'opacity-50' : ''}`}
             >
               <CardContent className="p-4">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex flex-col gap-1">
                     <Button
                       variant="ghost"
@@ -242,7 +269,7 @@ export default function FieldConfiguration({ user, sites }) {
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-[180px]">
                     <Input
                       value={field.label}
                       onChange={(e) => updateField(field.id, 'label', e.target.value)}
@@ -252,6 +279,32 @@ export default function FieldConfiguration({ user, sites }) {
                   </div>
                   <Badge variant="outline">{field.field_type}</Badge>
                   {field.is_core && <Badge className="bg-blue-100 text-blue-700">Core Field</Badge>}
+
+                  {/* Visibility inline selector */}
+                  <Select
+                    value={field.visibility || 'all'}
+                    onValueChange={(v) => updateField(field.id, 'visibility', v)}
+                  >
+                    <SelectTrigger className="w-[170px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Everyone</SelectItem>
+                      <SelectItem value="staff_only">Staff only</SelectItem>
+                      <SelectItem value="owner_only">Owner / Operator only</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Required toggle */}
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm">Required</Label>
+                    <Switch
+                      checked={!!field.is_mandatory}
+                      onCheckedChange={(v) => updateField(field.id, 'is_mandatory', v)}
+                    />
+                  </div>
+
+                  {/* Enabled toggle */}
                   <div className="flex items-center gap-2">
                     <Label className="text-sm">Enabled</Label>
                     <Switch
@@ -260,6 +313,7 @@ export default function FieldConfiguration({ user, sites }) {
                       disabled={field.is_core}
                     />
                   </div>
+
                   {!field.is_core && (
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(field.id)}>
                       <Trash2 className="h-4 w-4 text-red-500" />

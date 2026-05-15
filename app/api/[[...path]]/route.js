@@ -1127,6 +1127,111 @@ async function handleBankingCalculate(request) {
   }
 }
 
+// ============================================================================
+// POST /api/banking-formulas/:id/calculate
+//
+// Path-based formula calculator. Pulls the formula from
+// `site_banking_formulas` by id, evaluates against caller-supplied data,
+// and returns the numeric result PLUS a step-by-step breakdown for live
+// preview tooltips.
+//
+// Request body:
+//   { "data": { "fuel_sales": 3500, "shop_sales": 850, ... } }
+//
+// Response:
+//   {
+//     "formula_id": "...",
+//     "formula_name": "Total Banking",
+//     "result_label": "Banking Total",
+//     "result": 4880.00,
+//     "formula_breakdown": [
+//       { "step": 1, "type": "field", "key": "fuel_sales", "value": 3500, "operator": "+", "running_total": 3500 },
+//       { "step": 2, "type": "field", "key": "shop_sales", "value": 850,  "operator": "+", "running_total": 4350 },
+//       { "step": 3, "type": "field", "key": "cash",       "value": 530,  "operator": "+", "running_total": 4880 }
+//     ]
+//   }
+// ============================================================================
+async function handleCalculateFormulaById(formulaId, request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const data = body?.data || {};
+
+    const db = supabaseAdmin || supabase;
+    const { data: formula, error } = await db
+      .from('site_banking_formulas')
+      .select('id, name, result_label, formula_json')
+      .eq('id', formulaId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!formula) {
+      return NextResponse.json(
+        { error: 'Formula not found', id: formulaId },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    let operations = [];
+    try {
+      const parsed = typeof formula.formula_json === 'string'
+        ? JSON.parse(formula.formula_json)
+        : formula.formula_json;
+      operations = parsed?.operations || [];
+    } catch (e) {
+      return NextResponse.json(
+        { error: 'Malformed formula_json', detail: e.message },
+        { status: 422, headers: corsHeaders }
+      );
+    }
+
+    let result = 0;
+    let currentOp = '+';
+    const breakdown = [];
+    let step = 0;
+
+    for (const op of operations) {
+      if (op.type === 'operator') {
+        currentOp = op.value;
+        continue;
+      }
+      step += 1;
+      const rawValue = op.type === 'field' ? data[op.value] : op.value;
+      const value = parseFloat(rawValue || 0);
+
+      if (currentOp === '+') result += value;
+      else if (currentOp === '-') result -= value;
+      else if (currentOp === '*') result *= value;
+      else if (currentOp === '/') result = value !== 0 ? result / value : 0;
+
+      breakdown.push({
+        step,
+        type: op.type,
+        key: op.type === 'field' ? op.value : null,
+        value,
+        operator: currentOp,
+        running_total: Math.round(result * 100) / 100,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        formula_id: formula.id,
+        formula_name: formula.name,
+        result_label: formula.result_label || 'Result',
+        result: Math.round(result * 100) / 100,
+        formula_breakdown: breakdown,
+      },
+      { headers: corsHeaders }
+    );
+  } catch (error) {
+    console.error('Calculate formula by id error:', error);
+    return NextResponse.json(
+      { error: 'Failed to calculate formula', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
 // ============== SHIFT REPORTS ==============
 async function handleGetReports(request) {
   try {
@@ -2256,7 +2361,7 @@ export async function GET(request) {
   if (path[0] === 'reports') {
     return handleGetReports(request);
   }
-  if (path[0] === 'field-configs' || path[0] === 'site-field-configs') {
+  if (path[0] === 'field-configs' || path[0] === 'site-field-configs' || path[0] === 'form-fields') {
     return handleGetFieldConfigs(request);
   }
   if (path[0] === 'banking-formulas' || path[0] === 'site-banking-formulas') {
@@ -2326,11 +2431,14 @@ export async function POST(request) {
   if (path[0] === 'reports') {
     return handleCreateReport(request);
   }
-  if (path[0] === 'field-configs' || path[0] === 'site-field-configs') {
+  if (path[0] === 'field-configs' || path[0] === 'site-field-configs' || path[0] === 'form-fields') {
     if (path[1] === 'bulk') return handleBulkUpdateFieldConfigs(request);
     return handleCreateFieldConfig(request);
   }
   if (path[0] === 'banking-formulas' || path[0] === 'site-banking-formulas') {
+    if (path[1] && path[2] === 'calculate') {
+      return handleCalculateFormulaById(path[1], request);
+    }
     return handleCreateBankingFormula(request);
   }
   if (path[0] === 'banking' && path[1] === 'calculate') {
@@ -2367,7 +2475,7 @@ export async function PUT(request) {
   if (path[0] === 'reports' && path[1] && path[2] === 'status') {
     return handleUpdateReportStatus(path[1], request);
   }
-  if ((path[0] === 'field-configs' || path[0] === 'site-field-configs') && path[1]) {
+  if ((path[0] === 'field-configs' || path[0] === 'site-field-configs' || path[0] === 'form-fields') && path[1]) {
     return handleUpdateFieldConfig(path[1], request);
   }
   if ((path[0] === 'banking-formulas' || path[0] === 'site-banking-formulas') && path[1]) {
@@ -2398,7 +2506,7 @@ export async function DELETE(request) {
   if (path[0] === 'staff-assignments' && path[1]) {
     return handleDeleteStaffAssignment(path[1]);
   }
-  if ((path[0] === 'field-configs' || path[0] === 'site-field-configs') && path[1]) {
+  if ((path[0] === 'field-configs' || path[0] === 'site-field-configs' || path[0] === 'form-fields') && path[1]) {
     return handleDeleteFieldConfig(path[1]);
   }
   if ((path[0] === 'banking-formulas' || path[0] === 'site-banking-formulas') && path[1]) {
