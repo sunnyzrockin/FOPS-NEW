@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import supabase, { supabaseAdmin, supabaseStatus } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
-import { verifyAuth } from '@/lib/auth-helpers';
+import { verifyAuth, requireRole } from '@/lib/auth-helpers';
 // xlsx moved to dedicated /api/export route to keep catch-all bundle small.
 
 // CRITICAL: Force Node.js runtime on Vercel (NOT edge).
@@ -2449,6 +2449,544 @@ async function handleExport(request) {
   return NextResponse.redirect(newUrl, 307);
 }
 
+// ============== DIP READINGS (Phase 3: Fuel Inventory Tracking) ==============
+//
+// Operators log fuel tank levels (in litres) ~2x daily. Owner sees current
+// levels, consumption trends, and gets alerts to plan deliveries.
+//
+// Consumption math (computed here, NOT stored):
+//   consumption = previous_reading - current_reading + deliveries_received
+//
+// Authz:
+//   - operator: can read/write only their assigned sites; can edit their own
+//     readings within 24h of creation.
+//   - owner:    read-only on all sites they own.
+//   - staff:    no access for now (could be relaxed later).
+
+/**
+ * Resolve the set of site IDs the current user is allowed to act on.
+ * Returns an array of UUIDs (possibly empty).
+ */
+async function _getAllowedSiteIdsForDips(currentUser) {
+  const admin = supabaseAdmin || supabase;
+  if (currentUser.role === 'owner') {
+    const { data } = await admin
+      .from('sites')
+      .select('id')
+      .eq('owner_id', currentUser.id);
+    return (data || []).map((s) => s.id);
+  }
+  if (currentUser.role === 'operator') {
+    const { data } = await admin
+      .from('operator_site_assignments')
+      .select('site_id')
+      .eq('operator_user_id', currentUser.id);
+    return (data || []).map((a) => a.site_id);
+  }
+  if (currentUser.role === 'staff') {
+    const { data } = await admin
+      .from('staff_site_assignments')
+      .select('site_id')
+      .eq('staff_user_id', currentUser.id);
+    return (data || []).map((a) => a.site_id);
+  }
+  return [];
+}
+
+async function handleGetDips(request) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const currentUser = auth.user;
+    const admin = supabaseAdmin || supabase;
+
+    const url = new URL(request.url);
+    const siteIdParam = url.searchParams.get('site_id');
+    const siteIdsParam = url.searchParams.get('site_ids');
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    const limitParam = url.searchParams.get('limit');
+    const limit = Math.min(parseInt(limitParam, 10) || 500, 1000);
+
+    const allowedSiteIds = await _getAllowedSiteIdsForDips(currentUser);
+    if (allowedSiteIds.length === 0) {
+      return NextResponse.json([], { headers: corsHeaders });
+    }
+
+    // Apply requested filters, intersected with allowed sites
+    let requested = null;
+    if (siteIdParam) requested = [siteIdParam];
+    else if (siteIdsParam) requested = siteIdsParam.split(',').map((s) => s.trim()).filter(Boolean);
+
+    const finalSiteIds = requested
+      ? requested.filter((id) => allowedSiteIds.includes(id))
+      : allowedSiteIds;
+
+    if (finalSiteIds.length === 0) {
+      return NextResponse.json([], { headers: corsHeaders });
+    }
+
+    let query = admin
+      .from('dip_readings')
+      .select('*')
+      .in('site_id', finalSiteIds)
+      .order('reading_time', { ascending: false })
+      .limit(limit);
+
+    if (from) query = query.gte('reading_time', new Date(from).toISOString());
+    if (to) query = query.lte('reading_time', new Date(to).toISOString());
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return NextResponse.json(data || [], { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get dips error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch dip readings', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+async function handleGetDipsCurrent(request) {
+  // Latest reading per site for the user's allowed sites. Includes the
+  // immediately-previous reading so the UI can show "consumed since last
+  // reading" for each fuel grade.
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const currentUser = auth.user;
+    const admin = supabaseAdmin || supabase;
+
+    const allowedSiteIds = await _getAllowedSiteIdsForDips(currentUser);
+    if (allowedSiteIds.length === 0) {
+      return NextResponse.json([], { headers: corsHeaders });
+    }
+
+    // Pull the most recent 2 readings per site. Doing it in one query and
+    // bucketing in JS keeps us off pg window-function complexity.
+    const { data, error } = await admin
+      .from('dip_readings')
+      .select('*')
+      .in('site_id', allowedSiteIds)
+      .order('reading_time', { ascending: false })
+      .limit(allowedSiteIds.length * 5); // grab a small buffer per site
+    if (error) throw error;
+
+    const bySite = new Map();
+    for (const row of data || []) {
+      const arr = bySite.get(row.site_id) || [];
+      if (arr.length < 2) arr.push(row);
+      bySite.set(row.site_id, arr);
+    }
+
+    const fuels = ['ulp', 'diesel', 'premium'];
+    const result = allowedSiteIds.map((siteId) => {
+      const [current, previous] = bySite.get(siteId) || [];
+      const consumption = {};
+      for (const f of fuels) {
+        const cur = current?.[`${f}_litres`];
+        const prev = previous?.[`${f}_litres`];
+        const deliveries = Number(current?.[`deliveries_${f}_litres`] || 0);
+        if (cur != null && prev != null) {
+          // consumed since previous reading
+          consumption[f] = Number(prev) - Number(cur) + deliveries;
+        } else {
+          consumption[f] = null;
+        }
+      }
+      return {
+        site_id: siteId,
+        current: current || null,
+        previous: previous || null,
+        consumption_since_previous: consumption,
+      };
+    });
+
+    return NextResponse.json(result, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get current dips error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch current dips', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+async function handleGetDipsTrends(request) {
+  // Daily consumption per fuel grade for the last N days, per site.
+  // For each day we compute (first reading of day) - (last reading of day)
+  // + sum(deliveries during the day). That gives total litres pumped on
+  // that calendar day. We then also expose the rolling N-day average.
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const currentUser = auth.user;
+    const admin = supabaseAdmin || supabase;
+
+    const url = new URL(request.url);
+    const siteIdParam = url.searchParams.get('site_id');
+    const days = Math.max(1, Math.min(parseInt(url.searchParams.get('days'), 10) || 7, 90));
+
+    const allowedSiteIds = await _getAllowedSiteIdsForDips(currentUser);
+    if (allowedSiteIds.length === 0) {
+      return NextResponse.json({ days, sites: [] }, { headers: corsHeaders });
+    }
+
+    const siteIds = siteIdParam
+      ? (allowedSiteIds.includes(siteIdParam) ? [siteIdParam] : [])
+      : allowedSiteIds;
+    if (siteIds.length === 0) {
+      return NextResponse.json({ days, sites: [] }, { headers: corsHeaders });
+    }
+
+    // Fetch readings going back `days + 1` days so we have a baseline for
+    // the first day in the window.
+    const since = new Date();
+    since.setDate(since.getDate() - (days + 1));
+    const { data, error } = await admin
+      .from('dip_readings')
+      .select('*')
+      .in('site_id', siteIds)
+      .gte('reading_time', since.toISOString())
+      .order('reading_time', { ascending: true });
+    if (error) throw error;
+
+    const fuels = ['ulp', 'diesel', 'premium'];
+
+    // group readings by site -> day
+    const groupedBySite = new Map();
+    for (const row of data || []) {
+      const day = new Date(row.reading_time).toISOString().slice(0, 10);
+      const siteMap = groupedBySite.get(row.site_id) || new Map();
+      const dayArr = siteMap.get(day) || [];
+      dayArr.push(row);
+      siteMap.set(day, dayArr);
+      groupedBySite.set(row.site_id, siteMap);
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayKeys = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      dayKeys.push(d.toISOString().slice(0, 10));
+    }
+
+    const sites = siteIds.map((siteId) => {
+      const siteMap = groupedBySite.get(siteId) || new Map();
+      const daily = dayKeys.map((day) => {
+        const readings = (siteMap.get(day) || []).slice().sort((a, b) =>
+          new Date(a.reading_time) - new Date(b.reading_time)
+        );
+        const consumption = { ulp: null, diesel: null, premium: null };
+        if (readings.length >= 2) {
+          const first = readings[0];
+          const last = readings[readings.length - 1];
+          for (const f of fuels) {
+            const startVal = first[`${f}_litres`];
+            const endVal = last[`${f}_litres`];
+            if (startVal != null && endVal != null) {
+              // sum deliveries within the day (skip the first reading's
+              // deliveries since those happened before the window opens).
+              const deliveriesInDay = readings.slice(1).reduce(
+                (acc, r) => acc + Number(r[`deliveries_${f}_litres`] || 0),
+                0
+              );
+              consumption[f] = Number(startVal) - Number(endVal) + deliveriesInDay;
+            }
+          }
+        }
+        return { date: day, consumption, reading_count: readings.length };
+      });
+
+      // averages over the window for days that had a value
+      const avg = { ulp: null, diesel: null, premium: null };
+      for (const f of fuels) {
+        const vals = daily.map((d) => d.consumption[f]).filter((v) => v != null);
+        if (vals.length > 0) {
+          avg[f] = vals.reduce((a, b) => a + b, 0) / vals.length;
+        }
+      }
+
+      return { site_id: siteId, daily, average_consumption: avg };
+    });
+
+    return NextResponse.json({ days, sites }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Get dip trends error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch dip trends', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+async function handleCreateDip(request) {
+  try {
+    const auth = await requireRole(request, ['operator', 'owner']);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const currentUser = auth.user;
+    const admin = supabaseAdmin || supabase;
+
+    const body = await request.json();
+    const {
+      site_id,
+      reading_label = null,
+      reading_time = null,
+      ulp_litres = null,
+      diesel_litres = null,
+      premium_litres = null,
+      deliveries_ulp_litres = 0,
+      deliveries_diesel_litres = 0,
+      deliveries_premium_litres = 0,
+      notes = null,
+    } = body || {};
+
+    if (!site_id) {
+      return NextResponse.json(
+        { error: 'site_id is required' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // Need at least one fuel level OR one delivery to be useful
+    const anyLevel = [ulp_litres, diesel_litres, premium_litres].some((v) => v != null && v !== '');
+    const anyDelivery = [deliveries_ulp_litres, deliveries_diesel_litres, deliveries_premium_litres]
+      .some((v) => Number(v) > 0);
+    if (!anyLevel && !anyDelivery) {
+      return NextResponse.json(
+        { error: 'Provide at least one tank level or one delivery value.' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const allowedSiteIds = await _getAllowedSiteIdsForDips(currentUser);
+    if (!allowedSiteIds.includes(site_id)) {
+      return NextResponse.json(
+        { error: 'You are not assigned to this site.' },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    const toNum = (v) => (v === '' || v == null ? null : Number(v));
+    const toNumZero = (v) => (v === '' || v == null ? 0 : Number(v));
+
+    const row = {
+      id: uuidv4(),
+      site_id,
+      operator_user_id: currentUser.id,
+      reading_label: reading_label || null,
+      reading_time: reading_time ? new Date(reading_time).toISOString() : new Date().toISOString(),
+      ulp_litres: toNum(ulp_litres),
+      diesel_litres: toNum(diesel_litres),
+      premium_litres: toNum(premium_litres),
+      deliveries_ulp_litres: toNumZero(deliveries_ulp_litres),
+      deliveries_diesel_litres: toNumZero(deliveries_diesel_litres),
+      deliveries_premium_litres: toNumZero(deliveries_premium_litres),
+      notes: notes || null,
+    };
+
+    const { data, error } = await admin
+      .from('dip_readings')
+      .insert([row])
+      .select()
+      .single();
+    if (error) throw error;
+
+    return NextResponse.json(data, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Create dip error:', error);
+    return NextResponse.json(
+      { error: 'Failed to create dip reading', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+async function handleUpdateDip(id, request) {
+  // Operator can edit their OWN reading within 24h. Owner can edit any
+  // reading for their own sites at any time (audit trail not implemented yet).
+  try {
+    const auth = await requireRole(request, ['operator', 'owner']);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const currentUser = auth.user;
+    const admin = supabaseAdmin || supabase;
+
+    const { data: existing, error: getErr } = await admin
+      .from('dip_readings')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (getErr || !existing) {
+      return NextResponse.json(
+        { error: 'Dip reading not found' },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    const allowedSiteIds = await _getAllowedSiteIdsForDips(currentUser);
+    if (!allowedSiteIds.includes(existing.site_id)) {
+      return NextResponse.json(
+        { error: 'You do not have access to this reading.' },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    if (currentUser.role === 'operator') {
+      if (existing.operator_user_id !== currentUser.id) {
+        return NextResponse.json(
+          { error: 'Operators can only edit their own readings.' },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+      const ageMs = Date.now() - new Date(existing.created_at).getTime();
+      if (ageMs > 24 * 60 * 60 * 1000) {
+        return NextResponse.json(
+          { error: 'Edit window expired (>24h). Submit a new reading instead.' },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+    }
+
+    const body = await request.json();
+    const editable = [
+      'reading_label',
+      'reading_time',
+      'ulp_litres',
+      'diesel_litres',
+      'premium_litres',
+      'deliveries_ulp_litres',
+      'deliveries_diesel_litres',
+      'deliveries_premium_litres',
+      'notes',
+    ];
+    const patch = {};
+    for (const k of editable) {
+      if (k in body) {
+        if (k === 'reading_time' && body[k]) {
+          patch[k] = new Date(body[k]).toISOString();
+        } else if (k.endsWith('_litres')) {
+          // numeric coerce; '' / null => null for levels, 0 for deliveries
+          const isDelivery = k.startsWith('deliveries_');
+          const v = body[k];
+          if (v === '' || v == null) {
+            patch[k] = isDelivery ? 0 : null;
+          } else {
+            patch[k] = Number(v);
+          }
+        } else {
+          patch[k] = body[k] || null;
+        }
+      }
+    }
+
+    const { data, error } = await admin
+      .from('dip_readings')
+      .update(patch)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+
+    return NextResponse.json(data, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Update dip error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update dip reading', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+async function handleDeleteDip(id, request) {
+  // Operator can delete their OWN reading within 24h; owner can delete any
+  // reading for their own sites.
+  try {
+    const auth = await requireRole(request, ['operator', 'owner']);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const currentUser = auth.user;
+    const admin = supabaseAdmin || supabase;
+
+    const { data: existing, error: getErr } = await admin
+      .from('dip_readings')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (getErr || !existing) {
+      return NextResponse.json(
+        { error: 'Dip reading not found' },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    const allowedSiteIds = await _getAllowedSiteIdsForDips(currentUser);
+    if (!allowedSiteIds.includes(existing.site_id)) {
+      return NextResponse.json(
+        { error: 'You do not have access to this reading.' },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+    if (currentUser.role === 'operator') {
+      if (existing.operator_user_id !== currentUser.id) {
+        return NextResponse.json(
+          { error: 'Operators can only delete their own readings.' },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+      const ageMs = Date.now() - new Date(existing.created_at).getTime();
+      if (ageMs > 24 * 60 * 60 * 1000) {
+        return NextResponse.json(
+          { error: 'Delete window expired (>24h).' },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+    }
+
+    const { error } = await admin
+      .from('dip_readings')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+
+    return NextResponse.json({ success: true }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete dip error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete dip reading', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+
+
 // ============== REQUEST ROUTING ==============
 export async function GET(request) {
   const path = getPathSegments(request);
@@ -2509,6 +3047,11 @@ export async function GET(request) {
   if (path[0] === 'invites') {
     return handleGetInvites(request);
   }
+  if (path[0] === 'dips') {
+    if (path[1] === 'current') return handleGetDipsCurrent(request);
+    if (path[1] === 'trends') return handleGetDipsTrends(request);
+    return handleGetDips(request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -2568,6 +3111,9 @@ export async function POST(request) {
   if (path[0] === 'invites') {
     return handleCreateInvite(request);
   }
+  if (path[0] === 'dips') {
+    return handleCreateDip(request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -2602,6 +3148,9 @@ export async function PUT(request) {
   if (path[0] === 'competitor-prices' && path[1]) {
     return handleUpdateCompetitorPrice(path[1], request);
   }
+  if (path[0] === 'dips' && path[1]) {
+    return handleUpdateDip(path[1], request);
+  }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
 }
@@ -2632,6 +3181,9 @@ export async function DELETE(request) {
   }
   if (path[0] === 'competitor-prices' && path[1]) {
     return handleDeleteCompetitorPrice(path[1]);
+  }
+  if (path[0] === 'dips' && path[1]) {
+    return handleDeleteDip(path[1], request);
   }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });

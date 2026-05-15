@@ -20,6 +20,7 @@ import BankingManagement from '@/components/operator/banking/banking-management'
 import FieldConfiguration from '@/components/operator/field-configuration';
 import FuelPricingManagement from '@/components/fuel-pricing/fuel-pricing-management';
 import BankingSubmissions from '@/components/shared/banking-submissions';
+import DipsManagement from '@/components/operator/dips-management';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -99,6 +100,9 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
   }
   if (activeTab === 'submissions') {
     return <BankingSubmissions user={user} sites={sites} currentUserRole="operator" />;
+  }
+  if (activeTab === 'fuel-inventory') {
+    return <div className="container mx-auto px-4 py-6"><DipsManagement user={user} sites={sites} /></div>;
   }
   if (selectedReport) {
     return (

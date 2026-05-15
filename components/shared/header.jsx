@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import {
   Fuel, LogOut, BarChart3, Building2, Users, Settings, Calculator,
-  ClipboardList, FileText,
+  ClipboardList, FileText, Droplets,
 } from 'lucide-react';
 
 /**
@@ -19,6 +19,7 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
         { id: 'sites', label: 'Sites', icon: Building2 },
         { id: 'operators', label: 'Operators', icon: Users },
         { id: 'submissions', label: 'Banking Submissions', icon: ClipboardList },
+        { id: 'fuel-inventory', label: 'Fuel Inventory', icon: Droplets },
         { id: 'fuel-prices', label: 'Fuel Prices', icon: Fuel },
       ]
     : user.role === 'operator'
@@ -27,6 +28,7 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
         { id: 'staff', label: 'Staff Management', icon: Users },
         { id: 'pricing', label: 'Fuel Pricing', icon: Fuel },
         { id: 'submissions', label: 'Banking Submissions', icon: ClipboardList },
+        { id: 'fuel-inventory', label: 'Fuel Inventory', icon: Droplets },
         { id: 'fields', label: 'Form Fields', icon: Settings },
         { id: 'banking', label: 'Banking', icon: Calculator },
       ]
