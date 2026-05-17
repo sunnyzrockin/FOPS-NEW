@@ -122,7 +122,21 @@ export default function FieldConfiguration({ user, sites }) {
   };
 
   const handleDelete = async (fieldId) => {
-    if (!confirm('Delete this field?')) return;
+    // Look up the field to vary the confirmation depending on core-status.
+    const field = fields.find((f) => f.id === fieldId);
+    const isCore = !!field?.is_core;
+    const label = field?.label || 'this field';
+
+    const confirmMsg = isCore
+      ? `"${label}" is a CORE field.\n\n` +
+        `Deleting it will remove the column from the staff shift report form, and any banking ` +
+        `formulas, KPI cards, or dashboards that reference it will skip this value.\n\n` +
+        `This is reversible — you can re-add the field later via "Add Field".\n\n` +
+        `Continue and delete "${label}"?`
+      : `Delete "${label}"? You can re-add it later via "Add Field".`;
+
+    if (!confirm(confirmMsg)) return;
+
     try {
       const res = await fetch(`/api/field-configs/${fieldId}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -273,8 +287,8 @@ export default function FieldConfiguration({ user, sites }) {
                     <Input
                       value={field.label}
                       onChange={(e) => updateField(field.id, 'label', e.target.value)}
-                      disabled={field.is_core}
                       className="font-medium"
+                      title={field.is_core ? 'You can rename a core field; the internal key stays the same.' : undefined}
                     />
                   </div>
                   <Badge variant="outline">{field.field_type}</Badge>
@@ -310,15 +324,19 @@ export default function FieldConfiguration({ user, sites }) {
                     <Switch
                       checked={field.is_enabled}
                       onCheckedChange={(v) => updateField(field.id, 'is_enabled', v)}
-                      disabled={field.is_core}
                     />
                   </div>
 
-                  {!field.is_core && (
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(field.id)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(field.id)}
+                    title={field.is_core
+                      ? 'Delete this core field (you can re-add it later)'
+                      : 'Delete this field'}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
