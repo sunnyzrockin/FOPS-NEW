@@ -894,6 +894,72 @@ async function handleUpdateSite(siteId, request) {
   }
 }
 
+// DELETE /api/sites/:id — owner-only. Cascades via ON DELETE CASCADE FKs on
+// dependent tables (shift_reports, dip_readings, fuel_price_changes,
+// site_field_configs, site_banking_formulas, operator_site_assignments,
+// staff_site_assignments). Owner must own the site.
+async function handleDeleteSite(siteId, request) {
+  try {
+    const auth = await requireRole(request, ['owner']);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+    const me = auth.user;
+    const admin = supabaseAdmin || supabase;
+
+    // Ownership check.
+    const { data: site, error: getErr } = await admin
+      .from('sites')
+      .select('id, owner_id, name')
+      .eq('id', siteId)
+      .maybeSingle();
+    if (getErr) throw getErr;
+    if (!site) {
+      return NextResponse.json({ error: 'Site not found' }, { status: 404, headers: corsHeaders });
+    }
+    if (site.owner_id !== me.id) {
+      return NextResponse.json(
+        { error: 'You do not own this site.' },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    // Best-effort manual cleanup for tables that may not have ON DELETE
+    // CASCADE FKs (the schema in this DB is inconsistent — some tables
+    // were added by later migrations without FKs).
+    const cleanupTables = [
+      'shift_reports',
+      'dip_readings',
+      'fuel_price_changes',
+      'site_field_configs',
+      'site_banking_formulas',
+      'operator_site_assignments',
+      'staff_site_assignments',
+      'site_competitors',
+    ];
+    for (const t of cleanupTables) {
+      const { error: e } = await admin.from(t).delete().eq('site_id', siteId);
+      if (e) console.warn(`[delete-site] cleanup ${t} warning:`, e.message);
+    }
+
+    const { error: delErr } = await admin
+      .from('sites')
+      .delete()
+      .eq('id', siteId);
+    if (delErr) throw delErr;
+
+    return NextResponse.json({ ok: true, deleted: siteId }, { headers: corsHeaders });
+  } catch (error) {
+    console.error('Delete site error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete site', message: error?.message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
 // ============== FIELD CONFIGS ==============
 async function handleGetFieldConfigs(request) {
   try {
@@ -3445,6 +3511,9 @@ export async function DELETE(request) {
   }
   if (path[0] === 'dips' && path[1]) {
     return handleDeleteDip(path[1], request);
+  }
+  if (path[0] === 'sites' && path[1]) {
+    return handleDeleteSite(path[1], request);
   }
   
   return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });

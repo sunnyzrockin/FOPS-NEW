@@ -96,7 +96,7 @@ export async function GET(request) {
           staff:users!staff_user_id(id, name, email),
           acknowledged_at
         ),
-        escalations:fuel_price_escalations(
+        latest_escalation:fuel_price_escalations(
           id,
           escalation_level,
           escalation_type,
@@ -105,7 +105,13 @@ export async function GET(request) {
         )
       `)
       .in('site_id', scopedSiteIds)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(50)
+      // Trim escalations to the most recent 5 only; some rows have 180+
+      // escalation history records that bloat the payload to MBs and
+      // freeze the UI for several seconds while React parses them.
+      .order('escalated_at', { foreignTable: 'latest_escalation', ascending: false })
+      .limit(5, { foreignTable: 'latest_escalation' });
 
     if (status) query = query.eq('status', status);
 
