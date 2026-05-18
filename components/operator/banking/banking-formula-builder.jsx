@@ -74,6 +74,7 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
         if (cancelled) return;
         const usable = (Array.isArray(data) ? data : [])
           .filter((f) => f.is_enabled !== false)
+          .filter((f) => f.show_in_banking !== false)   // Phase 3: per-field opt-in
           .filter((f) => !f.field_type || ['number', 'currency', 'decimal', 'integer'].includes(f.field_type))
           .map((f) => ({ key: f.key, label: f.label || f.key, is_core: !!f.is_core }));
         setCustomFields(usable);

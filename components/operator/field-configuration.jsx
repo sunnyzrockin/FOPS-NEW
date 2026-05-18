@@ -101,6 +101,7 @@ export default function FieldConfiguration({ user, sites }) {
           display_order: fields.length + 1,
           is_core: false,
           is_enabled: true,
+          show_in_banking: true,   // Custom fields default to visible in banking
           created_by_user_id: user.id,
         }),
       });
@@ -141,7 +142,10 @@ export default function FieldConfiguration({ user, sites }) {
       const res = await fetch(`/api/field-configs/${fieldId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`Failed to delete: ${data.error || data.message || res.status}`);
+        // 409 means the field is referenced by an active banking formula —
+        // show the full helpful message that lists which formulas use it.
+        const msg = data.message || data.error || `HTTP ${res.status}`;
+        alert(msg);
         return;
       }
       loadFields();
@@ -324,6 +328,20 @@ export default function FieldConfiguration({ user, sites }) {
                     <Switch
                       checked={field.is_enabled}
                       onCheckedChange={(v) => updateField(field.id, 'is_enabled', v)}
+                    />
+                  </div>
+
+                  {/* Show in Banking toggle — controls whether this field
+                      appears in the Banking Formula Builder's Available
+                      Fields palette. Defaults OFF for core fields, ON for
+                      custom ones (operator decides). */}
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm" title="If on, this field appears in the Banking Formula Builder's Available Fields palette.">
+                      Show in Banking
+                    </Label>
+                    <Switch
+                      checked={field.show_in_banking !== false}
+                      onCheckedChange={(v) => updateField(field.id, 'show_in_banking', v)}
                     />
                   </div>
 

@@ -1040,17 +1040,65 @@ async function handleUpdateFieldConfig(configId, request) {
 
 async function handleDeleteFieldConfig(configId) {
   try {
-    const { error } = await (supabaseAdmin || supabase)
+    const admin = supabaseAdmin || supabase;
+
+    // Look up the field first so we can do a formula-reference check.
+    const { data: field, error: getErr } = await admin
+      .from('site_field_configs')
+      .select('id, site_id, key, label')
+      .eq('id', configId)
+      .maybeSingle();
+    if (getErr) throw getErr;
+    if (!field) {
+      return NextResponse.json(
+        { error: 'Field not found' },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    // Phase 3 safety: a field referenced by an ACTIVE banking formula on
+    // the same site cannot be deleted. We scan the JSON formula_json for
+    // any token whose `value` equals the field key.
+    const { data: formulas, error: fErr } = await admin
+      .from('site_banking_formulas')
+      .select('id, name, formula_json, is_active')
+      .eq('site_id', field.site_id);
+    if (fErr) throw fErr;
+
+    const referencingFormulas = [];
+    for (const f of formulas || []) {
+      if (f.is_active === false) continue;
+      try {
+        const ops = JSON.parse(f.formula_json || '{}').operations || [];
+        if (ops.some((op) => op.type === 'field' && op.value === field.key)) {
+          referencingFormulas.push(f.name);
+        }
+      } catch {
+        // skip malformed JSON
+      }
+    }
+
+    if (referencingFormulas.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Field is in use by an active banking formula',
+          message: `"${field.label}" cannot be deleted because it is used in: ${referencingFormulas.join(', ')}. Remove the field from those formulas (or deactivate them) first.`,
+          referenced_by: referencingFormulas,
+        },
+        { status: 409, headers: corsHeaders }
+      );
+    }
+
+    const { error } = await admin
       .from('site_field_configs')
       .delete()
       .eq('id', configId);
-    
     if (error) throw error;
-    
+
     return NextResponse.json({ message: 'Field config deleted' }, { headers: corsHeaders });
   } catch (error) {
     console.error('Delete field config error:', error);
-    return NextResponse.json({ error: 'Failed to delete field config' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Failed to delete field config', message: error?.message }, { status: 500, headers: corsHeaders });
   }
 }
 
