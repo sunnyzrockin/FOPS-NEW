@@ -88,24 +88,19 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
     return () => { cancelled = true; };
   }, [siteId]);
 
-  // Merge live API list with CORE_FIELDS so the palette is always populated,
-  // and so we always have a sample value for the live preview.
+  // If the live API returned ANY fields for this site, show ONLY those —
+  // operators want to see exactly what they configured. If the API returned
+  // empty (fresh site with nothing configured) or errored out, fall back
+  // to CORE_FIELDS so the palette is never empty.
   const availableFields = useMemo(() => {
     const live = customFields || [];
     if (live.length === 0) return CORE_FIELDS;
-    const seen = new Set();
-    const merged = [];
-    for (const f of live) {
-      if (!seen.has(f.key)) {
-        seen.add(f.key);
-        const sampleFromCore = CORE_FIELDS.find((c) => c.key === f.key)?.sample;
-        merged.push({ ...f, sample: sampleFromCore ?? 1000 });
-      }
-    }
-    for (const c of CORE_FIELDS) {
-      if (!seen.has(c.key)) { seen.add(c.key); merged.push(c); }
-    }
-    return merged;
+    // Use live list verbatim. Attach a sample value for the live-preview
+    // calc — prefer a core sample if we recognise the key, else default 1000.
+    return live.map((f) => ({
+      ...f,
+      sample: CORE_FIELDS.find((c) => c.key === f.key)?.sample ?? 1000,
+    }));
   }, [customFields, CORE_FIELDS]);
 
   const operators = [
@@ -320,6 +315,10 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
             </span>
           ) : fieldsError ? (
             <span className="text-xs text-amber-700">Using fallback list (API: {fieldsError})</span>
+          ) : customFields.length === 0 ? (
+            <span className="text-xs text-amber-700">
+              No fields configured for this site — using fallback core list
+            </span>
           ) : (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <Sparkles className="h-3 w-3" /> {availableFields.length} field(s) — synced from Form Fields tab
