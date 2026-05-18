@@ -65,7 +65,10 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
       setCustomFields(null);
       setFieldsError(null);
       try {
-        const res = await authedFetch(`/api/field-configs?siteId=${siteId}`);
+        // /api/field-configs is open (no verifyAuth on the server). Using
+        // plain fetch sidesteps authedFetch's synthetic-401 race that fires
+        // when supabase-js momentarily returns null on dialog mount.
+        const res = await fetch(`/api/field-configs?siteId=${siteId}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (cancelled) return;
