@@ -1,38 +1,34 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import { getBrandStyle, getPriceBandColor } from '@/lib/fuel-pricing/brand-styles';
 
 /**
  * LiveFuelPricesMap — Leaflet client component. Centred on QLD by default.
  * Uses leaflet.markercluster to group the 1,600+ QLD stations at low zoom
- * levels and expands them into individual price-coloured markers as the
- * user zooms in.
- *
- * Colour bands (matches PetrolSpy):
- *   bottom third of price range → emerald (cheapest)
- *   middle third                 → amber
- *   top third                    → red (most expensive)
- * Falls back to blue if priceStats is unavailable.
+ * levels and expands them into individual BRAND-COLOURED pins as the user
+ * zooms in. Each pin:
+ *   - Background fill = the brand's primary colour (Shell yellow, BP green,
+ *     7-Eleven orange, Caltex red, Ampol blue, etc.)
+ *   - Border ring     = price band (emerald = cheap, amber = mid, red = expensive)
+ *   - Letter inside   = short brand code ("SH", "BP", "7E", "CA", "AM", ...)
+ * Defined in /app/lib/fuel-pricing/brand-styles.js — extend there to add more
+ * brands or tweak colours.
  */
 
-function _colorFor(priceStats) {
-  if (!priceStats || priceStats.min === priceStats.max) {
-    return () => '#3b82f6';
-  }
-  const { min, max } = priceStats;
-  const cheapCutoff = min + (max - min) / 3;
-  const midCutoff = min + (2 * (max - min)) / 3;
-  return (priceCents) => {
-    if (priceCents <= cheapCutoff) return '#10b981';
-    if (priceCents <= midCutoff)   return '#f59e0b';
-    return '#ef4444';
-  };
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 /**
@@ -43,7 +39,6 @@ function _colorFor(priceStats) {
 function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
   const map = useMap();
   const layerRef = useRef(null);
-  const colorFor = useMemo(() => _colorFor(priceStats), [priceStats]);
 
   useEffect(() => {
     if (!map) return;
@@ -79,24 +74,52 @@ function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
 
     for (const s of stations) {
       if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number') continue;
-      const fill = colorFor(s.price_cents);
-      const marker = L.circleMarker([s.latitude, s.longitude], {
-        radius: 7,
-        color: '#ffffff',
-        weight: 1,
-        fillColor: fill,
-        fillOpacity: 0.9,
+      const brandStyle = getBrandStyle(s.brand);
+      const ring = getPriceBandColor(s.price_cents, priceStats);
+      const priceFmt = `$${(s.price_cents / 100).toFixed(3)}`;
+
+      const iconHtml = `
+        <div style="
+          width:30px;height:30px;border-radius:50%;
+          background:${brandStyle.bg};
+          color:${brandStyle.fg};
+          border:3px solid ${ring};
+          display:flex;align-items:center;justify-content:center;
+          font-weight:800;font-size:10px;letter-spacing:-0.3px;
+          font-family:Inter,system-ui,sans-serif;
+          box-shadow:0 2px 6px rgba(0,0,0,0.35);
+          line-height:1;">
+          ${escapeHtml(brandStyle.label)}
+        </div>
+      `;
+
+      const marker = L.marker([s.latitude, s.longitude], {
+        icon: L.divIcon({
+          html: iconHtml,
+          className: 'fops-brand-pin',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+        }),
+        // Z-order so cheapest sit on top of expensive when overlapping
+        zIndexOffset: ring === '#10b981' ? 1000 : ring === '#f59e0b' ? 500 : 0,
       });
 
-      const priceFmt = `$${(s.price_cents / 100).toFixed(3)}`;
       marker.bindTooltip(
-        `<strong>${priceFmt}</strong> · ${s.brand || 'Unbranded'}`,
-        { direction: 'top', offset: [0, -6], opacity: 0.95 }
+        `<strong>${priceFmt}</strong> · ${escapeHtml(s.brand || 'Unbranded')}`,
+        { direction: 'top', offset: [0, -10], opacity: 0.95 }
       );
 
       const popup = `
         <div style="min-width:200px;">
-          <div style="font-weight:600;">${escapeHtml(s.name || 'Station')}</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <div style="
+              width:24px;height:24px;border-radius:50%;
+              background:${brandStyle.bg};color:${brandStyle.fg};
+              display:flex;align-items:center;justify-content:center;
+              font-weight:800;font-size:9px;flex-shrink:0;
+              border:2px solid ${ring};">${escapeHtml(brandStyle.label)}</div>
+            <div style="font-weight:600;">${escapeHtml(s.name || 'Station')}</div>
+          </div>
           ${s.brand ? `<div style="font-size:12px;color:#666;">${escapeHtml(s.brand)}</div>` : ''}
           ${s.address ? `<div style="font-size:12px;margin-top:4px;">${escapeHtml(s.address)}</div>` : ''}
           <div style="margin-top:8px;font-size:14px;">
@@ -120,18 +143,9 @@ function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
         layerRef.current = null;
       }
     };
-  }, [map, stations, colorFor, fuelLabel]);
+  }, [map, stations, priceStats, fuelLabel]);
 
   return null;
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 export default function LiveFuelPricesMap({ stations, priceStats, fuelLabel }) {

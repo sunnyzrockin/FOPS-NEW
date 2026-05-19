@@ -303,7 +303,19 @@ backend:
         agent: "testing"
         comment: "✅ Supabase PostgreSQL integration working - Users table (1 record), Reports table (19 records), all API endpoints responding. Database queries functional, foreign key relationships working."
 
-  - task: "P0 Auth Fix: authedFetch No-Active-Session Bug + Marker Clustering"
+  - task: "P2/P3 Hardening: Orphan Cleanup + RLS SECURITY DEFINER + Modular Routes + Brand Logos"
+    implemented: true
+    working: true
+    file: "/app/lib/api/*, /app/app/api/dips/*, /app/app/api/fuel-prices-live/*, /app/app/api/admin/cleanup-orphan-auth-users/route.js, /app/lib/supabase-rls-security-definer.sql, /app/lib/fuel-pricing/brand-styles.js, /app/components/fuel-pricing/live-fuel-prices-map.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "1) BRAND LOGOS ON MAP: Replaced colour-only dots with brand-coloured pins (Shell yellow, BP green, 7-Eleven orange, Caltex red, Ampol blue, etc.) — see /app/lib/fuel-pricing/brand-styles.js for the 30+ brand → colour/letter map. Pins now show a 2-letter brand code on the brand's primary colour, with a price-band ring (emerald/amber/red) so cheap/mid/expensive is still glanceable. Verified via screenshot — Brisbane shows BP, 7E, CX, AM, UN, MP, EG, RD, LB, FR all in their correct colours. 2) ORPHAN AUTH USER CLEANUP: New owner-only endpoint /api/admin/cleanup-orphan-auth-users (dry-run via GET, live delete via POST with explicit acknowledgement). Demo accounts whitelisted. Verified: 401 without token, 403 for staff, 400 without confirmation body. Initial scan found 1 orphan (testop@example.com); not deleted yet — user can run live mode whenever ready. 3) RLS WITH SECURITY DEFINER: New SQL migration /app/lib/supabase-rls-security-definer.sql. Defines three SECURITY DEFINER helpers (auth_user_uuid, auth_user_role, auth_user_site_ids) that bypass RLS internally — that's what breaks the infinite-recursion the old policy set had. Re-enables RLS on 15 tables with clean policies referencing only the helpers (no cross-table queries inside policies). Service role still bypasses RLS so API keeps working. Idempotent and safely re-runnable. USER MUST APPLY THIS IN SUPABASE SQL EDITOR. 4) MODULAR ROUTE REFACTOR (PHASE 1): Extracted dips + fuel-prices-live out of the 3,575-line catch-all into purpose-built modules: /app/lib/api/cors.js (shared CORS), /app/lib/api/site-access.js (getAllowedSiteIds), /app/lib/api/handlers/dips.js (6 handlers), /app/lib/api/handlers/fuel-prices-live.js (4 handlers). Eight new thin route.js files in /app/app/api/dips/* and /app/app/api/fuel-prices-live/*. Catch-all reduced from 3,575 → 2,827 lines (-748). All routes still 200: /api/dips, /api/dips/current (7 sites), /api/dips/trends?days=7, /api/fuel-prices-live/{status,filters,stations,sync}, plus legacy /api/sites, /api/reports, /api/dashboard/stats, /api/banking-formulas, /api/field-configs, /api/operator-assignments. Verified Fuel Inventory and QLD Live Prices UI tabs end-to-end."
+
+
     implemented: true
     working: true
     file: "/app/lib/authed-fetch.js, /app/components/fuel-pricing/live-fuel-prices-map.jsx"
