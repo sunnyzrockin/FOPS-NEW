@@ -303,6 +303,22 @@ backend:
         agent: "testing"
         comment: "✅ Supabase PostgreSQL integration working - Users table (1 record), Reports table (19 records), all API endpoints responding. Database queries functional, foreign key relationships working."
 
+  - task: "P0 Auth Fix: authedFetch No-Active-Session Bug + Marker Clustering"
+    implemented: true
+    working: true
+    file: "/app/lib/authed-fetch.js, /app/components/fuel-pricing/live-fuel-prices-map.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reported 'No active session' error on QLD Live Prices tab — map UI completely inaccessible despite being logged in."
+      - working: true
+        agent: "main"
+        comment: "ROOT CAUSE: When the stored access_token expired, the old fallback path created a fresh Supabase browser client and called refreshSession(), but the SDK had no in-memory session (because our login flow writes to a CUSTOM localStorage key 'supabase-session' instead of the SDK's default sb-* key). refreshSession() therefore returned null and the user was kicked to a synthetic 401. FIX: When the custom-stored access_token is expired (or backend returns 401), we now hydrate the Supabase client via setSession({access_token, refresh_token}) FIRST, then call refreshSession(), then persist the new session back to our custom key. Added verbose debug logging gated behind window.__AUTHED_FETCH_DEBUG and richer 'debug' payload on synthetic 401s for future diagnosis. ALSO ADDED: Leaflet marker clustering via leaflet.markercluster (already in package.json) — 1,600+ QLD stations now group into branded blue cluster bubbles at low zoom and expand to colour-coded circle markers as the user zooms in. VERIFIED VIA SCREENSHOT: Owner login → QLD Live Prices tab → 'Updated just now · qld_fpm' + '1,660 stations · ULP 91 · cheapest $0.990 · median $1.860' + 18 cluster bubbles rendered across QLD (Brisbane=1013, Gold Coast=203, Townsville area=125/74/111, etc). No 'No active session' error."
+
+
 frontend:
   - task: "Login Page"
     implemented: true
