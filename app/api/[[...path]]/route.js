@@ -3224,7 +3224,10 @@ async function handleGetLiveStations(request) {
         )
       `)
       .eq('fuel_type', fuelType)
-      .limit(5000);
+      // supabase-js caps the default response window at 1000 rows even
+      // when .limit() is higher. Use .range() to widen the window. QLD has
+      // ~1800 stations, so 5000 leaves plenty of headroom.
+      .range(0, 4999);
 
     // Push as many filters as we can down to the DB by joining on the
     // station table. Supabase's PostgREST allows dotted column filters.
@@ -3242,6 +3245,10 @@ async function handleGetLiveStations(request) {
 
     const rows = (data || [])
       .filter((r) => r.station && r.station.latitude != null && r.station.longitude != null)
+      // Drop obvious bad/placeholder data: prices below 50¢/L or above $5/L
+      // are almost always "station closed" sentinels from QLD FPM, not real
+      // pump prices. Keeps the map clean for the demo.
+      .filter((r) => r.price_cents >= 50 && r.price_cents <= 500)
       .map((r) => ({
         station_id: r.station.station_id,
         name: r.station.name,
@@ -3288,7 +3295,7 @@ async function handleGetLiveFilters(request) {
     const { data, error } = await supabaseAdmin
       .from('fuel_stations')
       .select('region, brand')
-      .limit(5000);
+      .range(0, 4999);
     if (error) throw error;
 
     const regions = Array.from(new Set((data || []).map((r) => r.region).filter(Boolean))).sort();
