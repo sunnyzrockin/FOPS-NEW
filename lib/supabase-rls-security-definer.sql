@@ -235,39 +235,28 @@ CREATE POLICY competitor_fuel_prices_read ON public.competitor_fuel_prices
     )
   );
 
--- Phase 3 — dips
+-- Phase 3 — dips + live prices.
+-- Note: we use plain `EXECUTE '...'` strings (not dollar-quoted) because
+-- some SQL editors (including Supabase Studio when invoked from the
+-- Dashboard) choke on nested dollar-quote tags like $POL$ inside $$ DO
+-- blocks. Single-quoted strings work everywhere. The policy bodies have
+-- no embedded single quotes, so no escaping needed.
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='dip_readings') THEN
-    EXECUTE $POL$
-      CREATE POLICY dip_readings_read ON public.dip_readings
-        FOR SELECT TO authenticated
-        USING (site_id = ANY (auth_user_site_ids()))
-    $POL$;
+    EXECUTE 'CREATE POLICY dip_readings_read ON public.dip_readings FOR SELECT TO authenticated USING (site_id = ANY (auth_user_site_ids()))';
   END IF;
 
   -- Live fuel prices tables: owner-only (matches API gate). Staff/operator
   -- have no business reading raw QLD FPM data via PostgREST.
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='fuel_stations') THEN
-    EXECUTE $POL$
-      CREATE POLICY fuel_stations_owner_read ON public.fuel_stations
-        FOR SELECT TO authenticated
-        USING (auth_user_role() = 'owner')
-    $POL$;
+    EXECUTE 'CREATE POLICY fuel_stations_owner_read ON public.fuel_stations FOR SELECT TO authenticated USING (auth_user_role() = ''owner'')';
   END IF;
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='fuel_prices_live') THEN
-    EXECUTE $POL$
-      CREATE POLICY fuel_prices_live_owner_read ON public.fuel_prices_live
-        FOR SELECT TO authenticated
-        USING (auth_user_role() = 'owner')
-    $POL$;
+    EXECUTE 'CREATE POLICY fuel_prices_live_owner_read ON public.fuel_prices_live FOR SELECT TO authenticated USING (auth_user_role() = ''owner'')';
   END IF;
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='fuel_price_sync_meta') THEN
-    EXECUTE $POL$
-      CREATE POLICY fuel_price_sync_meta_owner_read ON public.fuel_price_sync_meta
-        FOR SELECT TO authenticated
-        USING (auth_user_role() = 'owner')
-    $POL$;
+    EXECUTE 'CREATE POLICY fuel_price_sync_meta_owner_read ON public.fuel_price_sync_meta FOR SELECT TO authenticated USING (auth_user_role() = ''owner'')';
   END IF;
 END $$;
 
