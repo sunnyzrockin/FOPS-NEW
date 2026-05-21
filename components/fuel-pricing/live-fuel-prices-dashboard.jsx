@@ -171,7 +171,7 @@ export default function LiveFuelPricesDashboard() {
               <Label className="text-xs">Fuel type</Label>
               <Select value={fuelType} onValueChange={setFuelType}>
                 <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[1100]">
                   {(filters.fuel_types || []).map((f) => (
                     <SelectItem key={f} value={f}>{FUEL_LABELS[f] || f}</SelectItem>
                   ))}
@@ -182,7 +182,7 @@ export default function LiveFuelPricesDashboard() {
               <Label className="text-xs">Region</Label>
               <Select value={region} onValueChange={setRegion} disabled={filterLoading}>
                 <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[1100]">
                   <SelectItem value="all">All regions</SelectItem>
                   {filters.regions.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                 </SelectContent>
@@ -192,7 +192,7 @@ export default function LiveFuelPricesDashboard() {
               <Label className="text-xs">Brand</Label>
               <Select value={brand} onValueChange={setBrand} disabled={filterLoading}>
                 <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[1100]">
                   <SelectItem value="all">All brands</SelectItem>
                   {filters.brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                 </SelectContent>
@@ -239,7 +239,7 @@ export default function LiveFuelPricesDashboard() {
       )}
 
       {/* Map */}
-      <Card className="border-0 shadow-lg overflow-hidden">
+      <Card className="border-0 shadow-lg overflow-hidden mt-6">
         <CardContent className="p-0 relative">
           {stationsLoading && (
             <div className="absolute inset-0 z-[450] flex items-center justify-center bg-white/60 pointer-events-none">

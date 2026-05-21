@@ -3,20 +3,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Fuel, Building2 } from 'lucide-react';
-import FuelPriceMapView from './fuel-price-map-view';
 
 /**
- * FuelPriceComparisonSection — Owner-facing "Fuel Price Intelligence"
- * section. Lets the owner toggle between Map view and List view, and pick
- * a date. Pulls /api/fuel-price-comparison and renders the appropriate
- * view (Map: Leaflet pinned competitors; List: per-site grid of nearby
- * competitor prices with insights).
- * Extracted from /app/app/app/page.js.
+ * FuelPriceComparisonSection — Owner-facing "Fuel Price Intelligence" section.
+ * As of June 2025 this is LIST-ONLY: a per-site grid of nearby competitor
+ * prices with insights. The previous Map View has been removed at the
+ * owner's request (the QLD Live Prices tab now covers that use-case at a
+ * statewide level).
+ *
+ * Pulls /api/fuel-price-comparison and renders one card per owned site
+ * showing own price vs. competitor band per fuel type.
  */
 export default function FuelPriceComparisonSection({ sites, siteIds }) {
-  const [viewMode, setViewMode] = useState('map'); // 'map' or 'list'
   const [priceData, setPriceData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -67,76 +66,64 @@ export default function FuelPriceComparisonSection({ sites, siteIds }) {
           <h3 className="text-lg font-bold flex items-center gap-2">
             <Fuel className="h-5 w-5" /> Fuel Price Intelligence
           </h3>
-          <p className="text-sm text-muted-foreground">Compare your fuel prices with nearby competitors</p>
+          <p className="text-sm text-muted-foreground">Your current prices alongside nearby competitor benchmarks</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Tabs value={viewMode} onValueChange={setViewMode}>
-            <TabsList>
-              <TabsTrigger value="map">🗺️ Map View</TabsTrigger>
-              <TabsTrigger value="list">📋 List View</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <Input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-[180px]"
-          />
-        </div>
+        <Input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="w-[180px]"
+        />
       </div>
 
-      {viewMode === 'map' ? (
-        <FuelPriceMapView sites={sites} priceData={priceData} selectedDate={selectedDate} />
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {(priceData || []).map((site) => (
-            <Card key={site.site_id} className="border-0 shadow-lg">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
-                  {site.site_name}
-                </CardTitle>
-                <CardDescription className="text-xs">{site.site_code}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {Object.entries(site.fuel_data).map(([fuelType, data]) => (
-                  <div key={fuelType} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{fuelType}</span>
-                      {data.own_price && (
-                        <span className="text-lg font-bold text-blue-600">
-                          ${(data.own_price / 100).toFixed(1)}
-                        </span>
-                      )}
-                    </div>
-
-                    {data.competitor_prices && data.competitor_prices.length > 0 && (
-                      <div className="space-y-1 pl-3 border-l-2 border-slate-200">
-                        {data.competitor_prices.map((comp, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-xs">
-                            <span className={getPriceColor(false, comp.price === data.min_competitor_price, comp.price === data.max_competitor_price)}>
-                              {comp.competitor_name}
-                            </span>
-                            <span className={getPriceColor(false, comp.price === data.min_competitor_price, comp.price === data.max_competitor_price)}>
-                              ${(comp.price / 100).toFixed(1)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {data.insight && (
-                      <div className={`text-xs p-2 rounded border ${getInsightColor(data.insight_type)}`}>
-                        {data.insight}
-                      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {(priceData || []).map((site) => (
+          <Card key={site.site_id} className="border-0 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                {site.site_name}
+              </CardTitle>
+              <CardDescription className="text-xs">{site.site_code}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {Object.entries(site.fuel_data).map(([fuelType, data]) => (
+                <div key={fuelType} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{fuelType}</span>
+                    {data.own_price && (
+                      <span className="text-lg font-bold text-blue-600">
+                        ${(data.own_price / 100).toFixed(1)}
+                      </span>
                     )}
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+
+                  {data.competitor_prices && data.competitor_prices.length > 0 && (
+                    <div className="space-y-1 pl-3 border-l-2 border-slate-200">
+                      {data.competitor_prices.map((comp, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <span className={getPriceColor(false, comp.price === data.min_competitor_price, comp.price === data.max_competitor_price)}>
+                            {comp.competitor_name}
+                          </span>
+                          <span className={getPriceColor(false, comp.price === data.min_competitor_price, comp.price === data.max_competitor_price)}>
+                            ${(comp.price / 100).toFixed(1)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {data.insight && (
+                    <div className={`text-xs p-2 rounded border ${getInsightColor(data.insight_type)}`}>
+                      {data.insight}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
