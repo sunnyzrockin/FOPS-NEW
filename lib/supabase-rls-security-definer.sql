@@ -28,9 +28,13 @@
 -- =====================================================
 
 -- ── 1. SECURITY DEFINER helpers ─────────────────────────────────────────
+-- NOTE: This schema uses TEXT primary keys for users.id / sites.id (e.g.
+-- 'site-001', 'staff-001') even though auth.users.id is a real UUID.
+-- The helpers therefore return TEXT / TEXT[] to match the actual columns,
+-- and we cast auth.uid()::text where appropriate.
 
 CREATE OR REPLACE FUNCTION public.auth_user_uuid()
-RETURNS uuid
+RETURNS text
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
@@ -54,16 +58,16 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION public.auth_user_site_ids()
-RETURNS uuid[]
+RETURNS text[]
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public, auth
 AS $$
 DECLARE
-  v_user uuid;
+  v_user text;
   v_role text;
-  v_ids  uuid[];
+  v_ids  text[];
 BEGIN
   SELECT id, role INTO v_user, v_role
     FROM public.users
@@ -71,29 +75,29 @@ BEGIN
    LIMIT 1;
 
   IF v_user IS NULL THEN
-    RETURN ARRAY[]::uuid[];
+    RETURN ARRAY[]::text[];
   END IF;
 
   IF v_role = 'owner' THEN
-    SELECT COALESCE(array_agg(id), ARRAY[]::uuid[])
+    SELECT COALESCE(array_agg(id), ARRAY[]::text[])
       INTO v_ids
       FROM public.sites
      WHERE owner_id = v_user;
     RETURN v_ids;
   ELSIF v_role = 'operator' THEN
-    SELECT COALESCE(array_agg(site_id), ARRAY[]::uuid[])
+    SELECT COALESCE(array_agg(site_id), ARRAY[]::text[])
       INTO v_ids
       FROM public.operator_site_assignments
      WHERE operator_user_id = v_user;
     RETURN v_ids;
   ELSIF v_role = 'staff' THEN
-    SELECT COALESCE(array_agg(site_id), ARRAY[]::uuid[])
+    SELECT COALESCE(array_agg(site_id), ARRAY[]::text[])
       INTO v_ids
       FROM public.staff_site_assignments
      WHERE staff_user_id = v_user;
     RETURN v_ids;
   ELSE
-    RETURN ARRAY[]::uuid[];
+    RETURN ARRAY[]::text[];
   END IF;
 END;
 $$;
