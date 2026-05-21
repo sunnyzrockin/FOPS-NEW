@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RefreshCw, Loader2, MapPin, Fuel, AlertCircle } from 'lucide-react';
+import { RefreshCw, Loader2, MapPin, Fuel, AlertCircle, Search, Crosshair, Maximize2 } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 
 // react-leaflet imports must be client-only; SSR will crash because Leaflet
@@ -73,6 +73,77 @@ export default function LiveFuelPricesDashboard() {
   const [region, setRegion] = useState('all');
   const [brand, setBrand] = useState('all');
   const [maxPrice, setMaxPrice] = useState('');
+
+  // Map navigation state — bumped every time the user hits Search/Locate/Fit.
+  // The map component watches `mapTarget` and flies to its `center`/`bounds`.
+  const [mapTarget, setMapTarget] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchHint, setSearchHint] = useState(null); // {ok, message, ...}
+
+  const onSearchPostcode = async (e) => {
+    e?.preventDefault?.();
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearchBusy(true);
+    setSearchHint(null);
+    try {
+      const res = await authedFetch(
+        `/api/fuel-prices-live/postcode-lookup?q=${encodeURIComponent(q)}`
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setSearchHint({
+          ok: false,
+          message: data.error || `No stations match "${q}"`,
+        });
+        return;
+      }
+      setMapTarget({ kind: 'bounds', bounds: data.bounds, ts: Date.now() });
+      setSearchHint({
+        ok: true,
+        message: `Jumped to ${data.sampleSuburb || q} · ${data.stationCount} station${data.stationCount === 1 ? '' : 's'} (${data.mode.replace('_', ' ')})`,
+      });
+    } catch (err) {
+      setSearchHint({ ok: false, message: err?.message || 'Search failed' });
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+
+  const onLocateMe = () => {
+    setSearchHint(null);
+    if (!navigator.geolocation) {
+      setSearchHint({ ok: false, message: 'Geolocation not supported by this browser' });
+      return;
+    }
+    setSearchBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setMapTarget({
+          kind: 'point',
+          center: [pos.coords.latitude, pos.coords.longitude],
+          zoom: 13,
+          ts: Date.now(),
+        });
+        setSearchHint({ ok: true, message: 'Centred on your current location' });
+        setSearchBusy(false);
+      },
+      (err) => {
+        setSearchHint({
+          ok: false,
+          message: err?.code === 1 ? 'Location permission denied' : (err?.message || 'Failed to get location'),
+        });
+        setSearchBusy(false);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60_000 }
+    );
+  };
+
+  const onFitToQld = () => {
+    setMapTarget({ kind: 'reset', ts: Date.now() });
+    setSearchHint(null);
+  };
 
   // 1) Load filter options once on mount
   useEffect(() => {
@@ -238,6 +309,47 @@ export default function LiveFuelPricesDashboard() {
         </div>
       )}
 
+      {/* Postcode / locate toolbar */}
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <form onSubmit={onSearchPostcode} className="flex items-center gap-2 flex-1 min-w-[260px]">
+              <div className="relative flex-1">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Postcode or suburb (e.g. 4000, Brisbane, Capalaba)"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                  inputMode="search"
+                />
+              </div>
+              <Button type="submit" size="sm" disabled={searchBusy || !searchQuery.trim()}>
+                {searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Go'}
+              </Button>
+            </form>
+            <Button variant="outline" size="sm" onClick={onLocateMe} disabled={searchBusy} className="gap-2">
+              <Crosshair className="h-4 w-4" /> My location
+            </Button>
+            <Button variant="outline" size="sm" onClick={onFitToQld} className="gap-2">
+              <Maximize2 className="h-4 w-4" /> Fit to QLD
+            </Button>
+          </div>
+          {searchHint && (
+            <div
+              className={`mt-2 text-xs px-3 py-2 rounded border ${
+                searchHint.ok
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}
+            >
+              {searchHint.message}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Map */}
       <Card className="border-0 shadow-lg overflow-hidden mt-6">
         <CardContent className="p-0 relative">
@@ -246,7 +358,12 @@ export default function LiveFuelPricesDashboard() {
               <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
             </div>
           )}
-          <LiveFuelPricesMap stations={stations} priceStats={priceStats} fuelLabel={FUEL_LABELS[fuelType] || fuelType} />
+          <LiveFuelPricesMap
+            stations={stations}
+            priceStats={priceStats}
+            fuelLabel={FUEL_LABELS[fuelType] || fuelType}
+            target={mapTarget}
+          />
         </CardContent>
       </Card>
 

@@ -148,7 +148,45 @@ function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
   return null;
 }
 
-export default function LiveFuelPricesMap({ stations, priceStats, fuelLabel }) {
+/**
+ * MapController — applies imperative map actions (flyTo, fitBounds) when
+ * the `target` prop changes. Lives inside <MapContainer> so it can grab
+ * the Leaflet map via useMap().
+ *
+ * Supported targets:
+ *   { kind: 'point', center: [lat,lng], zoom?: 13 }
+ *   { kind: 'bounds', bounds: [[s,w],[n,e]], padding?: 20 }
+ *   { kind: 'reset' }   — resets to default QLD view
+ *
+ * Each target object is identity-compared (we look at .ts) so the user
+ * can click the same button twice and the map will re-fly.
+ */
+function MapController({ target, defaultCenter, defaultZoom }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map || !target) return;
+    try {
+      if (target.kind === 'point' && Array.isArray(target.center)) {
+        map.flyTo(target.center, target.zoom ?? 13, { duration: 1.0 });
+      } else if (target.kind === 'bounds' && Array.isArray(target.bounds)) {
+        const [sw, ne] = target.bounds;
+        if (sw[0] === ne[0] && sw[1] === ne[1]) {
+          // Single-point "bounds" — flyTo a sensible zoom instead.
+          map.flyTo(sw, 14, { duration: 1.0 });
+        } else {
+          map.flyToBounds(target.bounds, { padding: [40, 40], duration: 1.0, maxZoom: 14 });
+        }
+      } else if (target.kind === 'reset') {
+        map.flyTo(defaultCenter, defaultZoom, { duration: 1.0 });
+      }
+    } catch (e) {
+      console.warn('[MapController] action failed', e);
+    }
+  }, [map, target, defaultCenter, defaultZoom]);
+  return null;
+}
+
+export default function LiveFuelPricesMap({ stations, priceStats, fuelLabel, target }) {
   const center = [-22.0, 145.0]; // roughly centre of QLD
   const zoom = 5;
 
@@ -177,6 +215,7 @@ export default function LiveFuelPricesMap({ stations, priceStats, fuelLabel }) {
             />
           </LayersControl.BaseLayer>
         </LayersControl>
+        <MapController target={target} defaultCenter={center} defaultZoom={zoom} />
         <ClusteredStationsLayer
           stations={stations}
           priceStats={priceStats}
