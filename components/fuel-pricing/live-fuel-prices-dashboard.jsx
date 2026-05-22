@@ -114,7 +114,10 @@ export default function LiveFuelPricesDashboard() {
   const onLocateMe = () => {
     setSearchHint(null);
     if (!navigator.geolocation) {
-      setSearchHint({ ok: false, message: 'Geolocation not supported by this browser' });
+      setSearchHint({
+        ok: false,
+        message: 'Your browser does not support Geolocation. Type a postcode or suburb above to jump there instead.',
+      });
       return;
     }
     setSearchBusy(true);
@@ -130,10 +133,19 @@ export default function LiveFuelPricesDashboard() {
         setSearchBusy(false);
       },
       (err) => {
-        setSearchHint({
-          ok: false,
-          message: err?.code === 1 ? 'Location permission denied' : (err?.message || 'Failed to get location'),
-        });
+        // Map every PositionError code to a clear next-step the user can act on.
+        // 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT.
+        let msg;
+        if (err?.code === 1) {
+          msg = 'Location permission was denied. To use this, allow the location prompt in your browser/site settings — or just type a postcode (e.g. 4000) or suburb above and hit Go.';
+        } else if (err?.code === 2) {
+          msg = "Couldn't determine your location (GPS unavailable). Try typing a postcode or suburb above instead.";
+        } else if (err?.code === 3) {
+          msg = 'Location request timed out. Try again, or type a postcode or suburb above instead.';
+        } else {
+          msg = `${err?.message || 'Failed to get location'} — try typing a postcode or suburb above.`;
+        }
+        setSearchHint({ ok: false, message: msg });
         setSearchBusy(false);
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 60_000 }
