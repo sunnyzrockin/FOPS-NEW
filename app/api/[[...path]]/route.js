@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import supabase, { supabaseAdmin, supabaseStatus } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { verifyAuth, requireRole } from '@/lib/auth-helpers';
+import { logAudit, logAuditAsync } from '@/lib/api/audit';
 // xlsx moved to dedicated /api/export route to keep catch-all bundle small.
 
 // CRITICAL: Force Node.js runtime on Vercel (NOT edge).
@@ -188,6 +189,15 @@ async function handleLogin(request) {
       }
     }
     
+    logAuditAsync({
+      request,
+      action: 'login',
+      tableName: 'users',
+      recordId: user.id,
+      actor: { id: user.id, email: user.email, role: user.role },
+      metadata: { siteCount: sites.length },
+    });
+
     return NextResponse.json({
       user: {
         id: user.id,
@@ -456,6 +466,16 @@ async function handleCreateUser(request) {
       );
     }
 
+    logAuditAsync({
+      request,
+      action: 'insert',
+      tableName: 'users',
+      recordId: data.id,
+      actorEmailOverride: email,
+      actorRoleOverride: role,
+      after: { id: data.id, email, role, name, status: 'active' },
+    });
+
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('Create user error:', error);
@@ -473,9 +493,13 @@ async function handleCreateUser(request) {
 
 async function handleUpdateUser(userId, request) {
   try {
+    const auth = await verifyAuth(request);
     const updates = await request.json();
+    const db = supabaseAdmin || supabase;
+    let before = null;
+    try { const { data } = await db.from('users').select('*').eq('id', userId).single(); before = data; } catch {}
     
-    const { data, error } = await (supabaseAdmin || supabase)
+    const { data, error } = await db
       .from('users')
       .update(updates)
       .eq('id', userId)
@@ -483,6 +507,16 @@ async function handleUpdateUser(userId, request) {
       .single();
     
     if (error) throw error;
+    
+    logAuditAsync({
+      request,
+      actor: auth.ok ? auth.user : null,
+      action: 'update',
+      tableName: 'users',
+      recordId: userId,
+      before,
+      after: data,
+    });
     
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
@@ -493,12 +527,23 @@ async function handleUpdateUser(userId, request) {
 
 async function handleDeleteUser(userId) {
   try {
-    const { error } = await (supabaseAdmin || supabase)
+    const db = supabaseAdmin || supabase;
+    let before = null;
+    try { const { data } = await db.from('users').select('*').eq('id', userId).single(); before = data; } catch {}
+    const { error } = await db
       .from('users')
       .delete()
       .eq('id', userId);
     
     if (error) throw error;
+    
+    logAuditAsync({
+      action: 'delete',
+      tableName: 'users',
+      recordId: userId,
+      actorEmailOverride: before?.email,
+      before,
+    });
     
     return NextResponse.json({ message: 'User deleted successfully' }, { headers: corsHeaders });
   } catch (error) {
@@ -850,6 +895,7 @@ async function handleGetSiteById(siteId) {
 
 async function handleCreateSite(request) {
   try {
+    const auth = await verifyAuth(request);
     const body = await request.json();
     
     const newSite = {
@@ -866,6 +912,16 @@ async function handleCreateSite(request) {
     
     if (error) throw error;
     
+    logAuditAsync({
+      request,
+      actor: auth.ok ? auth.user : null,
+      action: 'insert',
+      tableName: 'sites',
+      recordId: data.id,
+      siteId: data.id,
+      after: data,
+    });
+    
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('Create site error:', error);
@@ -875,9 +931,14 @@ async function handleCreateSite(request) {
 
 async function handleUpdateSite(siteId, request) {
   try {
+    const auth = await verifyAuth(request);
     const updates = await request.json();
+    const db = supabaseAdmin || supabase;
     
-    const { data, error } = await (supabaseAdmin || supabase)
+    let before = null;
+    try { const { data } = await db.from('sites').select('*').eq('id', siteId).single(); before = data; } catch {}
+    
+    const { data, error } = await db
       .from('sites')
       .update(updates)
       .eq('id', siteId)
@@ -885,6 +946,17 @@ async function handleUpdateSite(siteId, request) {
       .single();
     
     if (error) throw error;
+
+    logAuditAsync({
+      request,
+      actor: auth.ok ? auth.user : null,
+      action: 'update',
+      tableName: 'sites',
+      recordId: siteId,
+      siteId,
+      before,
+      after: data,
+    });
     
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
@@ -948,6 +1020,16 @@ async function handleDeleteSite(siteId, request) {
       .delete()
       .eq('id', siteId);
     if (delErr) throw delErr;
+
+    logAuditAsync({
+      request,
+      actor: me,
+      action: 'delete',
+      tableName: 'sites',
+      recordId: siteId,
+      siteId,
+      before: site,
+    });
 
     return NextResponse.json({ ok: true, deleted: siteId }, { headers: corsHeaders });
   } catch (error) {
@@ -1438,6 +1520,12 @@ async function handleDeleteReport(reportId, request) {
     }
 
     const db = supabaseAdmin || supabase;
+    // Fetch the report before delete for audit before_state
+    let beforeReport = null;
+    try {
+      const { data } = await db.from('shift_reports').select('*').eq('id', reportId).single();
+      beforeReport = data;
+    } catch {}
     // First, clean up the formula results (no ON DELETE CASCADE assumed).
     try {
       await db.from('shift_formula_results').delete().eq('shift_report_id', reportId);
@@ -1446,6 +1534,16 @@ async function handleDeleteReport(reportId, request) {
     }
     const { error } = await db.from('shift_reports').delete().eq('id', reportId);
     if (error) throw error;
+
+    logAuditAsync({
+      request,
+      actor: me,
+      action: 'delete',
+      tableName: 'shift_reports',
+      recordId: reportId,
+      siteId: beforeReport?.site_id,
+      before: beforeReport,
+    });
 
     return NextResponse.json(
       { success: true, deleted_id: reportId },
@@ -1847,6 +1945,17 @@ async function handleCreateReport(request) {
       console.error('Create report - dip block crashed (non-fatal):', dipBlockErr);
     }
 
+    logAuditAsync({
+      request,
+      actor: { id: submitted_by_user_id, email: auth.user?.email, role: auth.user?.role },
+      action: 'insert',
+      tableName: 'shift_reports',
+      recordId: report.id,
+      siteId: site_id,
+      after: report,
+      metadata: { shift_type, date },
+    });
+
     return NextResponse.json(report, { status: 201, headers: corsHeaders });
   } catch (error) {
     console.error('Create report - unhandled error:', error);
@@ -1864,13 +1973,18 @@ async function handleUpdateReportStatus(reportId, request) {
   try {
     const { status, reviewed_by_user_id } = await request.json();
     
+    const db = supabaseAdmin || supabase;
+    // Fetch before-state for audit
+    let before = null;
+    try { const { data } = await db.from('shift_reports').select('*').eq('id', reportId).single(); before = data; } catch {}
+    
     const updates = {
       status,
       reviewed_by_user_id,
       reviewed_at: new Date().toISOString()
     };
     
-    const { data, error } = await (supabaseAdmin || supabase)
+    const { data, error } = await db
       .from('shift_reports')
       .update(updates)
       .eq('id', reportId)
@@ -1878,6 +1992,18 @@ async function handleUpdateReportStatus(reportId, request) {
       .single();
     
     if (error) throw error;
+
+    logAuditAsync({
+      request,
+      actorUserIdOverride: reviewed_by_user_id,
+      action: 'update',
+      tableName: 'shift_reports',
+      recordId: reportId,
+      siteId: data?.site_id,
+      before,
+      after: data,
+      metadata: { reason: 'status_change', new_status: status },
+    });
     
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {

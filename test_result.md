@@ -360,6 +360,19 @@ backend:
         agent: "testing"
         comment: "Frontend-only feature (uses existing POST /api/reports endpoint). No new backend testing required. Regression tests confirm POST /api/reports still working correctly."
 
+  - task: "Session 3: Audit Log + Support/Founder role + Founder Console"
+    implemented: true
+    working: "NA"
+    file: "/app/lib/supabase-session3-audit-log.sql, /app/lib/api/audit.js, /app/lib/api/handlers/founder.js, /app/app/api/founder/{audit-log,stats,users,sites,setup}/route.js, /app/app/founder/page.js, /app/app/founder/dashboard/page.js, /app/app/api/[[...path]]/route.js, /app/lib/api/handlers/dips.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Session 3 — Support/Founder layer + comprehensive audit logging. (1) NEW SQL MIGRATION /app/lib/supabase-session3-audit-log.sql creates public.audit_log table with 5 indexes + RLS allowing only role='support' to SELECT (via auth_user_role() SECURITY DEFINER helper). Service role bypasses RLS so writes work. USER MUST APPLY THIS IN SUPABASE SQL EDITOR. (2) AUDIT HELPER /app/lib/api/audit.js exports logAudit() and logAuditAsync() — both insert via service-role client, catch errors silently. (3) INSTRUMENTED ENDPOINTS: handleLogin (login/login_failed), handleCreateReport (insert), handleUpdateReportStatus (update + before/after), handleDeleteReport (delete + before), handleCreateSite/UpdateSite/DeleteSite, handleCreateUser/UpdateUser/DeleteUser, modular Dips handlers (Create/Update/Delete). (4) FOUNDER ENDPOINTS require role='support': GET /api/founder/{audit-log,stats,users,sites}, POST /api/founder/setup (gated by FOUNDER_SETUP_SECRET env var). (5) HIDDEN /founder login page (dark amber/red shield branding, not linked anywhere in app). (6) /founder/dashboard console with system overview cards, activity badges, 5-filter audit timeline with expandable before/after JSONB diffs. ALL files lint-clean. Tests to perform: (a) /api/founder/audit-log returns 401 without Bearer, 403 with owner/operator/staff JWT. (b) After applying SQL + running founder/setup, support login returns role='support'. (c) /api/founder/stats returns table counts + role breakdown. (d) Submitting/updating/deleting a report creates corresponding audit rows visible to support. (e) Failed login records 'login_failed' with attempted email. NOTE: User must run SQL migration AND POST /api/founder/setup with {secret: env.FOUNDER_SETUP_SECRET, email, password, name} before any audit endpoint will work."
+
+
 
     implemented: true
     working: true
