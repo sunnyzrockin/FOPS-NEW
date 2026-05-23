@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import {
   Fuel, LogOut, BarChart3, Building2, Users, Settings, Calculator,
-  ClipboardList, FileText, Droplets, Map, TableProperties,
+  ClipboardList, FileText, Droplets, Map, TableProperties, TrendingUp,
 } from 'lucide-react';
 
 /**
@@ -16,6 +16,7 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
   const tabs = user.role === 'owner'
     ? [
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+        { id: 'executive', label: 'Executive', icon: TrendingUp },
         { id: 'pivot', label: 'Monthly Reports', icon: TableProperties },
         { id: 'sites', label: 'Sites', icon: Building2 },
         { id: 'operators', label: 'Operators', icon: Users },

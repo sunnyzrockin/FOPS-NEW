@@ -10,9 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
   Loader2, Download, ChevronLeft, ChevronRight, Calendar as CalendarIcon,
-  Building2, TableProperties, FileText,
+  Building2, TableProperties, FileText, FileDown,
 } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
+import {
+  createFopsPdf, addSectionTitle, addTable, saveFopsPdf,
+} from '@/lib/pdf-export';
 
 /**
  * MonthlyReportsPivot — Operator-facing pivot table view of shift_reports.
@@ -160,6 +163,59 @@ export default function MonthlyReportsPivot({ user, sites }) {
     URL.revokeObjectURL(url);
   };
 
+  const exportPdf = () => {
+    if (!data?.columns?.length) return;
+    const cols = data.columns;
+    const siteName = data?.site?.name || sites.find((s) => s.id === selectedSite)?.name || 'Site';
+    const doc = createFopsPdf({
+      title: 'Monthly Reports',
+      subtitle: siteName,
+      dateRange: { from, to },
+      orientation: 'landscape',
+    });
+    doc.__fopsMeta.contentStartY = 96;
+
+    addSectionTitle(doc, `${data.reportCount || 0} shifts · ${cols.length} field columns`);
+
+    const head = [
+      'Date', 'Shifts',
+      ...cols.map((c) => c.label),
+      ...(showRowTotal ? ['Row Total'] : []),
+      ...(varianceAgainst !== 'none' ? [`Variance vs ${cols.find((c) => c.key === varianceAgainst)?.label || varianceAgainst}`] : []),
+    ];
+    const body = augmentedRows.map((r) => [
+      r.date,
+      String(r.shifts || ''),
+      ...cols.map((c) => (r.values[c.key] != null ? Number(r.values[c.key]).toFixed(2) : '—')),
+      ...(showRowTotal ? [r.has_data ? r.rowTotal.toFixed(2) : '—'] : []),
+      ...(varianceAgainst !== 'none' ? [r.varianceValue != null ? r.varianceValue.toFixed(2) : '—'] : []),
+    ]);
+    // Totals row
+    body.push([
+      'TOTAL',
+      String(data.reportCount || 0),
+      ...cols.map((c) => Number(data.totals[c.key] || 0).toFixed(2)),
+      ...(showRowTotal ? [totalsRowTotal.toFixed(2)] : []),
+      ...(varianceAgainst !== 'none'
+        ? [(totalsRowTotal - (Number(data.totals[varianceAgainst]) || 0)).toFixed(2)]
+        : []),
+    ]);
+
+    addTable(doc, head, body, {
+      styles: { fontSize: 7, cellPadding: 3 },
+      didParseCell: (hook) => {
+        // Highlight the totals row (last row).
+        if (hook.row.index === body.length - 1 && hook.section === 'body') {
+          hook.cell.styles.fillColor = [241, 245, 249];
+          hook.cell.styles.fontStyle = 'bold';
+        }
+      },
+    });
+
+    const safe = (s) => String(s || '').replace(/[\\/:*?"<>|]+/g, '_');
+    saveFopsPdf(doc, `FOPS_Monthly_${safe(siteName)}_${from}_to_${to}.pdf`);
+  };
+
   // Month-step navigation
   const stepMonth = (delta) => {
     const [y, m] = month.split('-').map((s) => parseInt(s, 10));
@@ -181,6 +237,9 @@ export default function MonthlyReportsPivot({ user, sites }) {
         </div>
         <Button onClick={exportCsv} disabled={!data?.columns?.length} variant="outline" className="gap-2">
           <Download className="h-4 w-4" /> Export CSV
+        </Button>
+        <Button onClick={exportPdf} disabled={!data?.columns?.length} className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90">
+          <FileDown className="h-4 w-4" /> Export PDF
         </Button>
       </div>
 

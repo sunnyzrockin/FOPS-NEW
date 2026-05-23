@@ -31,6 +31,7 @@ import BankingSubmissions from '@/components/shared/banking-submissions';
 import MonthlyReportsPivot from '@/components/operator/monthly-reports-pivot';
 import FuelInventoryDashboard from '@/components/owner/fuel-inventory-dashboard';
 import LiveFuelPricesDashboard from '@/components/fuel-pricing/live-fuel-prices-dashboard';
+import OwnerExecutiveDashboard from '@/components/owner/owner-executive-dashboard';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -128,6 +129,10 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
 
   if (activeTab === 'live-prices') {
     return <LiveFuelPricesDashboard />;
+  }
+
+  if (activeTab === 'executive') {
+    return <OwnerExecutiveDashboard user={user} sites={sites} />;
   }
 
   if (selectedReport) {
