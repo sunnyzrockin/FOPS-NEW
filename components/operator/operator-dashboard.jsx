@@ -21,6 +21,7 @@ import FieldConfiguration from '@/components/operator/field-configuration';
 import FuelPricingManagement from '@/components/fuel-pricing/fuel-pricing-management';
 import BankingSubmissions from '@/components/shared/banking-submissions';
 import DipsManagement from '@/components/operator/dips-management';
+import MonthlyReportsPivot from '@/components/operator/monthly-reports-pivot';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -103,6 +104,9 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
   }
   if (activeTab === 'fuel-inventory') {
     return <div className="container mx-auto px-4 py-6"><DipsManagement user={user} sites={sites} /></div>;
+  }
+  if (activeTab === 'pivot') {
+    return <div className="container mx-auto px-4 py-6"><MonthlyReportsPivot user={user} sites={sites} /></div>;
   }
   if (selectedReport) {
     return (
