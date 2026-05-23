@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Loader2, UserPlus, User, Users, Building, Building2, Trash2, Mail,
+  Loader2, UserPlus, User, Users, Building, Building2, Trash2, Mail, X,
 } from 'lucide-react';
 
 /**
@@ -29,6 +29,7 @@ export default function StaffAccessManagement({ user, sites }) {
   const [showAssignSites, setShowAssignSites] = useState(null);
   const [selectedSites, setSelectedSites] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [removingAssignmentId, setRemovingAssignmentId] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', password: 'demo123' });
   const [debug, setDebug] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -213,10 +214,35 @@ export default function StaffAccessManagement({ user, sites }) {
     }
   };
 
+  const handleRemoveSiteAssignment = async (assignmentId, staffName, siteName) => {
+    if (!assignmentId) return;
+    if (!confirm(`Remove ${staffName}'s access to ${siteName}?\n\nThey will no longer be able to submit shift reports for this site.`)) return;
+    setRemovingAssignmentId(assignmentId);
+    try {
+      const res = await fetch(`/api/staff-assignments/${assignmentId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Failed to remove site: ${data.error || data.message || res.status}`);
+        return;
+      }
+      // Optimistic local update + reload to stay consistent with server
+      setStaffAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+      loadData();
+    } catch (err) {
+      alert('Failed to remove site: ' + err.message);
+    } finally {
+      setRemovingAssignmentId(null);
+    }
+  };
+
   const getStaffSites = (staffId) =>
     staffAssignments
       .filter((a) => a.staff_user_id === staffId)
-      .map((a) => a.site?.name || 'Unknown');
+      .map((a) => ({
+        assignmentId: a.id,
+        siteId: a.site_id,
+        siteName: a.site?.name || 'Unknown',
+      }));
 
   if (loading) {
     return (
@@ -371,11 +397,35 @@ export default function StaffAccessManagement({ user, sites }) {
                       <p className="text-xs text-muted-foreground">{staff.email}</p>
                       <div className="flex flex-wrap gap-1 mt-2">
                         {getStaffSites(staff.id).length > 0 ? (
-                          getStaffSites(staff.id).map((site, i) => (
-                            <Badge key={i} variant="secondary" className="text-xs">
-                              <Building2 className="h-3 w-3 mr-1" />{site}
-                            </Badge>
-                          ))
+                          getStaffSites(staff.id).map((s) => {
+                            const busy = removingAssignmentId === s.assignmentId;
+                            return (
+                              <Badge
+                                key={s.assignmentId}
+                                variant="secondary"
+                                className="text-xs pl-2 pr-1 py-0.5 gap-1 flex items-center"
+                              >
+                                <Building2 className="h-3 w-3" />
+                                <span>{s.siteName}</span>
+                                <button
+                                  type="button"
+                                  aria-label={`Unassign ${s.siteName} from ${staff.name}`}
+                                  title={`Unassign ${s.siteName}`}
+                                  disabled={busy}
+                                  onClick={() =>
+                                    handleRemoveSiteAssignment(s.assignmentId, staff.name, s.siteName)
+                                  }
+                                  className="ml-1 inline-flex items-center justify-center h-4 w-4 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {busy ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <X className="h-3 w-3" />
+                                  )}
+                                </button>
+                              </Badge>
+                            );
+                          })
                         ) : (
                           <Badge variant="outline" className="text-xs text-orange-600">
                             No sites assigned
