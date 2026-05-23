@@ -1555,7 +1555,24 @@ async function handleGetReports(request) {
     const { data, error } = await query.limit(500);
     if (error) throw error;
 
-    return NextResponse.json(data || [], { headers: corsHeaders });
+    // Spread custom_values JSONB back onto each row so consumers (owner
+    // dashboard, operator review list, edit form) see operator-defined
+    // fields as if they were flat columns. The real custom_values key is
+    // also kept on the row in case anyone wants the structured shape.
+    const flattened = (data || []).map((row) => {
+      const cv = row.custom_values || {};
+      if (!cv || typeof cv !== 'object') return row;
+      const flat = { ...row };
+      for (const [k, v] of Object.entries(cv)) {
+        // Don't clobber real columns if a key collides (real wins).
+        if (!(k in flat) || flat[k] === null || flat[k] === undefined) {
+          flat[k] = v;
+        }
+      }
+      return flat;
+    });
+
+    return NextResponse.json(flattened, { headers: corsHeaders });
   } catch (error) {
     console.error('Get reports error:', error);
     return NextResponse.json(
@@ -1608,8 +1625,14 @@ async function handleCreateReport(request) {
     }
 
     // -------- Build insert payload --------
-    // Allow-list spread: take everything from body EXCEPT alias keys we already
-    // normalized, then merge in our normalized + trusted values.
+    // The shift_reports table has a fixed set of columns; anything else
+    // the form sends (operator-defined custom fields like ACCOUNT,
+    // BANKING, FUEL_CARDS, etc.) must land in the JSONB custom_values
+    // column or PostgREST throws "Could not find the 'X' column of
+    // 'shift_reports' in the schema cache".
+    //
+    // Strategy: allow-list keys via SHIFT_REPORT_COLUMNS. Anything in
+    // `rest` not in the list gets rolled into custom_values.
     const {
       date: _d,
       shift_date: _sd,
@@ -1634,11 +1657,42 @@ async function handleCreateReport(request) {
       // Custom-grade dips configured per-site via Form Fields → Fuel Tank
       // Dips. Shape: { [field_key]: { level, delivery } }.
       custom_dip_values,
+      // If the client already shaped a custom_values blob (e.g. an edit
+      // request), respect it as the starting point and merge unknowns
+      // we discover below into it.
+      custom_values: bodyCustomValues,
       ...rest
     } = body;
 
+    // Allow-list of real columns on shift_reports. Keep in sync with
+    // /app/lib/supabase-schema.sql.
+    const SHIFT_REPORT_COLUMNS = new Set([
+      'id', 'site_id', 'submitted_by_user_id', 'date', 'shift_type',
+      'total_sales', 'fuel_sales', 'shop_sales', 'total_litres',
+      'eftpos', 'motorpass', 'cash', 'accounts',
+      'beverages', 'hot_food',
+      'drive_offs', 'dips', 'total_revenue', 'difference_value',
+      'notes', 'status', 'submitted_at', 'reviewed_by_user_id', 'reviewed_at',
+      'custom_values',
+    ]);
+
+    const knownCols = {};
+    const customValues = (bodyCustomValues && typeof bodyCustomValues === 'object' && !Array.isArray(bodyCustomValues))
+      ? { ...bodyCustomValues }
+      : {};
+    for (const [k, v] of Object.entries(rest)) {
+      if (SHIFT_REPORT_COLUMNS.has(k)) {
+        knownCols[k] = v;
+      } else if (v != null && v !== '') {
+        // Coerce numeric-looking strings to numbers so dashboards can sum
+        // them. JSONB doesn't care about the underlying JS type.
+        const num = Number(v);
+        customValues[k] = Number.isFinite(num) && String(v).trim() !== '' ? num : v;
+      }
+    }
+
     const newReport = {
-      ...rest,
+      ...knownCols,
       id: uuidv4(),
       site_id,
       date,
@@ -1646,6 +1700,7 @@ async function handleCreateReport(request) {
       submitted_by_user_id,
       status: 'pending',
       submitted_at: new Date().toISOString(),
+      custom_values: customValues,
     };
 
     const { data: report, error: reportError } = await (supabaseAdmin || supabase)
