@@ -16,13 +16,66 @@ import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
 /**
+ * Safely evaluate a spreadsheet-style numeric expression like "2450+1360",
+ * "+2450+1360", "(800+200)*1.1", "1,234.50 - 500". Returns the numeric
+ * result, or null if the input isn't a valid expression (in which case
+ * callers should keep the user's raw input untouched).
+ *
+ * Why not just use eval()?  We never want arbitrary code execution. So:
+ *   1. Strip a leading "+" (Excel shorthand).
+ *   2. Remove thousands-separator commas.
+ *   3. Whitelist characters via regex: digits, . + - * / ( ) and whitespace.
+ *   4. Use new Function() inside a try/catch — still sandboxed by the
+ *      whitelist regex; impossible to get past digits/operators.
+ *   5. Require the result to be a finite number.
+ *
+ * Returns:
+ *   - number if the expression evaluates cleanly to a finite number
+ *   - null   if the input is empty, plain text, or evaluates to NaN/Infinity
+ */
+function evalFormula(input) {
+  if (input == null) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+  const stripped = raw.replace(/^\+/, '');
+  // Remove thousands-separator commas (only between digits).
+  const noCommas = stripped.replace(/(\d),(?=\d{3}(\D|$))/g, '$1');
+  // Whitelist check — refuses anything outside the math vocabulary.
+  if (!/^[0-9+\-*/().\s]+$/.test(noCommas)) return null;
+  // Reject sequences that would be obviously invalid (lone operator etc.)
+  if (/[+\-*/]\s*$/.test(noCommas) || /^\s*[*/]/.test(noCommas)) return null;
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(`"use strict"; return (${noCommas});`);
+    const v = fn();
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+    // Round to 2 decimal places to avoid float artefacts (1.1 + 2.2 etc.)
+    return Math.round(v * 100) / 100;
+  } catch {
+    return null;
+  }
+}
+
+/** True if the user is mid-formula (contains an operator beyond the leading "+"). */
+function looksLikeFormula(s) {
+  if (!s) return false;
+  const stripped = String(s).trim().replace(/^\+/, '');
+  return /[+\-*/(]/.test(stripped);
+}
+
+/**
  * ShiftReportForm — Staff-facing form to submit a shift report. Loads the
  * site's field configurations and any staff-visible banking formulas, then
  * computes formula results live as the user types. Submits via the
  * Bearer-locked POST /api/reports endpoint (user id pulled from JWT).
  *
+ * Numeric fields support Excel-style arithmetic. Users can type things
+ * like "+2450+1360" or "(800+200)*1.1" and the value is evaluated on blur
+ * (or on submit as a safety net). A subtle "= 3810" preview shows while
+ * the user is still typing.
+ *
  * Extracted from /app/app/app/page.js as Phase D of the dashboard monolith
- * refactor. Behaviour unchanged.
+ * refactor. Behaviour unchanged outside the explicit upgrades above.
  */
 export default function ShiftReportForm({ user, sites, onSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -102,6 +155,18 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
   useEffect(() => {
     const calculateFormulas = () => {
       const results = {};
+      // Pre-resolve every field value so the operator's banking formula
+      // sees the *intended* number even if the staff is mid-typing an
+      // arithmetic expression like "+2450+1360".
+      const resolved = {};
+      for (const k of Object.keys(form)) {
+        const v = form[k];
+        if (v === '' || v == null) { resolved[k] = 0; continue; }
+        const plain = /^-?\d+(\.\d+)?$/.test(String(v).trim());
+        if (plain) { resolved[k] = parseFloat(v); continue; }
+        const evald = evalFormula(v);
+        resolved[k] = evald != null ? evald : parseFloat(v) || 0;
+      }
       formulas.forEach((formula) => {
         try {
           const operations = JSON.parse(formula.formula_json).operations || [];
@@ -110,7 +175,7 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
 
           for (const op of operations) {
             if (op.type === 'field') {
-              const value = parseFloat(form[op.value] || 0);
+              const value = Number.isFinite(resolved[op.value]) ? resolved[op.value] : 0;
               if (currentOp === '+') result += value;
               else if (currentOp === '-') result -= value;
               else if (currentOp === '*') result *= value;
@@ -143,29 +208,95 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: null }));
   };
 
+  /**
+   * Triggered on blur for numeric inputs. If the raw text is a valid
+   * arithmetic expression (e.g. "+2450+1360"), replace it with the
+   * computed value (3810). If it's already a plain number, leave it
+   * untouched. If it doesn't parse, also leave it — the user will see
+   * the validation error when they hit Submit.
+   */
+  const handleNumericBlur = (field) => {
+    const raw = form[field];
+    if (raw == null || raw === '') return;
+    // If it's already a clean plain number, normalise it (strip commas).
+    const looksPlain = /^-?\d+(\.\d+)?$/.test(String(raw).trim());
+    if (looksPlain) return;
+    const evaluated = evalFormula(raw);
+    if (evaluated != null) {
+      setForm((prev) => ({ ...prev, [field]: String(evaluated) }));
+    }
+  };
+
   const validate = () => {
     const newErrors = {};
     if (!form.site_id) newErrors.site_id = 'Site is required';
     if (!form.date) newErrors.date = 'Date is required';
     if (!form.shift_type) newErrors.shift_type = 'Shift type is required';
-    if (!form.fuel_sales) newErrors.fuel_sales = 'Fuel sales is required';
-    if (!form.shop_sales) newErrors.shop_sales = 'Shop sales is required';
-    if (!form.dips) newErrors.dips = 'Dips reading is required';
+    // Validate against the actual configured fields rather than hard-coded
+    // names. Any field marked `is_core` on the site's field-config is
+    // mandatory; everything else is optional. Numeric core fields must
+    // either be empty (=> error) or contain something that evaluates to
+    // a number (so "+2450+1360" is OK because it evaluates to 3810).
+    for (const f of fieldConfigs) {
+      if (!f.is_core) continue;
+      const v = form[f.key];
+      if (v == null || String(v).trim() === '') {
+        newErrors[f.key] = `${f.label} is required`;
+        continue;
+      }
+      if (f.field_type === 'number') {
+        const looksPlain = /^-?\d+(\.\d+)?$/.test(String(v).trim());
+        if (!looksPlain && evalFormula(v) == null) {
+          newErrors[f.key] = `${f.label} is not a valid number or formula`;
+        }
+      }
+    }
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
+    const newErrors = validate();
+    if (Object.keys(newErrors).length > 0) {
+      // Tell the user exactly what's missing — silent failure was the
+      // original "Submit Report button does nothing" complaint.
+      alert(
+        'Please fix the following before submitting:\n• ' +
+        Object.values(newErrors).join('\n• ')
+      );
+      return;
+    }
 
     setLoading(true);
     try {
+      // Safety net: coerce every configured field via evalFormula so
+      // anything like "+2450+1360" that the user typed but never blurred
+      // away from still gets evaluated before being POSTed. We do this
+      // regardless of field_type — evalFormula is whitelist-safe and
+      // returns null for genuine text (so legacy text fields containing
+      // notes/codes pass through untouched). Optional dip-litre fields
+      // are coerced the same way.
+      const coerced = { ...form };
+      const numericFlavoured = (key) => {
+        const v = coerced[key];
+        if (v == null || v === '') return;
+        const looksPlain = /^-?\d+(\.\d+)?$/.test(String(v).trim());
+        if (looksPlain) return;
+        const evald = evalFormula(v);
+        if (evald != null) coerced[key] = String(evald);
+      };
+      for (const f of fieldConfigs) numericFlavoured(f.key);
+      for (const k of [
+        'dip_ulp_litres', 'dip_diesel_litres', 'dip_premium_litres',
+        'delivery_ulp_litres', 'delivery_diesel_litres', 'delivery_premium_litres',
+      ]) numericFlavoured(k);
+
       // authedFetch injects Authorization: Bearer <jwt>. The backend pulls
       // submitter id from the JWT — do NOT send submitted_by_user_id in body.
       const res = await authedFetch('/api/reports', {
         method: 'POST',
-        body: JSON.stringify(form),
+        body: JSON.stringify(coerced),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -266,21 +397,47 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
 
           <div>
             <h3 className="font-medium mb-4">Sales & Payments</h3>
+            <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
+              <Calculator className="h-3 w-3" />
+              Tip: you can type Excel-style formulas e.g.{' '}
+              <code className="px-1 py-0.5 rounded bg-slate-100 font-mono text-xs">+2450+1360</code>{' '}
+              and the field will calculate the total when you tab out.
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {fieldConfigs.map((field) => (
-                <div key={field.id} className="space-y-2">
-                  <Label className="text-sm">{field.label} {field.is_core && '*'}</Label>
-                  <Input
-                    type={field.field_type === 'number' ? 'number' : 'text'}
-                    step={field.field_type === 'number' ? '0.01' : undefined}
-                    placeholder={field.field_type === 'number' ? '0.00' : ''}
-                    value={form[field.key] || ''}
-                    onChange={(e) => handleChange(field.key, e.target.value)}
-                    className={errors[field.key] ? 'border-red-500' : ''}
-                  />
-                  {errors[field.key] && <p className="text-xs text-red-500">{errors[field.key]}</p>}
-                </div>
-              ))}
+              {fieldConfigs.map((field) => {
+                const isNumber = field.field_type === 'number';
+                const raw = form[field.key] || '';
+                // Show the live "= 3810" preview whenever the raw input looks
+                // like an arithmetic expression — works for fields configured
+                // as either `number` or `text`. evalFormula is whitelist-safe
+                // and returns null for plain text or letters.
+                const preview = looksLikeFormula(raw) ? evalFormula(raw) : null;
+                return (
+                  <div key={field.id} className="space-y-1">
+                    <Label className="text-sm">{field.label} {field.is_core && '*'}</Label>
+                    <Input
+                      // Always render as text so spreadsheet formulas like
+                      // "+2450+1360" survive into onChange. inputMode=decimal
+                      // gives mobile users a numeric keypad when the field
+                      // type is meant to be numeric.
+                      type="text"
+                      inputMode={isNumber ? 'decimal' : undefined}
+                      placeholder={isNumber ? '0.00 or +1+2' : ''}
+                      value={raw}
+                      onChange={(e) => handleChange(field.key, e.target.value)}
+                      onBlur={() => handleNumericBlur(field.key)}
+                      className={errors[field.key] ? 'border-red-500' : ''}
+                    />
+                    {/* Live preview while the user is typing a formula. */}
+                    {preview != null && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </p>
+                    )}
+                    {errors[field.key] && <p className="text-xs text-red-500">{errors[field.key]}</p>}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -327,60 +484,60 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
               Record current tank levels in litres. These automatically appear on the Fuel Inventory dashboard so your operator and owner can plan deliveries. Leave blank if you didn't take a dip this shift.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm">ULP level (L)</Label>
-                <Input
-                  type="number" step="0.01" inputMode="decimal" placeholder="e.g. 18500"
-                  value={form.dip_ulp_litres || ''}
-                  onChange={(e) => handleChange('dip_ulp_litres', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Diesel level (L)</Label>
-                <Input
-                  type="number" step="0.01" inputMode="decimal" placeholder="e.g. 12300"
-                  value={form.dip_diesel_litres || ''}
-                  onChange={(e) => handleChange('dip_diesel_litres', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Premium level (L)</Label>
-                <Input
-                  type="number" step="0.01" inputMode="decimal" placeholder="(if sold)"
-                  value={form.dip_premium_litres || ''}
-                  onChange={(e) => handleChange('dip_premium_litres', e.target.value)}
-                />
-              </div>
+              {[
+                { key: 'dip_ulp_litres',    label: 'ULP level (L)',     placeholder: 'e.g. 18500' },
+                { key: 'dip_diesel_litres', label: 'Diesel level (L)',  placeholder: 'e.g. 12300' },
+                { key: 'dip_premium_litres',label: 'Premium level (L)', placeholder: '(if sold)' },
+              ].map(({ key, label, placeholder }) => {
+                const raw = form[key] || '';
+                const preview = looksLikeFormula(raw) ? evalFormula(raw) : null;
+                return (
+                  <div key={key} className="space-y-1">
+                    <Label className="text-sm">{label}</Label>
+                    <Input
+                      type="text" inputMode="decimal" placeholder={placeholder}
+                      value={raw}
+                      onChange={(e) => handleChange(key, e.target.value)}
+                      onBlur={() => handleNumericBlur(key)}
+                    />
+                    {preview != null && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <h4 className="text-sm font-medium mt-5 mb-2 flex items-center gap-2 text-muted-foreground">
               <Truck className="h-4 w-4" />
               Deliveries received this shift (L) — leave 0 if none
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm">ULP delivery</Label>
-                <Input
-                  type="number" step="0.01" inputMode="decimal" placeholder="0"
-                  value={form.delivery_ulp_litres || ''}
-                  onChange={(e) => handleChange('delivery_ulp_litres', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Diesel delivery</Label>
-                <Input
-                  type="number" step="0.01" inputMode="decimal" placeholder="0"
-                  value={form.delivery_diesel_litres || ''}
-                  onChange={(e) => handleChange('delivery_diesel_litres', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Premium delivery</Label>
-                <Input
-                  type="number" step="0.01" inputMode="decimal" placeholder="0"
-                  value={form.delivery_premium_litres || ''}
-                  onChange={(e) => handleChange('delivery_premium_litres', e.target.value)}
-                />
-              </div>
+              {[
+                { key: 'delivery_ulp_litres',    label: 'ULP delivery' },
+                { key: 'delivery_diesel_litres', label: 'Diesel delivery' },
+                { key: 'delivery_premium_litres',label: 'Premium delivery' },
+              ].map(({ key, label }) => {
+                const raw = form[key] || '';
+                const preview = looksLikeFormula(raw) ? evalFormula(raw) : null;
+                return (
+                  <div key={key} className="space-y-1">
+                    <Label className="text-sm">{label}</Label>
+                    <Input
+                      type="text" inputMode="decimal" placeholder="0"
+                      value={raw}
+                      onChange={(e) => handleChange(key, e.target.value)}
+                      onBlur={() => handleNumericBlur(key)}
+                    />
+                    {preview != null && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
