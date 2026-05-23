@@ -8,16 +8,24 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Loader2, Save, X, ChevronUp, ChevronDown, Settings, Trash2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Plus, Loader2, Save, X, ChevronUp, ChevronDown, Settings, Trash2, Droplets } from 'lucide-react';
 
 /**
  * FieldConfiguration — Operator-facing UI to customize the shift report
- * form fields per site (add/remove/reorder/enable/disable). Persists via
- * /api/field-configs(/bulk). Extracted from /app/app/app/page.js as Phase
- * C of the dashboard monolith refactor.
+ * form fields per site. Now split across two tabs:
+ *
+ *   • Sales & Payments  — category = 'sales' (default, the original list)
+ *   • Fuel Tank Dips    — category = 'dip'   (custom fuel grades like E10,
+ *                                              U95, U98, LPG, AdBlue, ...)
+ *
+ * Custom dip fields appear ADDITIVELY on the staff shift report below the
+ * built-in ULP / Diesel / Premium grades. Each gets a tank-level and an
+ * optional delivery input. Values land in dip_readings.custom_values (JSON).
  */
 export default function FieldConfiguration({ user, sites }) {
   const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
+  const [category, setCategory] = useState('sales'); // 'sales' | 'dip'
   const [fields, setFields] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,7 +47,10 @@ export default function FieldConfiguration({ user, sites }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/field-configs?siteId=${selectedSite}`, { cache: 'no-store' });
+      const res = await fetch(
+        `/api/field-configs?siteId=${selectedSite}&category=${category}`,
+        { cache: 'no-store' }
+      );
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
       setFields(list.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)));
@@ -49,7 +60,7 @@ export default function FieldConfiguration({ user, sites }) {
     } finally {
       setLoading(false);
     }
-  }, [selectedSite]);
+  }, [selectedSite, category]);
 
   useEffect(() => {
     loadFields();
@@ -95,13 +106,18 @@ export default function FieldConfiguration({ user, sites }) {
           site_id: selectedSite,
           key: fieldKey,
           label: newField.label,
-          field_type: newField.field_type,
-          visibility: newField.visibility || 'all',
+          // Dip fields are always numeric (litres).
+          field_type: category === 'dip' ? 'number' : newField.field_type,
+          // Dip fields are shown to everyone (staff must enter; owner sees).
+          visibility: category === 'dip' ? 'all' : (newField.visibility || 'all'),
           is_mandatory: !!newField.is_mandatory,
           display_order: fields.length + 1,
           is_core: false,
           is_enabled: true,
-          show_in_banking: true,   // Custom fields default to visible in banking
+          // Dip fields don't belong in the Banking Formula Builder palette
+          // — they're inventory, not financial. Default OFF.
+          show_in_banking: category !== 'dip',
+          category, // 'sales' or 'dip'
           created_by_user_id: user.id,
         }),
       });
@@ -182,13 +198,35 @@ export default function FieldConfiguration({ user, sites }) {
             </SelectContent>
           </Select>
           <Button onClick={() => setShowAddField(true)} variant="outline">
-            <Plus className="h-4 w-4 mr-2" /> Add Field
+            <Plus className="h-4 w-4 mr-2" />
+            {category === 'dip' ? 'Add Tank Field' : 'Add Field'}
           </Button>
           <Button onClick={handleSave} disabled={saving} className="bg-gradient-to-r from-blue-500 to-indigo-600">
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Save Changes
           </Button>
         </div>
       </div>
+
+      <Tabs value={category} onValueChange={(v) => { setCategory(v); setShowAddField(false); }}>
+        <TabsList>
+          <TabsTrigger value="sales" className="gap-2">
+            <Settings className="h-4 w-4" /> Sales &amp; Payments
+          </TabsTrigger>
+          <TabsTrigger value="dip" className="gap-2">
+            <Droplets className="h-4 w-4" /> Fuel Tank Dips
+          </TabsTrigger>
+        </TabsList>
+
+        {category === 'dip' && (
+          <div className="mt-3 p-3 rounded-lg bg-sky-50 border border-sky-200 text-sm text-sky-800">
+            Add extra fuel grades stocked at this site (e.g. <strong>E10</strong>,{' '}
+            <strong>U95</strong>, <strong>U98</strong>, <strong>LPG</strong>,{' '}
+            <strong>AdBlue</strong>). They appear on the staff shift report{' '}
+            <em>below</em> the built-in ULP / Diesel / Premium grades, with a tank
+            level + optional delivery input each.
+          </div>
+        )}
+      </Tabs>
 
       {showAddField && (
         <Card className="border-blue-200 bg-blue-50">

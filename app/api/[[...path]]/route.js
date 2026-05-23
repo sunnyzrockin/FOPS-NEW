@@ -964,19 +964,22 @@ async function handleGetFieldConfigs(request) {
   try {
     const url = new URL(request.url);
     const siteId = url.searchParams.get('siteId');
-    
+    const category = url.searchParams.get('category'); // 'sales' | 'dip' | null (=all)
+
     if (!siteId) {
       return NextResponse.json({ error: 'siteId is required' }, { status: 400, headers: corsHeaders });
     }
-    
-    const { data, error } = await (supabaseAdmin || supabase)
+
+    let q = (supabaseAdmin || supabase)
       .from('site_field_configs')
       .select('*')
       .eq('site_id', siteId)
       .order('display_order', { ascending: true });
-    
+    if (category) q = q.eq('category', category);
+
+    const { data, error } = await q;
     if (error) throw error;
-    
+
     return NextResponse.json(data || [], { headers: corsHeaders });
   } catch (error) {
     console.error('Get field configs error:', error);
@@ -1628,6 +1631,9 @@ async function handleCreateReport(request) {
       delivery_ulp_litres,
       delivery_diesel_litres,
       delivery_premium_litres,
+      // Custom-grade dips configured per-site via Form Fields → Fuel Tank
+      // Dips. Shape: { [field_key]: { level, delivery } }.
+      custom_dip_values,
       ...rest
     } = body;
 
@@ -1732,7 +1738,21 @@ async function handleCreateReport(request) {
       const anyLevel = Object.values(levels).some((v) => v != null);
       const anyDelivery = Object.values(deliveries).some((v) => v > 0);
 
-      if (anyLevel || anyDelivery) {
+      // Sanitize custom_dip_values from the form into the same JSON shape
+      // dip_readings.custom_values expects: { key: { level, delivery } }.
+      const cleanCustom = {};
+      if (custom_dip_values && typeof custom_dip_values === 'object' && !Array.isArray(custom_dip_values)) {
+        for (const [k, raw] of Object.entries(custom_dip_values)) {
+          if (!raw || typeof raw !== 'object') continue;
+          const level = toNum(raw.level);
+          const delivery = toNumZero(raw.delivery);
+          if (level == null && delivery === 0) continue;
+          cleanCustom[k] = { level, delivery };
+        }
+      }
+      const anyCustom = Object.keys(cleanCustom).length > 0;
+
+      if (anyLevel || anyDelivery || anyCustom) {
         // Map shift type to a sensible time-of-day so the reading lands
         // on a chronologically correct moment of the shift date.
         const hourByShift = { Morning: 8, Afternoon: 14, Night: 22 };
@@ -1757,6 +1777,7 @@ async function handleCreateReport(request) {
           deliveries_ulp_litres: deliveries.ulp,
           deliveries_diesel_litres: deliveries.diesel,
           deliveries_premium_litres: deliveries.premium,
+          custom_values: cleanCustom,
           notes: `Auto-logged from ${shift_type} shift report ${report.id}`,
         };
 

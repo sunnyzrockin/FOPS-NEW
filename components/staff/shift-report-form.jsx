@@ -89,27 +89,36 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
     shift_type: 'Morning',
   });
   const [errors, setErrors] = useState({});
+  // Custom fuel-grade dip fields (category='dip') configured per-site by
+  // the operator. They render in their own section below the built-in
+  // ULP / Diesel / Premium grades, each with a level + delivery input.
+  const [dipFieldConfigs, setDipFieldConfigs] = useState([]);
 
-  // Load field configs for the selected site
+  // Load field configs for the selected site — split into sales (the
+  // existing "Sales & Payments" section) and dip (the new custom-grade
+  // section below the built-in dips).
   useEffect(() => {
     const loadFieldConfigs = async () => {
       if (!form.site_id) return;
       try {
         const res = await fetch(`/api/field-configs?siteId=${form.site_id}`);
         const data = await res.json();
-        setFieldConfigs(
-          (Array.isArray(data) ? data : [])
-            .filter((f) => f.is_enabled)
-            // Visibility filter (staff context): show field if visibility
-            // is 'all' or 'staff_only'. Hide 'owner_only' fields like
-            // "Cash" that staff shouldn't enter. Default to 'all' if the
-            // column hasn't been migrated yet (back-compat).
-            .filter((f) => {
-              const v = f.visibility || 'all';
-              return v === 'all' || v === 'staff_only';
-            })
-            .sort((a, b) => a.display_order - b.display_order)
-        );
+        const all = Array.isArray(data) ? data : [];
+        const enabled = all
+          .filter((f) => f.is_enabled)
+          // Visibility filter (staff context): show field if visibility
+          // is 'all' or 'staff_only'. Hide 'owner_only' fields like
+          // "Cash" that staff shouldn't enter. Default to 'all' if the
+          // column hasn't been migrated yet (back-compat).
+          .filter((f) => {
+            const v = f.visibility || 'all';
+            return v === 'all' || v === 'staff_only';
+          })
+          .sort((a, b) => a.display_order - b.display_order);
+        // Default category to 'sales' so legacy rows (no category column)
+        // keep appearing in the sales section as they used to.
+        setFieldConfigs(enabled.filter((f) => (f.category || 'sales') === 'sales'));
+        setDipFieldConfigs(enabled.filter((f) => f.category === 'dip'));
       } catch (err) {
         console.error('Failed to load field configs:', err);
       }
@@ -291,6 +300,21 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
         'dip_ulp_litres', 'dip_diesel_litres', 'dip_premium_litres',
         'delivery_ulp_litres', 'delivery_diesel_litres', 'delivery_premium_litres',
       ]) numericFlavoured(k);
+
+      // Pack the custom-dip inputs (form keys "custom_dip__<key>__level"
+      // and "...__delivery") into the structured custom_dip_values shape
+      // the backend expects: { [key]: { level, delivery } }. Empty entries
+      // (level blank + delivery 0) are dropped server-side too.
+      const customDipValues = {};
+      for (const f of dipFieldConfigs) {
+        const lvl = coerced[`custom_dip__${f.key}__level`];
+        const del = coerced[`custom_dip__${f.key}__delivery`];
+        const cleanLvl = lvl == null || lvl === '' ? null : Number(lvl);
+        const cleanDel = del == null || del === '' ? 0 : Number(del);
+        if (cleanLvl == null && cleanDel === 0) continue;
+        customDipValues[f.key] = { level: cleanLvl, delivery: cleanDel };
+      }
+      coerced.custom_dip_values = customDipValues;
 
       // authedFetch injects Authorization: Bearer <jwt>. The backend pulls
       // submitter id from the JWT — do NOT send submitted_by_user_id in body.
@@ -539,6 +563,69 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
                 );
               })}
             </div>
+
+            {/* Custom fuel-grade fields configured per-site by the operator
+                (Form Fields → Fuel Tank Dips). Rendered below the built-in
+                ULP / Diesel / Premium grades so the visual ordering is
+                "core grades first, custom ones after". */}
+            {dipFieldConfigs.length > 0 && (
+              <>
+                <h4 className="text-sm font-medium mt-6 mb-2 flex items-center gap-2 text-muted-foreground">
+                  <Droplets className="h-4 w-4" />
+                  Additional fuel grades — configured for this site
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {dipFieldConfigs.map((f) => {
+                    const levelKey = `custom_dip__${f.key}__level`;
+                    const deliveryKey = `custom_dip__${f.key}__delivery`;
+                    const lvlRaw = form[levelKey] || '';
+                    const delRaw = form[deliveryKey] || '';
+                    const lvlPreview = looksLikeFormula(lvlRaw) ? evalFormula(lvlRaw) : null;
+                    const delPreview = looksLikeFormula(delRaw) ? evalFormula(delRaw) : null;
+                    return (
+                      <div
+                        key={f.id}
+                        className="rounded-lg border border-sky-200 bg-sky-50/40 p-3 space-y-2"
+                      >
+                        <div className="text-sm font-medium flex items-center gap-1.5">
+                          <Droplets className="h-3.5 w-3.5 text-sky-600" />
+                          {f.label}
+                          {f.is_mandatory && <span className="text-red-500">*</span>}
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Tank level (L)</Label>
+                          <Input
+                            type="text" inputMode="decimal" placeholder="e.g. 4500"
+                            value={lvlRaw}
+                            onChange={(e) => handleChange(levelKey, e.target.value)}
+                            onBlur={() => handleNumericBlur(levelKey)}
+                          />
+                          {lvlPreview != null && (
+                            <p className="text-xs text-blue-600 font-medium">
+                              = {lvlPreview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Delivery (L) — leave 0 if none</Label>
+                          <Input
+                            type="text" inputMode="decimal" placeholder="0"
+                            value={delRaw}
+                            onChange={(e) => handleChange(deliveryKey, e.target.value)}
+                            onBlur={() => handleNumericBlur(deliveryKey)}
+                          />
+                          {delPreview != null && (
+                            <p className="text-xs text-blue-600 font-medium">
+                              = {delPreview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           <Separator />
