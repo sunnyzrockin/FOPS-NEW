@@ -12,5 +12,5 @@ export const PUT = async (request, { params }) => {
 };
 export const DELETE = async (request, { params }) => {
   const { id } = await params;
-  return handleDeleteSiteCompetitor(id);
+  return handleDeleteSiteCompetitor(id, request);
 };
