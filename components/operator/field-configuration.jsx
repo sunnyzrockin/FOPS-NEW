@@ -9,7 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Plus, Loader2, Save, X, ChevronUp, ChevronDown, Settings, Trash2, Droplets } from 'lucide-react';
+import { Plus, Loader2, Save, X, ChevronUp, ChevronDown, Settings, Trash2, Droplets, Copy, AlertTriangle } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 
 /**
  * FieldConfiguration — Operator-facing UI to customize the shift report
@@ -37,6 +40,15 @@ export default function FieldConfiguration({ user, sites }) {
     visibility: 'all',
     is_mandatory: false,
   });
+
+  // "Copy fields from another site" wizard state
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copySourceSiteId, setCopySourceSiteId] = useState('');
+  const [copySourceFields, setCopySourceFields] = useState([]);
+  const [copyLoadingSource, setCopyLoadingSource] = useState(false);
+  const [copySelectedKeys, setCopySelectedKeys] = useState(new Set());
+  const [copyConflictMode, setCopyConflictMode] = useState('skip'); // 'skip' | 'overwrite'
+  const [copyApplying, setCopyApplying] = useState(false);
 
   const loadFields = useCallback(async () => {
     if (!selectedSite) {
@@ -183,6 +195,115 @@ export default function FieldConfiguration({ user, sites }) {
     setFields(newFields);
   };
 
+  // ---------- Copy from another site ----------
+
+  const otherSites = sites.filter((s) => s.id !== selectedSite);
+
+  const openCopyDialog = () => {
+    setCopySourceSiteId('');
+    setCopySourceFields([]);
+    setCopySelectedKeys(new Set());
+    setCopyConflictMode('skip');
+    setCopyOpen(true);
+  };
+
+  const loadCopySourceFields = async (siteId) => {
+    setCopySourceSiteId(siteId);
+    setCopySourceFields([]);
+    setCopySelectedKeys(new Set());
+    if (!siteId) return;
+    setCopyLoadingSource(true);
+    try {
+      const res = await fetch(`/api/field-configs?siteId=${siteId}&category=${category}`);
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : [];
+      setCopySourceFields(list);
+      // Default: pre-select all source fields
+      setCopySelectedKeys(new Set(list.map((f) => f.key)));
+    } catch (err) {
+      console.error('Failed to load source site fields', err);
+      setCopySourceFields([]);
+    } finally {
+      setCopyLoadingSource(false);
+    }
+  };
+
+  const toggleCopyKey = (key) => {
+    setCopySelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const applyCopy = async () => {
+    if (!copySourceSiteId || copySelectedKeys.size === 0) {
+      setCopyOpen(false);
+      return;
+    }
+    setCopyApplying(true);
+    const existingKeys = new Set(fields.map((f) => f.key));
+    const toCopy = copySourceFields.filter((f) => copySelectedKeys.has(f.key));
+
+    let inserted = 0, updated = 0, skipped = 0, failed = 0;
+    let nextOrder = fields.length + 1;
+
+    for (const src of toCopy) {
+      const existing = fields.find((f) => f.key === src.key);
+      if (existing && copyConflictMode === 'skip') {
+        skipped++; continue;
+      }
+      try {
+        if (existing && copyConflictMode === 'overwrite') {
+          const res = await fetch(`/api/field-configs/${existing.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              label: src.label,
+              field_type: src.field_type,
+              visibility: src.visibility,
+              is_mandatory: src.is_mandatory,
+              show_in_banking: src.show_in_banking,
+              is_enabled: src.is_enabled,
+            }),
+          });
+          if (res.ok) updated++; else failed++;
+        } else {
+          const res = await fetch('/api/field-configs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              site_id: selectedSite,
+              key: src.key,
+              label: src.label,
+              field_type: src.field_type,
+              visibility: src.visibility,
+              is_mandatory: !!src.is_mandatory,
+              display_order: nextOrder++,
+              is_core: false,
+              is_enabled: src.is_enabled !== false,
+              show_in_banking: !!src.show_in_banking,
+              category,
+              created_by_user_id: user.id,
+            }),
+          });
+          if (res.ok) inserted++; else failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+    setCopyApplying(false);
+    setCopyOpen(false);
+    await loadFields();
+    const parts = [];
+    if (inserted) parts.push(`${inserted} added`);
+    if (updated) parts.push(`${updated} updated`);
+    if (skipped) parts.push(`${skipped} skipped (already exist)`);
+    if (failed) parts.push(`${failed} FAILED`);
+    alert(`Copy complete: ${parts.join(', ') || 'no changes'}.`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -200,6 +321,9 @@ export default function FieldConfiguration({ user, sites }) {
           <Button onClick={() => setShowAddField(true)} variant="outline">
             <Plus className="h-4 w-4 mr-2" />
             {category === 'dip' ? 'Add Tank Field' : 'Add Field'}
+          </Button>
+          <Button onClick={openCopyDialog} variant="outline" disabled={otherSites.length === 0} title={otherSites.length === 0 ? 'No other sites to copy from' : 'Copy fields from another site'}>
+            <Copy className="h-4 w-4 mr-2" /> Copy from site
           </Button>
           <Button onClick={handleSave} disabled={saving} className="bg-gradient-to-r from-blue-500 to-indigo-600">
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Save Changes
@@ -399,6 +523,119 @@ export default function FieldConfiguration({ user, sites }) {
           ))}
         </div>
       )}
+
+      {/* Copy fields from another site dialog */}
+      <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Copy className="h-5 w-5 text-blue-600" />
+              Copy fields from another site
+            </DialogTitle>
+            <DialogDescription>
+              Pick a source site, then choose which {category === 'dip' ? 'tank dip' : 'sales & payment'} fields to copy
+              into <strong>{sites.find((s) => s.id === selectedSite)?.name || 'this site'}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Source site picker */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Source site</Label>
+              <Select value={copySourceSiteId} onValueChange={loadCopySourceFields}>
+                <SelectTrigger><SelectValue placeholder="Choose a site to copy from" /></SelectTrigger>
+                <SelectContent>
+                  {otherSites.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Conflict mode */}
+            {copySourceSiteId && (
+              <div className="space-y-1.5">
+                <Label className="text-sm">If a field with the same key already exists on this site</Label>
+                <Select value={copyConflictMode} onValueChange={setCopyConflictMode}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="skip">Skip — keep my existing field</SelectItem>
+                    <SelectItem value="overwrite">Overwrite — replace my field with the source version</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Source fields list */}
+            {copySourceSiteId && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm">
+                    {copyLoadingSource ? 'Loading…' : `${copySourceFields.length} field${copySourceFields.length === 1 ? '' : 's'} available · ${copySelectedKeys.size} selected`}
+                  </Label>
+                  {copySourceFields.length > 0 && (
+                    <div className="flex gap-2 text-xs">
+                      <button type="button" className="text-blue-600 hover:underline"
+                        onClick={() => setCopySelectedKeys(new Set(copySourceFields.map((f) => f.key)))}>Select all</button>
+                      <button type="button" className="text-slate-500 hover:underline"
+                        onClick={() => setCopySelectedKeys(new Set())}>Clear</button>
+                    </div>
+                  )}
+                </div>
+                {copyLoadingSource ? (
+                  <div className="py-6 flex items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                  </div>
+                ) : copySourceFields.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    This site has no {category === 'dip' ? 'tank dip' : 'sales'} fields configured.
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto border rounded-md divide-y">
+                    {copySourceFields.map((f) => {
+                      const conflict = fields.some((ff) => ff.key === f.key);
+                      const checked = copySelectedKeys.has(f.key);
+                      return (
+                        <label key={f.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-blue-50' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleCopyKey(f.key)}
+                            className="w-4 h-4"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{f.label}</div>
+                            <div className="text-[11px] text-muted-foreground font-mono">{f.key}</div>
+                          </div>
+                          <Badge variant="outline" className="text-[10px]">{f.field_type || 'number'}</Badge>
+                          {f.is_mandatory && <Badge className="text-[10px] bg-amber-100 text-amber-700">required</Badge>}
+                          {conflict && (
+                            <span className="flex items-center gap-1 text-[11px] text-amber-700" title="A field with this key already exists on the target site.">
+                              <AlertTriangle className="h-3 w-3" /> exists
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCopyOpen(false)}>Cancel</Button>
+            <Button
+              onClick={applyCopy}
+              disabled={!copySourceSiteId || copySelectedKeys.size === 0 || copyApplying}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600"
+            >
+              {copyApplying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              Copy {copySelectedKeys.size > 0 ? `${copySelectedKeys.size} field${copySelectedKeys.size === 1 ? '' : 's'}` : 'fields'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

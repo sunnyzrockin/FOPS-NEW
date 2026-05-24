@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, supabase, supabaseStatus } from '@/lib/supabase';
+import { verifyAuth } from '@/lib/auth-helpers';
+import { logAuditAsync } from '@/lib/api/audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,6 +21,7 @@ export async function OPTIONS() {
 export async function PUT(request, { params }) {
   try {
     const { id } = await params;
+    const auth = await verifyAuth(request, { allowAnon: true });
     const updates = await request.json();
     const client = supabaseAdmin || supabase;
     if (!client) {
@@ -28,6 +31,9 @@ export async function PUT(request, { params }) {
       );
     }
 
+    let before = null;
+    try { const { data } = await client.from('users').select('*').eq('id', id).single(); before = data; } catch {}
+
     const { data, error } = await client
       .from('users')
       .update(updates)
@@ -36,6 +42,18 @@ export async function PUT(request, { params }) {
       .single();
 
     if (error) throw error;
+
+    logAuditAsync({
+      request,
+      actor: auth.ok ? auth.user : null,
+      action: 'update',
+      tableName: 'users',
+      recordId: id,
+      actorEmailOverride: auth.ok ? auth.user.email : null,
+      before,
+      after: data,
+    });
+
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
     console.error('[users PUT]', error);
@@ -50,6 +68,7 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
+    const auth = await verifyAuth(request, { allowAnon: true });
     if (!supabaseAdmin) {
       return NextResponse.json(
         { error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY missing' },
@@ -57,10 +76,10 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Look up the user to get auth_user_id for cleanup
+    // Look up the user (full row so we can audit it)
     const { data: userRow } = await supabaseAdmin
       .from('users')
-      .select('auth_user_id')
+      .select('*')
       .eq('id', id)
       .single();
 
@@ -77,6 +96,16 @@ export async function DELETE(request, { params }) {
         await supabaseAdmin.auth.admin.deleteUser(userRow.auth_user_id);
       } catch (_) {}
     }
+
+    logAuditAsync({
+      request,
+      actor: auth.ok ? auth.user : null,
+      action: 'delete',
+      tableName: 'users',
+      recordId: id,
+      actorEmailOverride: auth.ok ? auth.user.email : null,
+      before: userRow,
+    });
 
     return NextResponse.json({ success: true }, { headers: corsHeaders });
   } catch (error) {

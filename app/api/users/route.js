@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin, supabase, supabaseStatus } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { verifyAuth, rateLimit, clientIp } from '@/lib/auth-helpers';
+import { logAuditAsync } from '@/lib/api/audit';
 
 // Force Node runtime + dynamic so Vercel doesn't infer edge or cache.
 export const runtime = 'nodejs';
@@ -160,6 +161,16 @@ export async function POST(request) {
         { status: 500, headers: corsHeaders }
       );
     }
+
+    logAuditAsync({
+      request,
+      actor: auth.user || null,
+      action: 'insert',
+      tableName: 'users',
+      recordId: data.id,
+      actorEmailOverride: auth.user?.email,
+      after: { id: data.id, email, name, role, status: 'active' },
+    });
 
     return NextResponse.json(data, { headers: corsHeaders });
   } catch (error) {
