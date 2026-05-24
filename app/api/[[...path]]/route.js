@@ -129,6 +129,13 @@ async function handleLogin(request) {
 
     if (authError || !authData.user) {
       console.error('Auth error:', authError);
+      // Log failed login attempt
+      logAuditAsync({
+        request,
+        action: 'login_failed',
+        actorEmailOverride: email,
+        metadata: { reason: authError?.message || 'Invalid credentials' },
+      });
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401, headers: corsHeaders });
     }
 
