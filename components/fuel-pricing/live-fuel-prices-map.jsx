@@ -8,6 +8,7 @@ import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { getBrandStyle, getPriceBandColor, getFuelGradeShortLabel } from '@/lib/fuel-pricing/brand-styles';
+import { getBrandLogoSvg } from '@/lib/fuel-pricing/brand-logos';
 
 /**
  * LiveFuelPricesMap — Leaflet client component. Centred on QLD by default.
@@ -91,11 +92,14 @@ function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
       // Dynamic font sizing for the brand wordmark so longer names fit.
       const wm = brandStyle.wordmark || brandStyle.label;
       const wmLen = wm.length;
-      const wmFontSize = wmLen <= 4 ? 11 : wmLen <= 6 ? 10 : wmLen <= 8 ? 9 : 8;
+      const wmFontSize = wmLen <= 4 ? 10 : wmLen <= 6 ? 9 : wmLen <= 8 ? 8 : 7;
+
+      // Real brand-logo SVG (or null → text-only shield fallback)
+      const logoSvg = getBrandLogoSvg(s.brand, brandStyle.fg);
 
       // Build the stacked icon: yellow price tag on top, brand shield below
-      // with a downward pointer. The whole thing is 78×46 px so it stays
-      // crisp at all zoom levels.
+      // with a downward pointer. Logo SVG sits to the LEFT of the wordmark
+      // when available — otherwise we centre the wordmark in the shield.
       const iconHtml = `
         <div style="
           display:flex;flex-direction:column;align-items:center;
@@ -109,7 +113,7 @@ function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
             border:1.5px solid #1A1A1A;
             border-radius:3px;
             padding:1px 5px 2px;
-            min-width:54px;
+            min-width:58px;
             display:flex;align-items:center;justify-content:space-between;gap:4px;
           ">
             <span style="
@@ -128,16 +132,20 @@ function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
             color:${brandStyle.fg};
             border:1.5px solid ${brandStyle.accent || '#1A1A1A'};
             border-radius:3px;
-            padding:2px 5px;
-            min-width:54px;
-            text-align:center;
+            padding:1px 4px;
+            min-width:58px;
+            min-height:18px;
+            display:flex;align-items:center;justify-content:center;gap:3px;
             font-weight:800;
             font-size:${wmFontSize}px;
             letter-spacing:-0.2px;
             text-transform:uppercase;
             position:relative;
           ">
-            ${escapeHtml(wm)}
+            ${logoSvg
+              ? `<span style="display:inline-flex;width:14px;height:14px;flex-shrink:0;">${logoSvg}</span>`
+              : ''}
+            <span>${escapeHtml(wm)}</span>
             <!-- triangle pointer below -->
             <div style="
               position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);
@@ -168,8 +176,8 @@ function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
         icon: L.divIcon({
           html: iconHtml,
           className: 'fops-brand-pin',
-          iconSize: [78, 56],
-          iconAnchor: [39, 56], // tip of the price-band dot
+          iconSize: [82, 58],
+          iconAnchor: [41, 58],
         }),
         // Z-order so cheapest sit on top of expensive when overlapping
         zIndexOffset: ring === '#10b981' ? 1000 : ring === '#f59e0b' ? 500 : 0,
@@ -184,12 +192,16 @@ function ClusteredStationsLayer({ stations, priceStats, fuelLabel }) {
         <div style="min-width:200px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
             <div style="
+              display:flex;align-items:center;gap:5px;
               padding:2px 8px;border-radius:3px;
               background:${brandStyle.bg};color:${brandStyle.fg};
               font-weight:800;font-size:10px;flex-shrink:0;
               border:1.5px solid ${brandStyle.accent || '#1A1A1A'};
               text-transform:uppercase;letter-spacing:0.3px;
-            ">${escapeHtml(wm)}</div>
+            ">
+              ${logoSvg ? `<span style="display:inline-flex;width:14px;height:14px;">${logoSvg}</span>` : ''}
+              ${escapeHtml(wm)}
+            </div>
             <div style="font-weight:600;flex:1;">${escapeHtml(s.name || 'Station')}</div>
           </div>
           ${s.brand ? `<div style="font-size:12px;color:#666;">${escapeHtml(s.brand)}</div>` : ''}
