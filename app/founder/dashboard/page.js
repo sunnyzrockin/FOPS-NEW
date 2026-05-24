@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   ShieldAlert, LogOut, Loader2, Database, Users, Building2, FileText, Activity,
-  Filter, RefreshCw, ChevronDown, ChevronRight, Calendar, AlertTriangle,
+  Filter, RefreshCw, ChevronDown, ChevronRight, Calendar, AlertTriangle, Download, FileDown,
 } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
+import { createFopsPdf, addSectionTitle, addTable, saveFopsPdf } from '@/lib/pdf-export';
 
 const ACTION_COLORS = {
   login: 'bg-blue-100 text-blue-700',
@@ -22,6 +23,11 @@ const ACTION_COLORS = {
   update: 'bg-amber-100 text-amber-700',
   delete: 'bg-rose-100 text-rose-700',
   support_account_created: 'bg-purple-100 text-purple-700',
+};
+
+const truncate = (s, n) => {
+  const str = String(s ?? '');
+  return str.length > n ? str.slice(0, n - 1) + '…' : str;
 };
 
 export default function FounderDashboardPage() {
@@ -101,6 +107,117 @@ export default function FounderDashboardPage() {
     localStorage.removeItem('supabase-session');
     localStorage.removeItem('fops_support_session');
     router.replace('/founder');
+  };
+
+  // ---------- Exports ----------
+
+  // Fetch ALL matching rows for export (respects current filters, ignores
+  // the in-table 200-row cap). We hit /api/founder/audit-log with limit=500
+  // and paginate until we've collected everything.
+  const fetchAllForExport = async () => {
+    const params = new URLSearchParams();
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    if (filters.action && filters.action !== 'all') params.set('action', filters.action);
+    if (filters.table && filters.table !== 'all') params.set('table', filters.table);
+    if (filters.actor) params.set('actor', filters.actor);
+    params.set('limit', '500');
+    const collected = [];
+    let offset = 0;
+    let totalRows = 0;
+    do {
+      params.set('offset', String(offset));
+      const res = await authedFetch(`/api/founder/audit-log?${params}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Export failed');
+      collected.push(...(data.rows || []));
+      totalRows = data.total || 0;
+      offset += 500;
+    } while (collected.length < totalRows && offset < 10000);
+    return collected;
+  };
+
+  const exportCsv = async () => {
+    try {
+      const all = await fetchAllForExport();
+      const cols = [
+        'created_at', 'action', 'table_name', 'record_id',
+        'actor_email', 'actor_role', 'actor_user_id',
+        'ip_address', 'site_id',
+        'before_state', 'after_state', 'metadata', 'user_agent',
+      ];
+      const esc = (v) => {
+        if (v == null) return '';
+        const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const lines = [cols.join(',')];
+      for (const r of all) lines.push(cols.map((c) => esc(r[c])).join(','));
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `FOPS_audit_${filters.from}_to_${filters.to}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`CSV export failed: ${e.message}`);
+    }
+  };
+
+  const exportPdf = async () => {
+    try {
+      const all = await fetchAllForExport();
+      const doc = createFopsPdf({
+        title: 'Audit Log',
+        subtitle: `Founder Console · ${all.length} events`,
+        dateRange: { from: filters.from, to: filters.to },
+        orientation: 'landscape',
+      });
+      doc.__fopsMeta.contentStartY = 96;
+      const filterDesc = [];
+      if (filters.action && filters.action !== 'all') filterDesc.push(`action=${filters.action}`);
+      if (filters.table && filters.table !== 'all') filterDesc.push(`table=${filters.table}`);
+      if (filters.actor) filterDesc.push(`actor=${filters.actor}`);
+      addSectionTitle(doc, filterDesc.length ? `Filters: ${filterDesc.join(' · ')}` : 'All actions, all tables');
+
+      const head = ['When', 'Action', 'Table', 'Record', 'Actor', 'Role', 'IP', 'Summary'];
+      const body = all.map((r) => {
+        const when = new Date(r.created_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'medium' });
+        let summary = '';
+        if (r.action === 'login_failed') summary = r.metadata?.reason || '';
+        else if (r.action === 'update') {
+          const diffs = [];
+          const b = r.before_state || {}; const a = r.after_state || {};
+          for (const k of Object.keys(a)) {
+            if (b[k] !== a[k] && (b[k] != null || a[k] != null)) {
+              diffs.push(`${k}: ${truncate(JSON.stringify(b[k]), 16)} → ${truncate(JSON.stringify(a[k]), 16)}`);
+              if (diffs.length >= 3) break;
+            }
+          }
+          summary = diffs.join('; ');
+        } else if (r.metadata && Object.keys(r.metadata).length) {
+          summary = truncate(JSON.stringify(r.metadata), 64);
+        }
+        return [
+          when,
+          r.action || '',
+          r.table_name || '',
+          r.record_id ? String(r.record_id).slice(0, 8) : '',
+          r.actor_email || '—',
+          r.actor_role || '',
+          r.ip_address || '',
+          summary,
+        ];
+      });
+      addTable(doc, head, body, {
+        styles: { fontSize: 7, cellPadding: 3 },
+        columnStyles: { 7: { cellWidth: 'auto' } },
+      });
+      saveFopsPdf(doc, `FOPS_audit_${filters.from}_to_${filters.to}.pdf`);
+    } catch (e) {
+      alert(`PDF export failed: ${e.message}`);
+    }
   };
 
   if (!authReady) {
@@ -218,10 +335,18 @@ export default function FounderDashboardPage() {
 
         {/* Timeline */}
         <Card className="border-0 shadow-lg">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base flex items-center gap-2">
               <Calendar className="h-4 w-4 text-blue-600" /> Audit Timeline
             </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button onClick={exportCsv} variant="outline" size="sm" className="gap-1.5 h-8">
+                <Download className="h-3.5 w-3.5" /> CSV
+              </Button>
+              <Button onClick={exportPdf} size="sm" className="gap-1.5 h-8 bg-gradient-to-r from-amber-500 to-red-600 text-white hover:opacity-90">
+                <FileDown className="h-3.5 w-3.5" /> PDF
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
