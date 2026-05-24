@@ -130,9 +130,10 @@ async function handleLogin(request) {
     if (authError || !authData.user) {
       console.error('Auth error:', authError);
       // Log failed login attempt
-      logAuditAsync({
+      await logAudit({
         request,
         action: 'login_failed',
+        tableName: 'users',
         actorEmailOverride: email,
         metadata: { reason: authError?.message || 'Invalid credentials' },
       });
@@ -196,7 +197,7 @@ async function handleLogin(request) {
       }
     }
     
-    logAuditAsync({
+    await logAudit({
       request,
       action: 'login',
       tableName: 'users',

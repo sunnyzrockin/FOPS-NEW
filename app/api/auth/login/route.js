@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { logAudit } from '@/lib/api/audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,13 @@ export async function POST(request) {
     
     if (authError) {
       console.error('Auth error:', authError);
+      await logAudit({
+        request,
+        action: 'login_failed',
+        tableName: 'users',
+        actorEmailOverride: email,
+        metadata: { reason: authError?.message || 'Invalid credentials' },
+      });
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -98,6 +106,15 @@ export async function POST(request) {
         sites = staffSites || [];
       }
     }
+
+    await logAudit({
+      request,
+      action: 'login',
+      tableName: 'users',
+      recordId: user.id,
+      actor: { id: user.id, email: user.email, role: user.role },
+      metadata: { siteCount: sites.length },
+    });
 
     return NextResponse.json({
       user,
