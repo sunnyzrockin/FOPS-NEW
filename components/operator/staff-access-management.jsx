@@ -1,458 +1,545 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
   DialogFooter, DialogClose, DialogDescription,
 } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Loader2, UserPlus, User, Users, Building, Building2, Trash2, Mail, X,
+  Loader2, UserPlus, UserMinus, User, Building2, Mail, ClipboardList,
+  Search, Power, ChevronRight,
 } from 'lucide-react';
-
-import { toast } from 'sonner';
+import { authedFetch } from '@/lib/authed-fetch';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
+import { toast } from 'sonner';
+
 /**
- * StaffAccessManagement — Operator-facing UI to create staff members,
- * send invites, and assign them to sites the operator is responsible for.
- * Includes an inline debug panel (toggleable) showing the raw API responses
- * for quick triage. Extracted from /app/app/app/page.js as Phase C of the
- * dashboard monolith refactor. API contracts unchanged.
+ * StaffAccessManagement — Operator-facing UI to manage staff who can
+ * submit shift reports for the operator's own sites. Section B (Phase 2)
+ * rebuild: card list with assigned-site badges, last-shift date, status
+ * badge (Active / Invited / Inactive); Add Staff modal with two tabs
+ * (Invite by email / Select existing user); site-scoped assignment.
  */
 export default function StaffAccessManagement({ user, sites }) {
   const { confirm: confirmDialog, ConfirmDialog } = useConfirmDialog();
+
   const [staffUsers, setStaffUsers] = useState([]);
   const [staffAssignments, setStaffAssignments] = useState([]);
-  const [showAddStaff, setShowAddStaff] = useState(false);
-  const [showAssignSites, setShowAssignSites] = useState(null);
-  const [selectedSites, setSelectedSites] = useState([]);
+  const [pendingInvites, setPendingInvites] = useState([]); // invites I sent that are still pending
+  const [lastShiftByUser, setLastShiftByUser] = useState({}); // user_id -> ISO date
   const [loading, setLoading] = useState(true);
-  const [removingAssignmentId, setRemovingAssignmentId] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: 'demo123' });
-  const [debug, setDebug] = useState(null);
-  const [showDebug, setShowDebug] = useState(false);
 
+  // Add Staff modal
+  const [showAddStaff, setShowAddStaff] = useState(false);
+  const [addTab, setAddTab] = useState('invite'); // invite | existing
+  const [inviteForm, setInviteForm] = useState({ email: '', name: '', site_ids: [] });
+  const [picked, setPicked] = useState(null);
+  const [search, setSearch] = useState('');
+  const [pickedSiteIds, setPickedSiteIds] = useState([]);
+  const [addBusy, setAddBusy] = useState(false);
+
+  // Per-row "manage sites" modal
+  const [managing, setManaging] = useState(null); // staff user object
+  const [manageSiteIds, setManageSiteIds] = useState([]);
+  const [manageBusy, setManageBusy] = useState(false);
+
+  /* ----- Load all data ----- */
   const loadData = useCallback(async () => {
-    const t = Date.now();
-    const dbg = { startedAt: new Date().toISOString(), userId: user.id };
+    setLoading(true);
     try {
-      const usersUrl = `/api/users?role=staff&_t=${t}`;
-      const assignmentsUrl = `/api/staff-assignments?operatorId=${user.id}&_t=${t}`;
-      dbg.usersUrl = usersUrl;
-      dbg.assignmentsUrl = assignmentsUrl;
-
-      const [usersRes, assignmentsRes] = await Promise.all([
-        fetch(usersUrl, { cache: 'no-store' }),
-        fetch(assignmentsUrl, { cache: 'no-store' }),
+      const siteIds = (sites || []).map((s) => s.id).join(',');
+      const [usersRes, asnRes, invRes, reportsRes] = await Promise.all([
+        authedFetch('/api/users?role=staff'),
+        authedFetch(`/api/staff-assignments?operatorId=${user.id}`),
+        authedFetch(`/api/invites?invitedBy=${user.id}`),
+        siteIds ? authedFetch(`/api/reports?siteIds=${siteIds}`) : Promise.resolve(null),
       ]);
-      dbg.usersStatus = usersRes.status;
-      dbg.assignmentsStatus = assignmentsRes.status;
+      const usersData = await usersRes.json().catch(() => []);
+      const asnData = await asnRes.json().catch(() => []);
+      const invData = await invRes.json().catch(() => []);
+      const reportsData = reportsRes ? await reportsRes.json().catch(() => []) : [];
 
-      const usersText = await usersRes.text();
-      const assignmentsText = await assignmentsRes.text();
-      dbg.usersBodyPreview = usersText.slice(0, 200);
-      dbg.assignmentsBodyPreview = assignmentsText.slice(0, 200);
+      setStaffUsers(Array.isArray(usersData) ? usersData : []);
+      setStaffAssignments(Array.isArray(asnData) ? asnData : []);
+      setPendingInvites(
+        Array.isArray(invData)
+          ? invData.filter((i) => i.status === 'pending' && i.role === 'staff')
+          : []
+      );
 
-      let usersData = [];
-      let assignmentsData = [];
-      try { usersData = JSON.parse(usersText); } catch (e) { dbg.usersParseError = e.message; }
-      try { assignmentsData = JSON.parse(assignmentsText); } catch (e) { dbg.assignmentsParseError = e.message; }
-
-      const finalUsers = Array.isArray(usersData) ? usersData : [];
-      const finalAssignments = Array.isArray(assignmentsData) ? assignmentsData : [];
-      dbg.staffCount = finalUsers.length;
-      dbg.assignmentsCount = finalAssignments.length;
-
-      setStaffUsers(finalUsers);
-      setStaffAssignments(finalAssignments);
-
-      if (!Array.isArray(usersData)) {
-        console.error('Failed to load staff list (non-array):', usersData);
+      // Last shift per staff (only those for THIS operator's sites)
+      const map = {};
+      if (Array.isArray(reportsData)) {
+        for (const r of reportsData) {
+          const uid = r.submitted_by_user_id || r.user_id;
+          if (!uid) continue;
+          if (!map[uid] || r.date > map[uid]) map[uid] = r.date;
+        }
       }
-    } catch (err) {
-      dbg.error = err.message;
-      console.error('Failed to load staff:', err);
+      setLastShiftByUser(map);
+    } catch (e) {
+      console.error('staff load failed', e);
+      toast.error('Failed to load staff');
     } finally {
       setLoading(false);
-      setDebug(dbg);
     }
-  }, [user.id]);
+  }, [user.id, sites]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const handleSendStaffInvite = async () => {
-    if (!form.name || !form.email) { toast.error('Name and email are required'); return; }
+  /* ----- Derived: only staff who have at least one assignment to MY sites ----- */
+  const mySiteIdSet = useMemo(() => new Set((sites || []).map((s) => s.id)), [sites]);
+
+  // Assignments scoped to my sites
+  const myAssignments = useMemo(
+    () => staffAssignments.filter((a) => mySiteIdSet.has(a.site_id)),
+    [staffAssignments, mySiteIdSet]
+  );
+
+  // staff_user_id → array of site IDs assigned (within my sites)
+  const sitesByStaffUserId = useMemo(() => {
+    const m = {};
+    for (const a of myAssignments) {
+      if (!m[a.staff_user_id]) m[a.staff_user_id] = [];
+      m[a.staff_user_id].push(a.site_id);
+    }
+    return m;
+  }, [myAssignments]);
+
+  // Cards to render = staff users with at least one assignment to my sites
+  const visibleStaff = useMemo(() => {
+    const ids = Object.keys(sitesByStaffUserId);
+    return staffUsers.filter((u) => ids.includes(u.id));
+  }, [staffUsers, sitesByStaffUserId]);
+
+  // Existing users that AREN'T already assigned to any of my sites
+  const pickableStaff = useMemo(() => {
+    const assignedSet = new Set(Object.keys(sitesByStaffUserId));
+    const q = search.trim().toLowerCase();
+    return staffUsers
+      .filter((u) => !assignedSet.has(u.id))
+      .filter((u) =>
+        !q ||
+        (u.name || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q)
+      );
+  }, [staffUsers, sitesByStaffUserId, search]);
+
+  /* ----- Status helper ----- */
+  const statusOf = (u) => {
+    if (u.status === 'inactive') return { label: 'Inactive', cls: 'bg-slate-100 text-slate-600' };
+    if (u.status === 'invited') return { label: 'Invited', cls: 'bg-amber-100 text-amber-700' };
+    return { label: 'Active', cls: 'bg-emerald-100 text-emerald-700' };
+  };
+
+  const siteNameById = useMemo(() => {
+    const m = {};
+    for (const s of sites || []) m[s.id] = s;
+    return m;
+  }, [sites]);
+
+  /* ----- Add Staff: open / close ----- */
+  const openAddStaff = () => {
+    setShowAddStaff(true);
+    setAddTab('invite');
+    setInviteForm({ email: '', name: '', site_ids: [] });
+    setPicked(null);
+    setPickedSiteIds([]);
+    setSearch('');
+  };
+  const closeAddStaff = () => {
+    setShowAddStaff(false);
+    setInviteForm({ email: '', name: '', site_ids: [] });
+    setPicked(null);
+    setPickedSiteIds([]);
+  };
+
+  const sendInvite = async () => {
+    if (!inviteForm.email) { toast.error('Email is required'); return; }
+    if (inviteForm.site_ids.length === 0) { toast.error('Pick at least one site'); return; }
+    setAddBusy(true);
     try {
-      const res = await fetch('/api/invites', {
+      const res = await authedFetch('/api/invites', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: form.email,
+          email: inviteForm.email.trim(),
+          name: inviteForm.name.trim() || null,
           role: 'staff',
-          invited_by_user_id: user.id,
+          site_ids: inviteForm.site_ids,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(`Failed to send invite: ${data.error || data.message || res.status}`);
-        return;
-      }
-      const ackMsg = data.email_sent
-        ? `Invite email sent to ${form.email}`
-        : data.email_mocked
-        ? `Invite created but email service is not configured. Share this link directly:\n\n${data.accept_url}`
-        : `Invite created but email failed to send. Share this link directly:\n\n${data.accept_url}`;
-      toast.info(ackMsg);
-      setForm({ name: '', email: '', password: 'demo123' });
-      setShowAddStaff(false);
-    } catch (err) {
-      toast.error('Failed to send invite: ' + err.message);
-    }
-  };
-
-  const handleCreateStaff = async () => {
-    if (!form.name || !form.email) { toast.error('Name and email are required'); return; }
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, role: 'staff', creatorRole: 'operator' }),
-      });
-
-      const text = await res.text();
-      if (!text) {
-        toast.error(`Failed to create staff: Server returned empty response (HTTP ${res.status}). Please retry; if this persists, contact support.`);
-        return;
-      }
-
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error('Response was not JSON:', text);
-        toast.error(`Failed to create staff: Invalid server response (HTTP ${res.status}).\n\nRaw response:\n${text.slice(0, 300)}`);
-        return;
-      }
-
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setForm({ name: '', email: '', password: 'demo123' });
-        setShowAddStaff(false);
-        loadData();
+        toast.success(`Invite sent to ${inviteForm.email}`);
+        closeAddStaff();
+        await loadData();
       } else {
-        const detail = data.error || data.message || 'Failed to create staff member';
-        const code = data.code ? ` (code: ${data.code})` : '';
-        toast.info(`${detail}${code}`);
+        toast.error(data.error || data.message || 'Invite failed');
       }
-    } catch (err) {
-      console.error('Create staff error:', err);
-      toast.error('Failed to create staff: ' + err.message);
-    }
+    } catch (e) {
+      toast.error('Invite failed: ' + e.message);
+    } finally { setAddBusy(false); }
   };
 
-  const handleDeleteStaff = async (staffId) => {
-    if (!(await confirmDialog('Delete staff member?', 'This will remove all site assignments for this staff member.', { destructive: true, confirmLabel: 'Delete' }))) return;
+  const addExistingStaff = async () => {
+    if (!picked) { toast.error('Pick a staff member'); return; }
+    if (pickedSiteIds.length === 0) { toast.error('Pick at least one site'); return; }
+    setAddBusy(true);
     try {
-      const res = await fetch(`/api/users/${staffId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(`Failed to delete staff: ${data.error || data.message || res.status}`);
-        return;
-      }
-      setStaffUsers((prev) => prev.filter((s) => s.id !== staffId));
-      setStaffAssignments((prev) => prev.filter((a) => a.staff_user_id !== staffId));
-      loadData();
-    } catch (err) {
-      toast.error('Failed to delete staff: ' + err.message);
-    }
-  };
-
-  const openAssignSites = async (staff) => {
-    const staffSiteIds = staffAssignments
-      .filter((a) => a.staff_user_id === staff.id)
-      .map((a) => a.site_id);
-    setSelectedSites(staffSiteIds);
-    setShowAssignSites(staff);
-  };
-
-  const handleSaveAssignments = async () => {
-    if (!showAssignSites) return;
-    const staffId = showAssignSites.id;
-    const currentSiteIds = staffAssignments
-      .filter((a) => a.staff_user_id === staffId)
-      .map((a) => a.site_id);
-    const toAdd = selectedSites.filter((id) => !currentSiteIds.includes(id));
-    const toRemove = staffAssignments
-      .filter((a) => a.staff_user_id === staffId && !selectedSites.includes(a.site_id))
-      .map((a) => a.id);
-
-    try {
-      for (const siteId of toAdd) {
-        const res = await fetch('/api/staff-assignments', {
+      for (const siteId of pickedSiteIds) {
+        await authedFetch('/api/staff-assignments', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            staff_user_id: staffId,
+            staff_user_id: picked.id,
             site_id: siteId,
             assigned_by_operator_id: user.id,
           }),
         });
-        if (!res.ok) {
-          const data = await res.json();
-          toast.error(data.error || 'Failed to assign site');
-          return;
-        }
       }
-      for (const assignmentId of toRemove) {
-        await fetch(`/api/staff-assignments/${assignmentId}`, { method: 'DELETE' });
-      }
-      setShowAssignSites(null);
-      loadData();
-    } catch (err) {
-      toast.error('Failed to update assignments');
-    }
+      toast.success(`${picked.name || picked.email} added to ${pickedSiteIds.length} site${pickedSiteIds.length === 1 ? '' : 's'}`);
+      closeAddStaff();
+      await loadData();
+    } catch (e) {
+      toast.error('Failed: ' + e.message);
+    } finally { setAddBusy(false); }
   };
 
-  const handleRemoveSiteAssignment = async (assignmentId, staffName, siteName) => {
-    if (!assignmentId) return;
-    if (!(await confirmDialog(`Remove ${staffName}'s access?`, `${staffName} will no longer be able to submit shift reports for ${siteName}.`, { destructive: true, confirmLabel: 'Remove' }))) return;
-    setRemovingAssignmentId(assignmentId);
+  /* ----- Manage sites (per row) ----- */
+  const openManage = (u) => {
+    setManaging(u);
+    setManageSiteIds(sitesByStaffUserId[u.id] || []);
+  };
+  const closeManage = () => { setManaging(null); setManageSiteIds([]); };
+
+  const saveManage = async () => {
+    if (!managing) return;
+    setManageBusy(true);
     try {
-      const res = await fetch(`/api/staff-assignments/${assignmentId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(`Failed to remove site: ${data.error || data.message || res.status}`);
-        return;
+      const current = new Set(sitesByStaffUserId[managing.id] || []);
+      const target = new Set(manageSiteIds);
+      const toAdd = [...target].filter((id) => !current.has(id));
+      const toRemove = staffAssignments.filter(
+        (a) => a.staff_user_id === managing.id && current.has(a.site_id) && !target.has(a.site_id)
+      );
+      // Removals
+      for (const a of toRemove) {
+        await authedFetch(`/api/staff-assignments/${a.id}`, { method: 'DELETE' });
       }
-      // Optimistic local update + reload to stay consistent with server
-      setStaffAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
-      loadData();
-    } catch (err) {
-      toast.error('Failed to remove site: ' + err.message);
-    } finally {
-      setRemovingAssignmentId(null);
+      // Additions
+      for (const siteId of toAdd) {
+        await authedFetch('/api/staff-assignments', {
+          method: 'POST',
+          body: JSON.stringify({
+            staff_user_id: managing.id,
+            site_id: siteId,
+            assigned_by_operator_id: user.id,
+          }),
+        });
+      }
+      toast.success(`Updated site access for ${managing.name || managing.email}`);
+      closeManage();
+      await loadData();
+    } catch (e) {
+      toast.error('Save failed: ' + e.message);
+    } finally { setManageBusy(false); }
+  };
+
+  /* ----- Remove from single site / Remove from all ----- */
+  const removeFromOneSite = async (staff, assignmentRow) => {
+    const site = siteNameById[assignmentRow.site_id];
+    const ok = await confirmDialog(
+      `Remove ${staff.name || staff.email}'s access to ${site?.name || 'this site'}?`,
+      `They will no longer be able to submit shift reports for this site.`,
+      { destructive: true, confirmLabel: 'Remove' }
+    );
+    if (!ok) return;
+    try {
+      const res = await authedFetch(`/api/staff-assignments/${assignmentRow.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Removed from site');
+        await loadData();
+      } else {
+        toast.error('Failed to remove');
+      }
+    } catch (e) { toast.error('Failed: ' + e.message); }
+  };
+
+  const removeFromAll = async (staff) => {
+    const ok = await confirmDialog(
+      `Deactivate ${staff.name || staff.email}?`,
+      `This will remove all of their site assignments under your sites. They will lose all submit access for your sites.`,
+      { destructive: true, confirmLabel: 'Deactivate' }
+    );
+    if (!ok) return;
+    try {
+      const rows = staffAssignments.filter(
+        (a) => a.staff_user_id === staff.id && mySiteIdSet.has(a.site_id)
+      );
+      for (const a of rows) {
+        await authedFetch(`/api/staff-assignments/${a.id}`, { method: 'DELETE' });
+      }
+      toast.success(`${staff.name || staff.email} deactivated`);
+      await loadData();
+    } catch (e) {
+      toast.error('Failed: ' + e.message);
     }
   };
 
-  const getStaffSites = (staffId) =>
-    staffAssignments
-      .filter((a) => a.staff_user_id === staffId)
-      .map((a) => ({
-        assignmentId: a.id,
-        siteId: a.site_id,
-        siteName: a.site?.name || 'Unknown',
-      }));
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
-
+  /* ----- Render ----- */
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold">Staff Management</h2>
-          <p className="text-muted-foreground">Create staff members and assign them to your sites</p>
+          <p className="text-muted-foreground">Manage who can submit shift reports for your sites</p>
         </div>
-        <Dialog open={showAddStaff} onOpenChange={setShowAddStaff}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-green-500 to-emerald-600">
-              <UserPlus className="h-4 w-4 mr-2" /> Add Staff Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Staff Member</DialogTitle>
-              <DialogDescription>
-                Send an email invitation (recommended) or create the account directly with a temporary password.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <Label>Name *</Label>
-                <Input
-                  placeholder="Full name"
-                  value={form.name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label>Email *</Label>
-                <Input
-                  type="email"
-                  placeholder="email@example.com"
-                  value={form.email}
-                  onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-            <DialogFooter className="gap-2 sm:gap-2">
-              <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-              <Button variant="outline" onClick={handleSendStaffInvite}>
-                <Mail className="h-4 w-4 mr-1" /> Send Invite
-              </Button>
-              <Button onClick={handleCreateStaff}>Create Directly</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openAddStaff} className="bg-blue-600 hover:bg-blue-700">
+          <UserPlus className="h-4 w-4 mr-2" /> Add Staff
+        </Button>
       </div>
 
-      <Dialog open={!!showAssignSites} onOpenChange={(open) => !open && setShowAssignSites(null)}>
+      {loading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+        </div>
+      )}
+
+      {/* Pending invites strip */}
+      {pendingInvites.length > 0 && (
+        <Card className="border border-amber-200 bg-amber-50 shadow-sm">
+          <CardContent className="p-3 flex flex-wrap items-center gap-3">
+            <Mail className="h-4 w-4 text-amber-700" />
+            <span className="text-sm text-amber-900 font-medium">
+              {pendingInvites.length} pending invite{pendingInvites.length === 1 ? '' : 's'}:
+            </span>
+            <span className="text-xs text-amber-800 break-all">
+              {pendingInvites.map((i) => i.email).join(', ')}
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Staff cards */}
+      {!loading && visibleStaff.length === 0 && pendingInvites.length === 0 && (
+        <Card className="border border-border/50 shadow-sm">
+          <CardContent className="p-8 text-center text-muted-foreground">
+            <User className="h-10 w-10 mx-auto opacity-50 mb-2" />
+            <p className="font-medium text-foreground">No staff assigned yet</p>
+            <p className="text-sm">Use <strong>Add Staff</strong> to invite or pick from existing users.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-3">
+        {visibleStaff.map((staff) => {
+          const status = statusOf(staff);
+          const assignedSiteIds = sitesByStaffUserId[staff.id] || [];
+          const lastShift = lastShiftByUser[staff.id];
+          const assignmentRows = staffAssignments.filter(
+            (a) => a.staff_user_id === staff.id && mySiteIdSet.has(a.site_id)
+          );
+          return (
+            <Card key={staff.id} className="border border-border/50 shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                      {(staff.name || staff.email || '?').charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{staff.name || '—'}</div>
+                      <div className="text-xs text-muted-foreground truncate">{staff.email}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className={status.cls + ' hover:' + status.cls}>{status.label}</Badge>
+                    <Button variant="outline" size="sm" onClick={() => openManage(staff)}>
+                      <Building2 className="h-3.5 w-3.5 mr-1.5" /> Manage sites
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => removeFromAll(staff)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                      <Power className="h-3.5 w-3.5 mr-1.5" /> Remove all
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 flex-wrap text-sm">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium mr-1">Sites:</span>
+                    {assignedSiteIds.length === 0 ? (
+                      <span className="text-muted-foreground italic">none</span>
+                    ) : (
+                      assignmentRows.map((row) => {
+                        const s = siteNameById[row.site_id];
+                        if (!s) return null;
+                        return (
+                          <Badge key={row.id} variant="outline" className="gap-1 pr-1">
+                            {s.code || s.name}
+                            <button type="button" onClick={() => removeFromOneSite(staff, row)}
+                              className="ml-0.5 rounded hover:bg-red-100 hover:text-red-700 p-0.5"
+                              aria-label={`Remove from ${s.name}`}>
+                              <UserMinus className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    <ClipboardList className="h-4 w-4" />
+                    <span>{lastShift ? `Last shift ${lastShift}` : 'No shifts yet'}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* ADD STAFF MODAL */}
+      <Dialog open={showAddStaff} onOpenChange={(o) => { if (!o) closeAddStaff(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" /> Add staff member
+            </DialogTitle>
+            <DialogDescription>Invite a new staff member by email or pick someone already in the system.</DialogDescription>
+          </DialogHeader>
+
+          <div className="inline-flex rounded-md border bg-background p-0.5 self-start">
+            <button type="button" onClick={() => setAddTab('invite')}
+              className={`px-3 py-1.5 text-xs font-medium rounded ${addTab === 'invite' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
+              Invite by email
+            </button>
+            <button type="button" onClick={() => setAddTab('existing')}
+              className={`px-3 py-1.5 text-xs font-medium rounded ${addTab === 'existing' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
+              Select existing user
+            </button>
+          </div>
+
+          {addTab === 'invite' && (
+            <div className="space-y-3">
+              <div>
+                <Label>Email *</Label>
+                <Input type="email" placeholder="staff@example.com" value={inviteForm.email}
+                  onChange={(e) => setInviteForm((p) => ({ ...p, email: e.target.value }))} className="mt-1" />
+              </div>
+              <div>
+                <Label>Name (optional)</Label>
+                <Input placeholder="John Smith" value={inviteForm.name}
+                  onChange={(e) => setInviteForm((p) => ({ ...p, name: e.target.value }))} className="mt-1" />
+              </div>
+              <div>
+                <Label>Site access *</Label>
+                <div className="mt-2 max-h-40 overflow-y-auto border rounded-md p-2 space-y-1.5">
+                  {(sites || []).map((s) => (
+                    <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox checked={inviteForm.site_ids.includes(s.id)}
+                        onCheckedChange={(c) => setInviteForm((p) => ({
+                          ...p,
+                          site_ids: c ? [...p.site_ids, s.id] : p.site_ids.filter((id) => id !== s.id),
+                        }))} />
+                      <span className="truncate">{s.name} <span className="text-muted-foreground">({s.code})</span></span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" /> An invite email with a magic link will be sent.
+              </p>
+            </div>
+          )}
+
+          {addTab === 'existing' && (
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search by name or email…" value={search}
+                  onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+              </div>
+              <div className="max-h-44 overflow-y-auto border rounded-md divide-y">
+                {pickableStaff.length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">
+                    {staffUsers.length === 0 ? 'No staff users exist yet — use the Invite tab.' : 'No matching users.'}
+                  </div>
+                ) : pickableStaff.map((u) => (
+                  <button key={u.id} type="button" onClick={() => setPicked(u)}
+                    className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-muted/60 ${picked?.id === u.id ? 'bg-blue-50' : ''}`}>
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
+                      {(u.name || '?').charAt(0).toUpperCase()}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-medium text-sm truncate">{u.name || u.email}</span>
+                      <span className="block text-xs text-muted-foreground truncate">{u.email}</span>
+                    </span>
+                    {picked?.id === u.id && <ChevronRight className="h-4 w-4 text-blue-600" />}
+                  </button>
+                ))}
+              </div>
+              {picked && (
+                <div>
+                  <Label>Assign to which sites *</Label>
+                  <div className="mt-2 max-h-32 overflow-y-auto border rounded-md p-2 space-y-1.5">
+                    {(sites || []).map((s) => (
+                      <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={pickedSiteIds.includes(s.id)}
+                          onCheckedChange={(c) => setPickedSiteIds((prev) => c ? [...prev, s.id] : prev.filter((id) => id !== s.id))} />
+                        <span className="truncate">{s.name} <span className="text-muted-foreground">({s.code})</span></span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <DialogClose asChild><Button variant="outline" disabled={addBusy}>Cancel</Button></DialogClose>
+            {addTab === 'invite' ? (
+              <Button onClick={sendInvite} disabled={!inviteForm.email || inviteForm.site_ids.length === 0 || addBusy}>
+                {addBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send Invite'}
+              </Button>
+            ) : (
+              <Button onClick={addExistingStaff} disabled={!picked || pickedSiteIds.length === 0 || addBusy}>
+                {addBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add to sites'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MANAGE SITES MODAL */}
+      <Dialog open={!!managing} onOpenChange={(o) => { if (!o) closeManage(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign Sites to {showAssignSites?.name}</DialogTitle>
-            <DialogDescription>
-              Select which sites this staff member can access (from your assigned sites only)
-            </DialogDescription>
+            <DialogTitle>Manage site access</DialogTitle>
+            <DialogDescription>{managing?.name || managing?.email}</DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-3 max-h-[400px] overflow-y-auto">
-            {sites.length === 0 ? (
-              <div className="text-center py-8 px-4">
-                <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                <p className="font-medium text-amber-700">No sites available to assign</p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  You don&apos;t have any sites assigned to you yet. Ask your owner to assign sites to your operator account first.
-                </p>
-              </div>
-            ) : (
-              sites.map((site) => (
-                <div key={site.id} className="flex items-center space-x-3 p-3 rounded-xl hover:bg-slate-50">
-                  <Checkbox
-                    id={site.id}
-                    checked={selectedSites.includes(site.id)}
-                    onCheckedChange={(checked) =>
-                      setSelectedSites((prev) =>
-                        checked ? [...prev, site.id] : prev.filter((id) => id !== site.id)
-                      )
-                    }
-                  />
-                  <label htmlFor={site.id} className="flex-1 cursor-pointer">
-                    <p className="font-medium">{site.name}</p>
-                    <p className="text-xs text-muted-foreground">{site.code} • {site.location}</p>
-                  </label>
-                </div>
-              ))
-            )}
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {(sites || []).map((s) => (
+              <label key={s.id} className="flex items-center gap-2 text-sm p-2 rounded hover:bg-muted/50 cursor-pointer">
+                <Checkbox checked={manageSiteIds.includes(s.id)}
+                  onCheckedChange={(c) => setManageSiteIds((prev) => c ? [...prev, s.id] : prev.filter((id) => id !== s.id))} />
+                <span className="flex-1 truncate">{s.name} <span className="text-muted-foreground">({s.code})</span></span>
+              </label>
+            ))}
           </div>
           <DialogFooter>
-            <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-            <Button onClick={handleSaveAssignments} disabled={sites.length === 0}>
-              Save Assignments
+            <DialogClose asChild><Button variant="outline" disabled={manageBusy}>Cancel</Button></DialogClose>
+            <Button onClick={saveManage} disabled={manageBusy}>
+              {manageBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Card className="border border-border/50 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="h-5 w-5" /> Staff Members ({staffUsers.length})
-              </CardTitle>
-              <CardDescription>Staff members can submit shift reports for assigned sites</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => loadData()}>
-                <Loader2 className="h-3 w-3 mr-1" /> Refresh
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowDebug((v) => !v)}>
-                {showDebug ? 'Hide' : 'Show'} Debug
-              </Button>
-            </div>
-          </div>
-          {showDebug && debug && (
-            <div className="mt-3 p-3 bg-slate-100 rounded-md text-xs font-mono overflow-x-auto">
-              <pre className="whitespace-pre-wrap break-all">{JSON.stringify(debug, null, 2)}</pre>
-            </div>
-          )}
-        </CardHeader>
-        <CardContent>
-          {staffUsers.length === 0 ? (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-              <p className="text-muted-foreground">No staff members yet</p>
-              <p className="text-xs text-muted-foreground mt-1">Create a staff member to get started</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {staffUsers.map((staff) => (
-                <div
-                  key={staff.id}
-                  className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-green-50 rounded-xl border border-slate-100"
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                      <User className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium">{staff.name}</p>
-                      <p className="text-xs text-muted-foreground">{staff.email}</p>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {getStaffSites(staff.id).length > 0 ? (
-                          getStaffSites(staff.id).map((s) => {
-                            const busy = removingAssignmentId === s.assignmentId;
-                            return (
-                              <Badge
-                                key={s.assignmentId}
-                                variant="secondary"
-                                className="text-xs pl-2 pr-1 py-0.5 gap-1 flex items-center"
-                              >
-                                <Building2 className="h-3 w-3" />
-                                <span>{s.siteName}</span>
-                                <button
-                                  type="button"
-                                  aria-label={`Unassign ${s.siteName} from ${staff.name}`}
-                                  title={`Unassign ${s.siteName}`}
-                                  disabled={busy}
-                                  onClick={() =>
-                                    handleRemoveSiteAssignment(s.assignmentId, staff.name, s.siteName)
-                                  }
-                                  className="ml-1 inline-flex items-center justify-center h-4 w-4 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {busy ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <X className="h-3 w-3" />
-                                  )}
-                                </button>
-                              </Badge>
-                            );
-                          })
-                        ) : (
-                          <Badge variant="outline" className="text-xs text-orange-600">
-                            No sites assigned
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openAssignSites(staff)}>
-                      <Building className="h-4 w-4 mr-1" /> Assign Sites
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteStaff(staff.id)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    
-    <ConfirmDialog />
-  </div>
+      <ConfirmDialog />
+    </div>
   );
 }
