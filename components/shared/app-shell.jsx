@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { OnboardingModal } from '@/components/shared/onboarding-modal';
 
 /* ---------------------------------------------------------------- */
 /*  ROLE → NAV GROUP DEFINITIONS                                    */
@@ -337,6 +338,26 @@ export default function AppShell({ user, onLogout, children }) {
     });
   }, []);
 
+  /* -------- first-login onboarding modal -------- */
+  // Open the modal whenever the user record carries first_login === true.
+  // We keep an independent piece of local state so the user can dismiss the
+  // modal without us having to mutate the parent's user object — the modal
+  // itself PATCHes /api/users/me on completion to persist the flip-off.
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  useEffect(() => {
+    if (user?.first_login === true) {
+      setShowOnboarding(true);
+    }
+  }, [user?.first_login]);
+
+  const onboardingNode = (
+    <OnboardingModal
+      open={showOnboarding}
+      onClose={() => setShowOnboarding(false)}
+      user={user}
+    />
+  );
+
   /* -------- staff branch: no sidebar -------- */
   if (user.role === 'staff') {
     return (
@@ -351,6 +372,7 @@ export default function AppShell({ user, onLogout, children }) {
             ? children({ activeTab })
             : children}
         </main>
+        {onboardingNode}
       </div>
     );
   }
@@ -382,6 +404,7 @@ export default function AppShell({ user, onLogout, children }) {
             : children}
         </main>
       </div>
+      {onboardingNode}
     </div>
   );
 }

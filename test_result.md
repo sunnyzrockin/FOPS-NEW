@@ -1459,3 +1459,19 @@ frontend:
     message: "Three small targeted changes landed: (1) PATCH /api/users/me created (Section C prep — flips first_login flag). (2) components/shared/onboarding-modal.jsx built as the 3-step welcome modal (not yet wired into AppShell). (3) Legacy /api/rls-fix route deleted (no callers in codebase). (4) Replaced alert() in shift-report-form.jsx with toast.error(). Requesting focused backend test on /api/users/me + /api/rls-fix 404 + 0 regressions on the existing 53+ test suite."
   - agent: "testing"
     message: "🎉 FOCUSED BACKEND TEST COMPLETE - ALL 18 TESTS PASSED (100% SUCCESS RATE)! Tested three targeted changes: (A) NEW /api/users/me endpoint - 12/12 tests passed: auth gates working (401 without/invalid Bearer), GET returns correct user row for all 3 roles (owner/operator/staff), PATCH updates first_login field correctly, whitelist enforcement prevents role/email changes, validation working (empty body → 400, non-whitelisted-only → 400), CRITICAL: static /me route correctly takes priority over dynamic [id] route (NOT treated as id='me'). (B) DELETED /api/rls-fix endpoint - 2/2 tests passed: POST → 404, GET → 404 (endpoint successfully removed). (C) REGRESSION - 4/4 tests passed: GET /dashboard/stats with health-strip fields working (submittedToday=1, totalSites=1), GET /users?role=staff as Operator → 200, GET /users without Bearer → 401 (auth gate intact), GET /operator-assignments without Bearer → 200 (allowAnon: true pre-existing behavior confirmed). ZERO REGRESSIONS DETECTED. All three changes are PRODUCTION-READY! Frontend change (alert() → toast.error() in shift-report-form.jsx) confirmed by code review - no backend impact."
+
+  - task: "Phase 2 Section C: Invite + Onboarding wiring"
+    implemented: true
+    working: "NA"
+    file: "/app/lib/mailer.js, /app/components/shared/app-shell.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Section C completion commit. Changes: (1) /app/lib/mailer.js — acceptUrl now points to `${APP_BASE_URL}/accept-invite?token=<token>` (was previously /invite/<token>, but the existing page lives at /accept-invite). (2) /app/components/shared/app-shell.jsx — imports OnboardingModal, adds local `showOnboarding` state initialized from `user.first_login === true`, renders <OnboardingModal /> in both staff and owner/operator branches. Modal PATCHes /api/users/me { first_login: false } on completion via authedFetch. (3) Confirmed middleware.js already has `/accept-invite` in its public-route bypass (no change needed). Test plan: (a) Login flow loads users with first_login=true and modal auto-opens; with first_login=false modal does not show. (b) Step navigation Next/Back/Skip work; Skip and Esc both PATCH first_login=false. (c) Re-login after completing once: modal should NOT re-open. (d) Backend: invite POST should generate a Resend email whose acceptUrl ends with /accept-invite?token=… (e) No regression on the 18-test focused suite from previous commit."
+
+  - agent: "main"
+    message: "Section C commit complete in one go: (1) mailer.js acceptUrl fixed to /accept-invite?token=. (2) OnboardingModal wired into AppShell (auto-opens when user.first_login === true; close → PATCH /api/users/me). (3) middleware already had /accept-invite public bypass — confirmed. App compiles cleanly, lint passes on all touched files. Login page screenshot verified. Pausing for user testing as instructed."
+
