@@ -53,6 +53,23 @@ export default function LoginPage() {
       localStorage.setItem('workflowlite_sites', JSON.stringify(userData.sites || []));
       if (userData.session) {
         localStorage.setItem('supabase-session', JSON.stringify(userData.session));
+
+        // Also hand the session to the browser Supabase client so it
+        // writes the sb-*-auth-token HTTP cookies. The new server-side
+        // middleware (Section 1) reads those cookies via
+        // supabase.auth.getUser() to gate /app/*. Without this, the
+        // middleware would redirect back to /login in a loop.
+        try {
+          const { createBrowserClient } = await import('@/lib/supabase');
+          const sb = createBrowserClient();
+          await sb.auth.setSession({
+            access_token: userData.session.access_token,
+            refresh_token: userData.session.refresh_token,
+          });
+        } catch (cookieErr) {
+          // Non-fatal — localStorage fallback still works for the UI.
+          console.warn('Could not persist Supabase cookie session:', cookieErr);
+        }
       }
 
       // Small delay to ensure localStorage is written before redirect

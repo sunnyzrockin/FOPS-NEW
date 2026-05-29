@@ -1,5 +1,12 @@
 'use client';
 
+/**
+ * @deprecated Replaced by /app/components/shared/app-shell.jsx (Section 3
+ * of the May 2026 redesign). The new AppShell renders a left sidebar for
+ * Owner/Operator and a 2-button top bar for Staff, with tab state driven
+ * from the URL (?tab=...). Kept temporarily for reference; safe to delete
+ * once we've shipped a release. Not imported anywhere in the app.
+ */
 import { Button } from '@/components/ui/button';
 import {
   Fuel, LogOut, BarChart3, Building2, Users, Settings, Calculator,

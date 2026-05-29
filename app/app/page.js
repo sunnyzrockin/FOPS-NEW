@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
 // All UI lives in /app/components/* now. This file is the slim role-router.
-import Header from '@/components/shared/header';
+import AppShell from '@/components/shared/app-shell';
 import OwnerDashboard from '@/components/owner/owner-dashboard';
 import OperatorDashboard from '@/components/operator/operator-dashboard';
 import StaffDashboard from '@/components/staff/staff-dashboard';
@@ -16,19 +16,19 @@ import { authedFetch } from '@/lib/authed-fetch';
  *   1) On mount, hydrate user/sites from localStorage; if missing, bounce
  *      to /login.
  *   2) Wire a 5-min global escalation poller while the user is logged in.
- *   3) Render the Header + the role-specific dashboard.
+ *   3) Render the AppShell + the role-specific dashboard, with tab state
+ *      driven from the URL (?tab=...) for bookmarkability.
  *
  * Everything else (forms, fuel pricing, banking, staff/operator/site
  * management, charts, KPI cards, etc.) lives in the dedicated component
  * tree under /app/components/. See ARCHITECTURE.md.
  */
-export default function App() {
+function AppInner() {
   const router = useRouter();
 
   // Start with null to avoid hydration mismatch
   const [user, setUser] = useState(null);
   const [sites, setSites] = useState([]);
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
 
@@ -42,7 +42,6 @@ export default function App() {
         const parsedUser = JSON.parse(savedUser);
         setUser(parsedUser);
         setSites(JSON.parse(savedSites));
-        setActiveTab(parsedUser.role === 'staff' ? 'submit' : 'dashboard');
         setMounted(true);
       } catch (e) {
         console.error('Failed to parse user data:', e);
@@ -129,34 +128,50 @@ export default function App() {
 
   if (!mounted || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="min-h-screen flex items-center justify-center bg-muted/30">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
       </div>
     );
   }
 
+  // AppShell wraps the role-specific dashboard. Tab state is driven from
+  // the URL `?tab=` via AppShell internals; we receive it via render-prop
+  // so we can pass it down to the legacy `activeTab` prop on dashboards.
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <Header
-        user={user}
-        onLogout={handleLogout}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
-      {user.role === 'staff' && (
-        <StaffDashboard user={user} sites={sites} activeTab={activeTab} />
+    <AppShell user={user} onLogout={handleLogout}>
+      {({ activeTab }) => (
+        <>
+          {user.role === 'staff' && (
+            <StaffDashboard user={user} sites={sites} activeTab={activeTab} />
+          )}
+          {user.role === 'operator' && (
+            <OperatorDashboard user={user} sites={sites} activeTab={activeTab} />
+          )}
+          {user.role === 'owner' && (
+            <OwnerDashboard
+              user={user}
+              sites={sites}
+              activeTab={activeTab}
+              onRefreshSites={refreshSites}
+            />
+          )}
+        </>
       )}
-      {user.role === 'operator' && (
-        <OperatorDashboard user={user} sites={sites} activeTab={activeTab} />
-      )}
-      {user.role === 'owner' && (
-        <OwnerDashboard
-          user={user}
-          sites={sites}
-          activeTab={activeTab}
-          onRefreshSites={refreshSites}
-        />
-      )}
-    </div>
+    </AppShell>
+  );
+}
+
+// Wrap in Suspense — useSearchParams() requires it in Next.js 15.
+export default function App() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-muted/30">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        </div>
+      }
+    >
+      <AppInner />
+    </Suspense>
   );
 }
