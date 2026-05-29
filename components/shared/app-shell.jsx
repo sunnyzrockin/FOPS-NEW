@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { OnboardingModal } from '@/components/shared/onboarding-modal';
+import { HelpPanel } from '@/components/shared/help-panel';
 
 /* ---------------------------------------------------------------- */
 /*  ROLE → NAV GROUP DEFINITIONS                                    */
@@ -358,6 +359,11 @@ export default function AppShell({ user, onLogout, children }) {
     />
   );
 
+  // The Help panel (Section D) lives at the shell level so it's available
+  // on every authed route. It's self-contained (manages its own open state)
+  // so we just drop it in once and forget about it.
+  const helpNode = <HelpPanel user={user} />;
+
   /* -------- staff branch: no sidebar -------- */
   if (user.role === 'staff') {
     return (
@@ -373,6 +379,7 @@ export default function AppShell({ user, onLogout, children }) {
             : children}
         </main>
         {onboardingNode}
+        {helpNode}
       </div>
     );
   }
@@ -405,6 +412,7 @@ export default function AppShell({ user, onLogout, children }) {
         </main>
       </div>
       {onboardingNode}
+      {helpNode}
     </div>
   );
 }
