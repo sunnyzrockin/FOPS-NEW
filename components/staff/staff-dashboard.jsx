@@ -57,7 +57,7 @@ export default function StaffDashboard({ user, sites, activeTab }) {
   useEffect(() => { loadReports(); }, [loadReports]);
 
   const handleReportClick = async (report) => {
-    const res = await fetch(`/api/reports/${report.id}`);
+    const res = await authedFetch(`/api/reports/${report.id}`);
     const data = await res.json();
     setSelectedReport(data);
   };

@@ -9,18 +9,12 @@
  */
 
 import { NextResponse } from 'next/server';
-import { optionsHandler } from '@/lib/api/cors';
+import { corsHeaders, optionsHandler } from '@/lib/api/cors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 export const OPTIONS = optionsHandler;
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
 
 export async function POST(request) {
   try {

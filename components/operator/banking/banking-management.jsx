@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Calculator, Loader2, Pencil, Trash2 } from 'lucide-react';
 import BankingFormulaBuilder from '@/components/operator/banking/banking-formula-builder';
+import { authedFetch } from '@/lib/authed-fetch';
 
 /**
  * BankingManagement — Operator-facing wrapper around BankingFormulaBuilder.
@@ -30,7 +31,7 @@ export default function BankingManagement({ user, sites }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/banking-formulas?siteId=${selectedSite}`, { cache: 'no-store' });
+      const res = await authedFetch(`/api/banking-formulas?siteId=${selectedSite}`, { cache: 'no-store' });
       const data = await res.json();
       setFormulas(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -48,7 +49,7 @@ export default function BankingManagement({ user, sites }) {
   const handleDelete = async (formulaId) => {
     if (!confirm('Delete this formula?')) return;
     try {
-      const res = await fetch(`/api/banking-formulas/${formulaId}`, { method: 'DELETE' });
+      const res = await authedFetch(`/api/banking-formulas/${formulaId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         alert(`Failed to delete formula: ${data.error || data.message || res.status}`);

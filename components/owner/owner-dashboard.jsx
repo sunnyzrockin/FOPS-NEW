@@ -64,11 +64,11 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
     setLoading(true);
     try {
       const [statsRes, dailyRes, shiftsRes, siteStatsRes, chartRes] = await Promise.all([
-        fetch(`/api/dashboard/stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        fetch(`/api/daily-rollups?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/dashboard/stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/daily-rollups?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         authedFetch(`/api/reports?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        fetch(`/api/dashboard/site-stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        fetch(`/api/dashboard/revenue-chart?siteIds=${siteIds}&days=7`),
+        authedFetch(`/api/dashboard/site-stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/dashboard/revenue-chart?siteIds=${siteIds}&days=7`),
       ]);
 
       const [statsData, dailyData, shiftsData, siteStatsData, chartDataRes] = await Promise.all([

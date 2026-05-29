@@ -21,32 +21,25 @@ const nextConfig = {
     pagesBufferLength: 2,
   },
   async headers() {
-    // Restrict CORS to your own domains in production. Set CORS_ORIGINS in
-    // Vercel env vars to a comma-separated list, e.g.
-    //   CORS_ORIGINS=https://fopsapp.com,https://www.fopsapp.com
-    // If unset, defaults to the production domain.
-    const corsOrigin = process.env.CORS_ORIGINS || 'https://fopsapp.com';
+    // CORS is intentionally handled per-request inside route handlers
+    // (see /app/lib/api/cors.js → corsHeadersFor()). That lets us echo
+    // http://localhost:3000 during `yarn dev` while still locking down
+    // to NEXT_PUBLIC_BASE_URL in production. Doing it here as a static
+    // string would prevent any per-request logic and would also override
+    // (silently wins) the route handlers' headers.
+    //
+    // Everything else in this block is static security headers that apply
+    // to all responses regardless of method.
     return [
       {
         source: '/(.*)',
         headers: [
-          // Prevent clickjacking — only fopsapp.com itself can frame the app.
+          // Prevent clickjacking — only the app's own origin can frame it.
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           {
             key: 'Content-Security-Policy',
             value: "frame-ancestors 'self';",
           },
-          // Tighter CORS than wide-open `*`.
-          { key: 'Access-Control-Allow-Origin', value: corsOrigin },
-          {
-            key: 'Access-Control-Allow-Methods',
-            value: 'GET, POST, PUT, DELETE, OPTIONS',
-          },
-          {
-            key: 'Access-Control-Allow-Headers',
-            value: 'Content-Type, Authorization',
-          },
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
           // Standard security headers
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },

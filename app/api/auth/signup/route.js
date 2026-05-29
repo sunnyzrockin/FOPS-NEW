@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import { optionsHandler } from '@/lib/api/cors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -79,13 +80,4 @@ export async function POST(request) {
 }
 
 // Handle OPTIONS for CORS
-export async function OPTIONS(request) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
-}
+export const OPTIONS = optionsHandler;

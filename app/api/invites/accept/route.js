@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { corsHeaders } from '@/lib/api/cors';
 import { supabaseAdmin, supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimit, clientIp } from '@/lib/auth-helpers';
@@ -6,12 +7,6 @@ import { rateLimit, clientIp } from '@/lib/auth-helpers';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });

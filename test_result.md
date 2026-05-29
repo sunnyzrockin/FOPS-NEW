@@ -384,10 +384,26 @@ backend:
 
 
 
+  - task: "Section 2: Replace bare fetch() with authedFetch() in 4 dashboard components"
+    implemented: true
+    working: false
+    file: "/app/components/owner/owner-dashboard.jsx (4 calls: stats, daily-rollups, site-stats, revenue-chart), /app/components/operator/operator-dashboard.jsx (2 calls: daily-rollups, dashboard/stats), /app/components/operator/banking/banking-management.jsx (2 calls: GET formulas, DELETE formula), /app/components/staff/staff-dashboard.jsx (1 call: GET report by id in handleReportClick)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "SECTION 2 (per user request): Replaced exactly 9 bare fetch('/api/...') calls with authedFetch(...) across 4 dashboard components, leaving banking-formula-builder.jsx untouched as the user noted its plain fetch is intentional. (1) owner-dashboard.jsx — converted /api/dashboard/stats, /api/daily-rollups, /api/dashboard/site-stats, /api/dashboard/revenue-chart inside the Promise.all in loadData (kept /api/reports/{id} bare per spec). (2) operator-dashboard.jsx — converted /api/daily-rollups and /api/dashboard/stats inside loadData (kept the two /api/reports/{id} and /api/reports/{id}/status bare per spec). (3) banking-management.jsx — added `import { authedFetch } from '@/lib/authed-fetch';`, converted GET /api/banking-formulas and DELETE /api/banking-formulas/{id}. (4) staff-dashboard.jsx — converted GET /api/reports/{id} in handleReportClick (the file already imported authedFetch for loadReports). Lint clean. Tests to perform: full backend regression — should remain 100% since this is a frontend-only change; on the frontend side, the dashboard endpoints now hit the new auth-gated handlers we added in Section 1 with a proper Bearer token, so the dashboards continue to render data for authenticated users."
+      - working: false
+        agent: "testing"
+        comment: "❌ SECTION 2 REGRESSION TESTING FAILED - 55/67 TESTS PASSED (82.1% SUCCESS RATE). CRITICAL AUTH GATE REGRESSIONS DETECTED! ✅ DASHBOARD ENDPOINTS (5/8 tests): All 4 dashboard endpoints correctly return 401 without Bearer token ✅. GET /dashboard/stats with Owner Bearer → 200 ✅. However, 3 dashboard endpoints failed due to test script bug (trying to call .keys() on list response). ❌ CRITICAL ISSUE 1: GET /api/banking-formulas without Bearer → 200 (expected 401). Root cause: handleGetBankingFormulas in /app/lib/api/handlers/banking-formulas.js (lines 22-39) has NO verifyAuth() call - it directly queries the database and returns data without any authentication check. ❌ CRITICAL ISSUE 2: GET /api/reports/<id> without Bearer → 200 (expected 401). Root cause: handleGetReportById in /app/lib/api/handlers/reports.js (lines 24-80) has NO verifyAuth() call - it directly queries the database and returns report data without any authentication check. This is a SEVERE security vulnerability as anyone can read any report by ID without authentication. ❌ CRITICAL ISSUE 3: GET /api/users without Bearer → 200 (expected 401). Root cause: GET handler in /app/app/api/users/route.js (lines 18-42) has NO verifyAuth() call - it directly queries the users table and returns all user data without any authentication check. This is a SEVERE security vulnerability exposing all user emails and data. ❌ CRITICAL ISSUE 4: GET /api/field-configs without Bearer → 400 (expected 401). Root cause: handleGetFieldConfigs in /app/lib/api/handlers/field-configs.js (lines 22-38) has NO verifyAuth() call - it returns 400 for missing siteId parameter but never checks authentication. ✅ SECTION 1 SECURITY GATES (4/4 tests): All Section 1 security gates still intact - GET /debug-env → 404 ✅, GET /test-create-user → 404 ✅, POST /seed-supabase without auth → 403 ✅, GET /app without session → 307 redirect to /login ✅. ✅ FULL BACKEND REGRESSION (42/49 tests): Auth endpoints working (4/4) ✅, Core data endpoints mostly working (6/7, field-configs returns 400) ✅, Dashboard endpoints working with Bearer (4/4) ✅, Executive dashboard endpoints working (4/4) ✅, Dips endpoints working (3/3) ✅, Fuel prices live endpoints (1/4, 3 timeouts due to QLD API slowness) ⚠️, Founder endpoints working (4/4) ✅, Modular routes working (5/5) ✅, RBAC verification working (4/4) ✅. ❌ AUTH GATE VERIFICATION FAILURES (7/10 tests): GET /users, GET /banking-formulas, GET /field-configs all return 200/400 without Bearer instead of 401. SUMMARY: The frontend authedFetch() changes are correct, but the backend has CRITICAL SECURITY VULNERABILITIES where 4 GET endpoints (banking-formulas, reports/:id, users, field-configs) are missing verifyAuth() calls in their handlers. These endpoints were likely missed during the Phase 2 modular refactor when auth gates were added to dashboard and fuel-prices handlers. IMMEDIATE ACTION REQUIRED: Add verifyAuth() calls to the beginning of handleGetBankingFormulas, handleGetReportById, handleGetFieldConfigs, and the GET handler in /app/app/api/users/route.js."
+
+
   - task: "Section 1: Security hardening (delete dangerous routes, gate seed, lock CORS, middleware auth)"
     implemented: true
     working: true
-    file: "/app/middleware.js (rewrote with @supabase/ssr server-side session check for /app/*), /app/lib/api/cors.js (origin-aware: NEXT_PUBLIC_BASE_URL in prod, localhost:3000 in dev, no wildcard), /app/app/api/seed-supabase/route.js (triple-gated: SEED_ENABLED=true + verifyAuth + requireRole owner), /app/app/api/debug-env/route.js (DELETED — leaked env previews), /app/app/api/test-create-user/route.js (DELETED — created users without auth), /app/app/page-old-dashboard.js (DELETED — 144KB dead code), /app/lib/db.js (DELETED — last mongodb dependency), /app/package.json (renamed nextjs-mongo-template→fops, removed mongodb dep)"
+    file: "/app/middleware.js, /app/lib/api/cors.js, /app/app/api/seed-supabase/route.js, /app/app/api/debug-env/route.js (DELETED), /app/app/api/test-create-user/route.js (DELETED), /app/app/page-old-dashboard.js (DELETED), /app/lib/db.js (DELETED), /app/package.json, /app/next.config.js, /app/lib/auth-helpers.js, 19 handler/route files (local corsHeaders defs replaced with shared import)"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
@@ -945,7 +961,8 @@ backend:
 
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Section 2: Replace bare fetch() with authedFetch() in 4 dashboard components"
   stuck_tasks: []
   test_all: false
   test_priority: "stuck_first"

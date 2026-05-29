@@ -53,8 +53,8 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
       const siteFilter = selectedSite === 'all' ? siteIds : selectedSite;
       const [reportsRes, dailyRes, statsRes] = await Promise.all([
         authedFetch(`/api/reports?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        fetch(`/api/daily-rollups?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        fetch(`/api/dashboard/stats?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/daily-rollups?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/dashboard/stats?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
       ]);
       const [reportsData, dailyData, statsData] = await Promise.all([
         reportsRes.json(), dailyRes.json(), statsRes.json(),

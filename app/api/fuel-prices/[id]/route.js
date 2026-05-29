@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server';
+import { corsHeaders } from '@/lib/api/cors';
 import { supabaseAdmin, supabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });

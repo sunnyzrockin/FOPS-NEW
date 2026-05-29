@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
 
+import { corsHeaders } from '@/lib/api/cors';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
