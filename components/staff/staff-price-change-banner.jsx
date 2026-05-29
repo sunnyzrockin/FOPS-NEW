@@ -6,6 +6,7 @@ import { Loader2, Fuel, ChevronRight, CheckCircle, Clock } from 'lucide-react';
 import { formatDateTime } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
 /**
  * StaffPriceChangeBanner — Pinned banner on the Staff dashboard listing all
  * pending fuel-price changes for the staff member's assigned sites. Polls
@@ -50,10 +51,10 @@ export default function StaffPriceChangeBanner({ user }) {
         loadPendingChanges();
       } else {
         const error = await res.json();
-        alert(`Error: ${error.error}`);
+        toast.error(`Error: ${error.error}`);
       }
     } catch (err) {
-      alert('Failed to acknowledge');
+      toast.error('Failed to acknowledge');
       console.error(err);
     } finally {
       setAcknowledging(null);

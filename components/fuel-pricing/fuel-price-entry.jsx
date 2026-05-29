@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Save } from 'lucide-react';
 
+import { toast } from 'sonner';
 /**
  * FuelPriceEntry — Operator-facing form to record both their own pump
  * prices and competitor prices for a given date. Calls
@@ -67,11 +68,11 @@ export default function FuelPriceEntry({ user, sites }) {
         }
       }
 
-      alert('Prices saved successfully!');
+      toast.success('Prices saved successfully!');
       setPrices({ ULP: '', Diesel: '', Premium: '' });
       setCompetitorPrices({});
     } catch (err) {
-      alert('Failed to save prices');
+      toast.error('Failed to save prices');
     } finally {
       setLoading(false);
     }

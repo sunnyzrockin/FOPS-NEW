@@ -68,13 +68,13 @@ function LoginPage({ onLogin, loading }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-md shadow-xl border-0">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
             <Fuel className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">WorkflowLite</CardTitle>
+          <CardTitle className="text-2xl font-bold text-blue-600">WorkflowLite</CardTitle>
           <CardDescription>Fuel Station Shift Reporting</CardDescription>
         </CardHeader>
         <CardContent>
@@ -123,11 +123,11 @@ function Header({ user, onLogout, activeTab, setActiveTab }) {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
               <Fuel className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">WorkflowLite</h1>
+              <h1 className="font-bold text-lg text-blue-600">WorkflowLite</h1>
               <p className="text-xs text-muted-foreground capitalize">{user.role} Dashboard</p>
             </div>
           </div>
@@ -177,7 +177,7 @@ function StatCard({ title, value, icon: Icon, subValue, color = 'blue', trend })
   };
   
   return (
-    <Card className="overflow-hidden border-0 shadow-lg hover:shadow-xl transition-shadow">
+    <Card className="overflow-hidden border border-border/50 shadow-sm hover:shadow-xl transition-shadow">
       <CardContent className="p-0">
         <div className={`bg-gradient-to-br ${colorClasses[color]} p-4 text-white`}>
           <div className="flex items-start justify-between">
@@ -375,7 +375,7 @@ function ReportDetail({ report, onClose, onStatusChange, canChangeStatus, user }
   ];
   
   return (
-    <Card className="border-0 shadow-xl">
+    <Card className="border border-border/50 shadow-sm">
       <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
         <div className="flex items-start justify-between">
           <div>
@@ -697,7 +697,7 @@ function BankingManagement({ user, sites }) {
       </div>
 
       {showBuilder && (
-        <Card className="border-0 shadow-xl">
+        <Card className="border border-border/50 shadow-sm">
           <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
             <CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5" /> {editingFormula ? 'Edit Formula' : 'Create Banking Formula'}</CardTitle>
           </CardHeader>
@@ -1124,7 +1124,7 @@ function ShiftReportForm({ user, sites, onSuccess }) {
   };
 
   return (
-    <Card className="border-0 shadow-xl">
+    <Card className="border border-border/50 shadow-sm">
       <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
         <CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5" /> Submit Shift Report</CardTitle>
         <CardDescription>Complete the form below to submit your shift report</CardDescription>
@@ -1389,7 +1389,7 @@ function FuelPriceComparisonSection({ sites, siteIds }) {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {priceData.map(site => (
-            <Card key={site.site_id} className="border-0 shadow-lg">
+            <Card key={site.site_id} className="border border-border/50 shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Building2 className="h-4 w-4" />
@@ -1594,7 +1594,7 @@ function LeafletMapInner({ currentSite, competitors, priceData }) {
     const validCompetitors = competitors.filter(c => c.latitude && c.longitude);
 
     return (
-      <Card className="border-0 shadow-lg overflow-hidden">
+      <Card className="border border-border/50 shadow-sm overflow-hidden">
         <div className="h-[600px]">
           <MapContainer 
             center={[currentSite.latitude, currentSite.longitude]} 
@@ -1668,7 +1668,7 @@ function LeafletMapInner({ currentSite, competitors, priceData }) {
   } catch (error) {
     console.error('Map render error:', error);
     return (
-      <Card className="border-0 shadow-lg overflow-hidden">
+      <Card className="border border-border/50 shadow-sm overflow-hidden">
         <CardContent className="h-[600px] flex flex-col items-center justify-center p-8">
           <AlertTriangle className="h-12 w-12 text-orange-500 mb-4" />
           <p className="text-lg font-semibold mb-2">Map View Unavailable</p>
@@ -1960,7 +1960,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
       {/* Filters */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-end gap-4">
@@ -1987,7 +1987,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
       ) : (
         <>
           {/* Morning Price Brief Panel */}
-          <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-indigo-50">
+          <Card className="border border-border/50 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Fuel className="h-5 w-5" /> Morning Price Brief
@@ -2015,7 +2015,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
               {(stats.topPerformingSite || stats.lowestPerformingSite) && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {stats.topPerformingSite && (
-                    <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-50">
+                    <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div>
@@ -2031,7 +2031,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
                     </Card>
                   )}
                   {stats.lowestPerformingSite && (
-                    <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-amber-50">
+                    <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-orange-50 to-amber-50">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div>
@@ -2056,7 +2056,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
           
           {/* Charts */}
           <div className="grid lg:grid-cols-2 gap-6">
-            <Card className="border-0 shadow-lg">
+            <Card className="border border-border/50 shadow-sm">
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><TrendingUp className="h-5 w-5" /> Revenue Trend</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -2072,7 +2072,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
               </CardContent>
             </Card>
             
-            <Card className="border-0 shadow-lg">
+            <Card className="border border-border/50 shadow-sm">
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Site Comparison</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -2091,7 +2091,7 @@ function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
           </div>
           
           {/* Reports */}
-          <Card className="border-0 shadow-lg">
+          <Card className="border border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 {viewType === 'daily' ? <Calendar className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
@@ -2377,7 +2377,7 @@ function OperatorManagement({ user, sites, onRefresh }) {
         </DialogContent>
       </Dialog>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Users className="h-5 w-5" /> Operators ({operators.length})
@@ -2531,7 +2531,7 @@ function UserManagement({ user, sites, onRefresh }) {
         </DialogContent>
       </Dialog>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Users className="h-5 w-5" /> Operators ({operators.length})</CardTitle></CardHeader>
         <CardContent>
           {operators.length === 0 ? <p className="text-muted-foreground text-center py-4">No operators yet</p> : (
@@ -2557,7 +2557,7 @@ function UserManagement({ user, sites, onRefresh }) {
         </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader><CardTitle className="text-lg flex items-center gap-2"><User className="h-5 w-5" /> Staff ({staffMembers.length})</CardTitle></CardHeader>
         <CardContent>
           {staffMembers.length === 0 ? <p className="text-muted-foreground text-center py-4">No staff members yet</p> : (
@@ -2642,7 +2642,7 @@ function OperatorDashboard({ user, sites, activeTab }) {
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap gap-4">
@@ -2671,7 +2671,7 @@ function OperatorDashboard({ user, sites, activeTab }) {
         </div>
       )}
       
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle>{viewType === 'daily' ? 'Daily Summaries' : 'Shift Reports'}</CardTitle>
           <CardDescription>{stats?.pendingReports || 0} pending • {stats?.reviewedReports || 0} reviewed</CardDescription>
@@ -2871,7 +2871,7 @@ function StaffAccessManagement({ user, sites }) {
         </DialogContent>
       </Dialog>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Users className="h-5 w-5" /> Staff Members ({staffUsers.length})
@@ -2956,7 +2956,7 @@ function StaffDashboard({ user, sites, activeTab }) {
     <div className="container mx-auto px-4 py-6">
       {activeTab === 'submit' && <ShiftReportForm user={user} sites={sites} onSuccess={loadReports} />}
       {activeTab === 'history' && (
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-border/50 shadow-sm">
           <CardHeader><CardTitle>My Submitted Reports</CardTitle><CardDescription>View your recent shift report submissions</CardDescription></CardHeader>
           <CardContent>
             {loading ? <div className="flex items-center justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div> : reports.length === 0 ? <p className="text-center text-muted-foreground py-8">No reports submitted yet</p> : (
@@ -3028,7 +3028,7 @@ export default function App() {
   if (!user) { return <LoginPage onLogin={handleLogin} loading={loading} />; }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-muted/30">
       <Header user={user} onLogout={handleLogout} activeTab={activeTab} setActiveTab={setActiveTab} />
       {user.role === 'staff' && <StaffDashboard user={user} sites={sites} activeTab={activeTab} />}
       {user.role === 'operator' && <OperatorDashboard user={user} sites={sites} activeTab={activeTab} />}

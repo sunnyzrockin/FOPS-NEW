@@ -8,6 +8,7 @@ import { Loader2, Save, Sparkles } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
 /**
  * BankingFormulaBuilder — premium calculator-style formula builder. Lets an
  * operator compose a banking formula by clicking fields + operators, with
@@ -188,7 +189,7 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
 
   const handleSave = async () => {
     if (operations.length === 0) {
-      alert('Please add at least one field to the formula');
+      toast.info('Please add at least one field to the formula');
       return;
     }
     setSaving(true);
@@ -209,10 +210,10 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
         onClose(true);
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || err.message || `Failed to save formula (HTTP ${res.status})`);
+        toast.error(err.error || err.message || `Failed to save formula (HTTP ${res.status})`);
       }
     } catch (err) {
-      alert('Error saving formula: ' + err.message);
+      toast.error('Error saving formula: ' + err.message);
     } finally {
       setSaving(false);
     }

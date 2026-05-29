@@ -11,6 +11,7 @@ import {
 import { formatDateTime } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
 /**
  * OperatorPriceChangeNotifications — Operator-facing list of pending fuel
  * price changes for their assigned sites. Operators can "Accept Price
@@ -54,14 +55,14 @@ export default function OperatorPriceChangeNotifications({ user, sites }) {
         body: JSON.stringify({ operatorUserId: user.id }),
       });
       if (res.ok) {
-        alert('Staff notified successfully!');
+        toast.success('Staff notified successfully!');
         loadPendingChanges();
       } else {
         const error = await res.json();
-        alert(`Error: ${error.error}`);
+        toast.error(`Error: ${error.error}`);
       }
     } catch (err) {
-      alert('Failed to notify staff');
+      toast.error('Failed to notify staff');
       console.error(err);
     } finally {
       setNotifying(null);
@@ -79,10 +80,10 @@ export default function OperatorPriceChangeNotifications({ user, sites }) {
         await loadPendingChanges();
       } else {
         const error = await res.json().catch(() => ({}));
-        alert(`Error: ${error.error || 'Failed to accept price change'}`);
+        toast.error(`Error: ${error.error || 'Failed to accept price change'}`);
       }
     } catch (err) {
-      alert('Failed to accept price change');
+      toast.error('Failed to accept price change');
       console.error(err);
     } finally {
       setAccepting(null);

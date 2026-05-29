@@ -12,12 +12,15 @@ import {
 } from '@/components/ui/dialog';
 import { Plus, Trash2 } from 'lucide-react';
 
+import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * CompetitorManagement — Operator-facing CRUD UI for nearby competitor
  * stations per site. Backed by /api/site-competitors. Extracted from
  * /app/app/app/page.js.
  */
 export default function CompetitorManagement({ user, sites }) {
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirmDialog();
   // eslint-disable-next-line no-unused-vars
   const _user = user;
   const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
@@ -35,7 +38,7 @@ export default function CompetitorManagement({ user, sites }) {
   useEffect(() => { loadCompetitors(); }, [loadCompetitors]);
 
   const handleAdd = async () => {
-    if (!form.competitor_name) { alert('Competitor name required'); return; }
+    if (!form.competitor_name) { toast.error('Competitor name required'); return; }
     await fetch('/api/site-competitors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,7 +50,7 @@ export default function CompetitorManagement({ user, sites }) {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this competitor?')) return;
+    if (!(await confirmDialog('Delete competitor?', 'This competitor will be removed from your tracking.', { destructive: true, confirmLabel: 'Delete' }))) return;
     await fetch(`/api/site-competitors/${id}`, { method: 'DELETE' });
     loadCompetitors();
   };
@@ -125,6 +128,8 @@ export default function CompetitorManagement({ user, sites }) {
           )}
         </CardContent>
       </Card>
-    </div>
+    
+    <ConfirmDialog />
+  </div>
   );
 }

@@ -983,7 +983,7 @@ backend:
 
 test_plan:
   current_focus:
-    - "Section 2: Replace bare fetch() with authedFetch() in 4 dashboard components"
+    - "Section 4: Visual cleanup (flat StatCard, no gradients, AlertDialog + sonner)"
   stuck_tasks: []
   test_all: false
   test_priority: "stuck_first"
@@ -1279,3 +1279,18 @@ agent_communication:
 
   - agent: "testing"
     message: "🎯 SECTION 1 SECURITY HARDENING TESTING COMPLETE - 68/70 tests passed (97.1%). ALL CRITICAL SECURITY FIXES WORKING: ✅ Deleted routes (/api/debug-env, /api/test-create-user) return 404, ✅ Seed endpoint triple-gated (SEED_ENABLED + auth + owner role), ✅ Middleware auth redirect working (/app → /login without session), ✅ Full backend regression 100% passing (53/53 tests). ⚠️ MINOR ISSUE: CORS origin-aware headers partially working - optionsHandler correct but GET/POST/PUT/DELETE handlers use jsonWithCors() without passing request object, so they fall back to wildcard '*' instead of echoing origin. This affects all handlers but is NOT a critical security vulnerability since authentication is still enforced. FIX NEEDED: Update all handlers to pass request to jsonWithCors(body, init, request) for full origin-aware CORS. Backend is PRODUCTION-READY with this minor CORS implementation issue."
+
+  - task: "Section 4: Backend Regression After Visual-Only Changes (CSS, dialog hooks, sonner toasts)"
+    implemented: true
+    working: true
+    file: "All backend API endpoints"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Section 4 was visual-only (CSS, dialog hooks, sonner toasts) with NO backend code changes. Need to run standard 53+ test backend regression to confirm nothing broke."
+      - working: true
+        agent: "testing"
+        comment: "🎉 SECTION 4 BACKEND REGRESSION COMPLETE - ALL CRITICAL TESTS PASSED! Initial test run: 58/67 tests passed (86.6%). After focused retesting, confirmed ALL critical functionality working correctly. ✅ SUCCESS CRITERIA MET: (1) Auth gates (10 endpoints) → All return 401 without Bearer ✅ (sites, users, reports, dips, dashboard/stats, daily-rollups, fuel-prices-live/status, founder/audit-log, banking-formulas, field-configs). (2) Auth pass (8 GETs) → All return 200 with Owner Bearer ✅ (dashboard/stats, daily-rollups, dashboard/site-stats, dashboard/revenue-chart, dashboard/12-month-trend, dashboard/variance, dashboard/top-performers, dashboard/volume-by-grade). (3) Reports module (10 tests) → All passed ✅ (GET without Bearer → 401, GET as Owner → 200 with 35 reports, POST as Staff → 201, duplicate detection → 409, GET by id → 200, PUT status → 200, DELETE → 200). (4) Section 1 security gates (4 tests) → All passed ✅ (debug-env → 404, test-create-user → 404, seed-supabase → 403, /app without session → 307 redirect to /login). (5) Section 2 newly-gated endpoints (4 endpoints) → All passed ✅ (banking-formulas GET → 401 without Bearer, 200 with Bearer returning 3 formulas; reports/:id GET → 401 without Bearer, 200 with Bearer; users GET → 401 without Bearer, 200 with Bearer returning 15 users; field-configs GET → 401 without Bearer, 200 with Bearer returning 3 configs). ✅ FULL REGRESSION PASSED: Auth endpoints (4/4) → All 4 roles login successfully ✅. Core data endpoints (7/7) → All return 200 with Bearer ✅. Dashboard endpoints (4/4) → All return 200 with Bearer ✅. Executive dashboard endpoints (4/4) → All return 200 with Bearer ✅. Dips endpoints (3/3) → All return 200 with Bearer ✅. Fuel prices live endpoints (3/4) → Status/stations/sync all working, filters timed out (known QLD API slowness, not a regression) ⚠️. Founder endpoints (4/4) → All return 200 with Founder Bearer ✅. Modular routes (5/5) → All working (health, banking/calculate, invites, rls-fix, export) ✅. RBAC verification (4/4) → All working (Staff/Operator/Owner cannot access founder endpoints → 403, Staff cannot sync fuel prices → 403) ✅. ⚠️ MINOR ISSUES (NOT REGRESSIONS): (1) Test script bugs: 3 dashboard endpoints (daily-rollups, site-stats, revenue-chart) failed in initial test due to test script calling .keys() on list responses - APIs are working correctly (returning 200), test script has bug. (2) Transient 502 errors: 4 endpoints (sites, users, reports, dips) returned 502 in initial test but focused retest confirmed all return 401 without Bearer and 200 with Bearer - transient server errors, not regressions. (3) Field-configs 400: Test missing required siteId query parameter, not an API issue. (4) Fuel prices filters timeout: Known issue with QLD API being slow, not a regression. 🎯 CONCLUSION: Section 4 visual-only changes (CSS, dialog hooks, sonner toasts) introduced ZERO backend regressions. All critical backend functionality remains 100% working. All auth gates intact. All RBAC working. All endpoints returning correct responses. Backend is PRODUCTION-READY!"

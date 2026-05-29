@@ -31,7 +31,7 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
   ];
 
   return (
-    <Card className="border-0 shadow-xl">
+    <Card className="border border-border/50 shadow-sm">
       <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
         <div className="flex items-start justify-between">
           <div>

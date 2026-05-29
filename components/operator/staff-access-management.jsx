@@ -15,6 +15,8 @@ import {
   Loader2, UserPlus, User, Users, Building, Building2, Trash2, Mail, X,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * StaffAccessManagement — Operator-facing UI to create staff members,
  * send invites, and assign them to sites the operator is responsible for.
@@ -23,6 +25,7 @@ import {
  * dashboard monolith refactor. API contracts unchanged.
  */
 export default function StaffAccessManagement({ user, sites }) {
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirmDialog();
   const [staffUsers, setStaffUsers] = useState([]);
   const [staffAssignments, setStaffAssignments] = useState([]);
   const [showAddStaff, setShowAddStaff] = useState(false);
@@ -83,7 +86,7 @@ export default function StaffAccessManagement({ user, sites }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleSendStaffInvite = async () => {
-    if (!form.name || !form.email) { alert('Name and email are required'); return; }
+    if (!form.name || !form.email) { toast.error('Name and email are required'); return; }
     try {
       const res = await fetch('/api/invites', {
         method: 'POST',
@@ -96,7 +99,7 @@ export default function StaffAccessManagement({ user, sites }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(`Failed to send invite: ${data.error || data.message || res.status}`);
+        toast.error(`Failed to send invite: ${data.error || data.message || res.status}`);
         return;
       }
       const ackMsg = data.email_sent
@@ -104,16 +107,16 @@ export default function StaffAccessManagement({ user, sites }) {
         : data.email_mocked
         ? `Invite created but email service is not configured. Share this link directly:\n\n${data.accept_url}`
         : `Invite created but email failed to send. Share this link directly:\n\n${data.accept_url}`;
-      alert(ackMsg);
+      toast.info(ackMsg);
       setForm({ name: '', email: '', password: 'demo123' });
       setShowAddStaff(false);
     } catch (err) {
-      alert('Failed to send invite: ' + err.message);
+      toast.error('Failed to send invite: ' + err.message);
     }
   };
 
   const handleCreateStaff = async () => {
-    if (!form.name || !form.email) { alert('Name and email are required'); return; }
+    if (!form.name || !form.email) { toast.error('Name and email are required'); return; }
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
@@ -123,7 +126,7 @@ export default function StaffAccessManagement({ user, sites }) {
 
       const text = await res.text();
       if (!text) {
-        alert(`Failed to create staff: Server returned empty response (HTTP ${res.status}). Please retry; if this persists, contact support.`);
+        toast.error(`Failed to create staff: Server returned empty response (HTTP ${res.status}). Please retry; if this persists, contact support.`);
         return;
       }
 
@@ -132,7 +135,7 @@ export default function StaffAccessManagement({ user, sites }) {
         data = JSON.parse(text);
       } catch (e) {
         console.error('Response was not JSON:', text);
-        alert(`Failed to create staff: Invalid server response (HTTP ${res.status}).\n\nRaw response:\n${text.slice(0, 300)}`);
+        toast.error(`Failed to create staff: Invalid server response (HTTP ${res.status}).\n\nRaw response:\n${text.slice(0, 300)}`);
         return;
       }
 
@@ -143,32 +146,32 @@ export default function StaffAccessManagement({ user, sites }) {
       } else {
         const detail = data.error || data.message || 'Failed to create staff member';
         const code = data.code ? ` (code: ${data.code})` : '';
-        alert(`${detail}${code}`);
+        toast.info(`${detail}${code}`);
       }
     } catch (err) {
       console.error('Create staff error:', err);
-      alert('Failed to create staff: ' + err.message);
+      toast.error('Failed to create staff: ' + err.message);
     }
   };
 
   const handleDeleteStaff = async (staffId) => {
-    if (!confirm('Are you sure? This will remove all site assignments for this staff member.')) return;
+    if (!(await confirmDialog('Delete staff member?', 'This will remove all site assignments for this staff member.', { destructive: true, confirmLabel: 'Delete' }))) return;
     try {
       const res = await fetch(`/api/users/${staffId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`Failed to delete staff: ${data.error || data.message || res.status}`);
+        toast.error(`Failed to delete staff: ${data.error || data.message || res.status}`);
         return;
       }
       setStaffUsers((prev) => prev.filter((s) => s.id !== staffId));
       setStaffAssignments((prev) => prev.filter((a) => a.staff_user_id !== staffId));
       loadData();
     } catch (err) {
-      alert('Failed to delete staff: ' + err.message);
+      toast.error('Failed to delete staff: ' + err.message);
     }
   };
 
-  const openAssignSites = (staff) => {
+  const openAssignSites = async (staff) => {
     const staffSiteIds = staffAssignments
       .filter((a) => a.staff_user_id === staff.id)
       .map((a) => a.site_id);
@@ -200,7 +203,7 @@ export default function StaffAccessManagement({ user, sites }) {
         });
         if (!res.ok) {
           const data = await res.json();
-          alert(data.error || 'Failed to assign site');
+          toast.error(data.error || 'Failed to assign site');
           return;
         }
       }
@@ -210,26 +213,26 @@ export default function StaffAccessManagement({ user, sites }) {
       setShowAssignSites(null);
       loadData();
     } catch (err) {
-      alert('Failed to update assignments');
+      toast.error('Failed to update assignments');
     }
   };
 
   const handleRemoveSiteAssignment = async (assignmentId, staffName, siteName) => {
     if (!assignmentId) return;
-    if (!confirm(`Remove ${staffName}'s access to ${siteName}?\n\nThey will no longer be able to submit shift reports for this site.`)) return;
+    if (!(await confirmDialog(`Remove ${staffName}'s access?`, `${staffName} will no longer be able to submit shift reports for ${siteName}.`, { destructive: true, confirmLabel: 'Remove' }))) return;
     setRemovingAssignmentId(assignmentId);
     try {
       const res = await fetch(`/api/staff-assignments/${assignmentId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`Failed to remove site: ${data.error || data.message || res.status}`);
+        toast.error(`Failed to remove site: ${data.error || data.message || res.status}`);
         return;
       }
       // Optimistic local update + reload to stay consistent with server
       setStaffAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
       loadData();
     } catch (err) {
-      alert('Failed to remove site: ' + err.message);
+      toast.error('Failed to remove site: ' + err.message);
     } finally {
       setRemovingAssignmentId(null);
     }
@@ -350,7 +353,7 @@ export default function StaffAccessManagement({ user, sites }) {
         </DialogContent>
       </Dialog>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -448,6 +451,8 @@ export default function StaffAccessManagement({ user, sites }) {
           )}
         </CardContent>
       </Card>
-    </div>
+    
+    <ConfirmDialog />
+  </div>
   );
 }

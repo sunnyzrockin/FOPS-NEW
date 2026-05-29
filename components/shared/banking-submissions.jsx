@@ -15,6 +15,8 @@ import {
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * BankingSubmissions — owner & operator-facing flat list of all shift report
  * submissions across their accessible sites. Each row shows top-line banking
@@ -29,6 +31,7 @@ import { authedFetch } from '@/lib/authed-fetch';
  * Phase 2 — Q2 option (a) deliverable.
  */
 export default function BankingSubmissions({ user, sites, currentUserRole }) {
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirmDialog();
   // eslint-disable-next-line no-unused-vars
   const _user = user;
   const role = currentUserRole || user?.role;
@@ -137,17 +140,17 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
 
   const handleDelete = async (reportId, e) => {
     e.stopPropagation();
-    if (!confirm('Delete this submission? This action is irreversible.')) return;
+    if (!(await confirmDialog('Delete submission?', 'This action is irreversible.', { destructive: true, confirmLabel: 'Delete' }))) return;
     try {
       const res = await authedFetch(`/api/form-submissions/${reportId}`, { method: 'DELETE' });
       if (res.ok) {
         loadSubmissions();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to delete');
+        toast.error(err.error || 'Failed to delete');
       }
     } catch (err) {
-      alert('Delete failed: ' + err.message);
+      toast.error('Delete failed: ' + err.message);
     }
   };
 
@@ -165,7 +168,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
       </div>
 
       {/* Filters */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1 min-w-[200px]">
@@ -215,21 +218,21 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
 
       {/* Summary KPI strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+        <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-purple-500 to-pink-500 text-white">
           <CardContent className="p-4">
             <p className="text-sm opacity-90">Total Banking</p>
             <p className="text-3xl font-bold mt-1">{formatCurrency(summary.totalBanking)}</p>
             <p className="text-xs opacity-75 mt-1">across {filteredSubmissions.length} submissions</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
+        <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
           <CardContent className="p-4">
             <p className="text-sm opacity-90">Submitted Today</p>
             <p className="text-3xl font-bold mt-1">{summary.submittedToday}</p>
             <p className="text-xs opacity-75 mt-1">{formatDate(new Date().toISOString())}</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+        <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-amber-500 to-orange-500 text-white">
           <CardContent className="p-4">
             <p className="text-sm opacity-90">Pending Review</p>
             <p className="text-3xl font-bold mt-1">{summary.pendingReview}</p>
@@ -239,7 +242,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
       </div>
 
       {/* Submissions list */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle>Submissions ({filteredSubmissions.length})</CardTitle>
           <CardDescription>Click a row to expand the audit breakdown.</CardDescription>
@@ -413,6 +416,8 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
           )}
         </CardContent>
       </Card>
-    </div>
+    
+    <ConfirmDialog />
+  </div>
   );
 }

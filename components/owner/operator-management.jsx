@@ -15,12 +15,15 @@ import {
   Loader2, UserPlus, User, Users, Building, Building2, Trash2,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * OperatorManagement — Owner-facing UI to create operators and assign sites
  * to them. Extracted from /app/app/app/page.js as Phase C of the dashboard
  * monolith refactor. API contracts unchanged.
  */
 export default function OperatorManagement({ user, sites, onRefresh }) {
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirmDialog();
   const [operators, setOperators] = useState([]);
   const [operatorAssignments, setOperatorAssignments] = useState([]);
   const [showAddOperator, setShowAddOperator] = useState(false);
@@ -51,7 +54,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleCreateOperator = async () => {
-    if (!form.name || !form.email) { alert('Name and email are required'); return; }
+    if (!form.name || !form.email) { toast.error('Name and email are required'); return; }
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
@@ -61,7 +64,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
 
       const text = await res.text();
       if (!text) {
-        alert(`Failed to create operator: Server returned empty response (HTTP ${res.status}). Please retry; if this persists, contact support.`);
+        toast.error(`Failed to create operator: Server returned empty response (HTTP ${res.status}). Please retry; if this persists, contact support.`);
         return;
       }
 
@@ -70,7 +73,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
         data = JSON.parse(text);
       } catch (e) {
         console.error('Response was not JSON:', text);
-        alert(`Failed to create operator: Invalid server response (HTTP ${res.status}).\n\nRaw response:\n${text.slice(0, 300)}`);
+        toast.error(`Failed to create operator: Invalid server response (HTTP ${res.status}).\n\nRaw response:\n${text.slice(0, 300)}`);
         return;
       }
 
@@ -81,28 +84,28 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
       } else {
         const detail = data.error || data.message || 'Failed to create operator';
         const code = data.code ? ` (code: ${data.code})` : '';
-        alert(`${detail}${code}`);
+        toast.info(`${detail}${code}`);
       }
     } catch (err) {
       console.error('Create operator error:', err);
-      alert('Failed to create operator: ' + err.message);
+      toast.error('Failed to create operator: ' + err.message);
     }
   };
 
   const handleDeleteOperator = async (operatorId) => {
-    if (!confirm('Are you sure? This will remove all site assignments for this operator.')) return;
+    if (!(await confirmDialog('Delete operator?', 'This will remove all site assignments for this operator.', { destructive: true, confirmLabel: 'Delete' }))) return;
     try {
       const res = await fetch(`/api/users/${operatorId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`Failed to delete operator: ${data.error || data.message || res.status}`);
+        toast.error(`Failed to delete operator: ${data.error || data.message || res.status}`);
         return;
       }
       setOperators((prev) => prev.filter((o) => o.id !== operatorId));
       setOperatorAssignments((prev) => prev.filter((a) => a.operator_user_id !== operatorId));
       loadData();
     } catch (err) {
-      alert('Failed to delete operator: ' + err.message);
+      toast.error('Failed to delete operator: ' + err.message);
     }
   };
 
@@ -144,7 +147,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
       loadData();
       onRefresh?.();
     } catch (err) {
-      alert('Failed to update assignments');
+      toast.error('Failed to update assignments');
     }
   };
 
@@ -237,7 +240,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
         </DialogContent>
       </Dialog>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Users className="h-5 w-5" /> Operators ({operators.length})
@@ -292,6 +295,8 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
           )}
         </CardContent>
       </Card>
-    </div>
+    
+    <ConfirmDialog />
+  </div>
   );
 }

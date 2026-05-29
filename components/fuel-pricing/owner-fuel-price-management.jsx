@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Fuel, Plus, Clock, ChevronRight } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
 /**
  * OwnerFuelPriceManagement — Owner-facing Fuel Prices tab. Lets the owner
  * create a price change (POST /api/fuel-prices) and view recent changes
@@ -65,7 +66,7 @@ export default function OwnerFuelPriceManagement({ user, sites }) {
       });
 
       if (res.ok) {
-        alert('Price change created and operators notified!');
+        toast.success('Price change created and operators notified!');
         setSelectedSite('');
         setOldPrice('');
         setNewPrice('');
@@ -73,10 +74,10 @@ export default function OwnerFuelPriceManagement({ user, sites }) {
         loadPriceChanges();
       } else {
         const error = await res.json();
-        alert(`Error: ${error.error}`);
+        toast.error(`Error: ${error.error}`);
       }
     } catch (err) {
-      alert('Failed to create price change');
+      toast.error('Failed to create price change');
       console.error(err);
     } finally {
       setLoading(false);

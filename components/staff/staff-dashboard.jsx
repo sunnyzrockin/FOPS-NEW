@@ -116,7 +116,7 @@ export default function StaffDashboard({ user, sites, activeTab }) {
       )}
 
       {activeTab === 'history' && (
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-border/50 shadow-sm">
           <CardHeader>
             <CardTitle>My Submitted Reports</CardTitle>
             <CardDescription>View your recent shift report submissions</CardDescription>

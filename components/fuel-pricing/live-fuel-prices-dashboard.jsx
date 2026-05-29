@@ -247,7 +247,7 @@ export default function LiveFuelPricesDashboard() {
   return (
     <div className="container mx-auto px-4 py-6 space-y-4">
       {/* Filter bar */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
@@ -322,7 +322,7 @@ export default function LiveFuelPricesDashboard() {
       )}
 
       {/* Postcode / locate toolbar */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-3">
           <div className="flex flex-wrap items-center gap-2">
             <form onSubmit={onSearchPostcode} className="flex items-center gap-2 flex-1 min-w-[260px]">
@@ -363,7 +363,7 @@ export default function LiveFuelPricesDashboard() {
       </Card>
 
       {/* Map */}
-      <Card className="border-0 shadow-lg overflow-hidden mt-6">
+      <Card className="border border-border/50 shadow-sm overflow-hidden mt-6">
         <CardContent className="p-0 relative">
           {stationsLoading && (
             <div className="absolute inset-0 z-[450] flex items-center justify-center bg-white/60 pointer-events-none">
@@ -380,7 +380,7 @@ export default function LiveFuelPricesDashboard() {
       </Card>
 
       {/* Legend */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex items-center gap-6 flex-wrap text-sm">
             <span className="font-medium flex items-center gap-2"><Fuel className="h-4 w-4" /> Price legend</span>

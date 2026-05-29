@@ -14,6 +14,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 
+import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * FieldConfiguration — Operator-facing UI to customize the shift report
  * form fields per site. Now split across two tabs:
@@ -27,6 +29,7 @@ import {
  * optional delivery input. Values land in dip_readings.custom_values (JSON).
  */
 export default function FieldConfiguration({ user, sites }) {
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirmDialog();
   const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
   const [category, setCategory] = useState('sales'); // 'sales' | 'dip'
   const [fields, setFields] = useState([]);
@@ -88,20 +91,20 @@ export default function FieldConfiguration({ user, sites }) {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`Failed to save: ${data.error || data.message || res.status}`);
+        toast.error(`Failed to save: ${data.error || data.message || res.status}`);
       } else {
         loadFields();
       }
     } catch (err) {
-      alert('Failed to save: ' + err.message);
+      toast.error('Failed to save: ' + err.message);
     } finally {
       setSaving(false);
     }
   };
 
   const handleAddField = async () => {
-    if (!newField.label) { alert('Label is required'); return; }
-    if (!selectedSite) { alert('Please select a site first'); return; }
+    if (!newField.label) { toast.error('Label is required'); return; }
+    if (!selectedSite) { toast.info('Please select a site first'); return; }
     setAdding(true);
     try {
       const fieldKey = newField.label
@@ -137,14 +140,14 @@ export default function FieldConfiguration({ user, sites }) {
         const data = await res.json().catch(() => ({}));
         const detail = data.message || data.error || res.status;
         const hint = data.hint ? `\nHint: ${data.hint}` : '';
-        alert(`Failed to add field: ${detail}${hint}`);
+        toast.error(`Failed to add field: ${detail}${hint}`);
         return;
       }
       setNewField({ label: '', field_type: 'number', visibility: 'all', is_mandatory: false });
       setShowAddField(false);
       loadFields();
     } catch (err) {
-      alert('Failed to add field: ' + err.message);
+      toast.error('Failed to add field: ' + err.message);
     } finally {
       setAdding(false);
     }
@@ -164,7 +167,7 @@ export default function FieldConfiguration({ user, sites }) {
         `Continue and delete "${label}"?`
       : `Delete "${label}"? You can re-add it later via "Add Field".`;
 
-    if (!confirm(confirmMsg)) return;
+    if (!(await confirmDialog('Delete field?', confirmMsg, { destructive: true, confirmLabel: 'Delete' }))) return;
 
     try {
       const res = await fetch(`/api/field-configs/${fieldId}`, { method: 'DELETE' });
@@ -173,12 +176,12 @@ export default function FieldConfiguration({ user, sites }) {
         // 409 means the field is referenced by an active banking formula —
         // show the full helpful message that lists which formulas use it.
         const msg = data.message || data.error || `HTTP ${res.status}`;
-        alert(msg);
+        toast.info(msg);
         return;
       }
       loadFields();
     } catch (err) {
-      alert('Failed to delete: ' + err.message);
+      toast.error('Failed to delete: ' + err.message);
     }
   };
 
@@ -301,7 +304,7 @@ export default function FieldConfiguration({ user, sites }) {
     if (updated) parts.push(`${updated} updated`);
     if (skipped) parts.push(`${skipped} skipped (already exist)`);
     if (failed) parts.push(`${failed} FAILED`);
-    alert(`Copy complete: ${parts.join(', ') || 'no changes'}.`);
+    toast.info(`Copy complete: ${parts.join(', ') || 'no changes'}.`);
   };
 
   return (
@@ -636,6 +639,8 @@ export default function FieldConfiguration({ user, sites }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    
+    <ConfirmDialog />
+  </div>
   );
 }

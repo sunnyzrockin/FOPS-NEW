@@ -78,7 +78,7 @@ export default function FuelPriceComparisonSection({ sites, siteIds }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {(priceData || []).map((site) => (
-          <Card key={site.site_id} className="border-0 shadow-lg">
+          <Card key={site.site_id} className="border border-border/50 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Building2 className="h-4 w-4" />

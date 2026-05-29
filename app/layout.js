@@ -1,6 +1,7 @@
 import './globals.css';
 import 'leaflet/dist/leaflet.css';
 import { AuthProvider } from '@/lib/auth-context';
+import { Toaster } from '@/components/ui/sonner';
 
 export const metadata = {
   title: 'FOPS - Field Operations System',
@@ -24,6 +25,7 @@ export default function RootLayout({ children }) {
         <AuthProvider>
           {children}
         </AuthProvider>
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );

@@ -124,7 +124,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap gap-4">
@@ -166,7 +166,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
         </div>
       )}
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle>{viewType === 'daily' ? 'Daily Summaries' : 'Shift Reports'}</CardTitle>
           <CardDescription>

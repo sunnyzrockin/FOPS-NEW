@@ -116,7 +116,7 @@ export default function FuelInventoryDashboard({ user, sites }) {
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
       {/* Filters bar */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Site</span>
@@ -158,7 +158,7 @@ export default function FuelInventoryDashboard({ user, sites }) {
               { f: 'diesel', label: 'Diesel across portfolio', grad: 'from-amber-500 to-orange-600' },
               { f: 'premium', label: 'Premium across portfolio', grad: 'from-purple-500 to-fuchsia-600' },
             ].map((it) => (
-              <Card key={it.f} className="overflow-hidden border-0 shadow-lg">
+              <Card key={it.f} className="overflow-hidden border border-border/50 shadow-sm">
                 <div className={`bg-gradient-to-br ${it.grad} p-5 text-white`}>
                   <div className="flex items-center justify-between">
                     <div>
@@ -175,7 +175,7 @@ export default function FuelInventoryDashboard({ user, sites }) {
 
           {/* Low fuel alerts */}
           {lowFuelAlerts.length > 0 && (
-            <Card className="border-0 shadow-lg bg-amber-50">
+            <Card className="border border-border/50 shadow-sm bg-amber-50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg text-amber-900">
                   <AlertTriangle className="h-5 w-5" /> Low fuel — consider scheduling deliveries
@@ -198,7 +198,7 @@ export default function FuelInventoryDashboard({ user, sites }) {
           )}
 
           {/* Per-site current levels */}
-          <Card className="border-0 shadow-lg">
+          <Card className="border border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Droplets className="h-5 w-5" /> Current tank levels per site
@@ -271,7 +271,7 @@ export default function FuelInventoryDashboard({ user, sites }) {
           </Card>
 
           {/* Consumption trends */}
-          <Card className="border-0 shadow-lg">
+          <Card className="border border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <TrendingDown className="h-5 w-5" /> Daily consumption — last {days} days
@@ -328,7 +328,7 @@ export default function FuelInventoryDashboard({ user, sites }) {
           </Card>
 
           {/* Per-site averages */}
-          <Card className="border-0 shadow-lg">
+          <Card className="border border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <CalendarDays className="h-5 w-5" /> {days}-day average daily consumption per site

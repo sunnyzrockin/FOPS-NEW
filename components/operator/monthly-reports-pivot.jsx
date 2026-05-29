@@ -244,7 +244,7 @@ export default function MonthlyReportsPivot({ user, sites }) {
       </div>
 
       {/* Filter bar */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4 space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
@@ -348,7 +348,7 @@ export default function MonthlyReportsPivot({ user, sites }) {
       </Card>
 
       {/* Pivot table */}
-      <Card className="border-0 shadow-lg overflow-hidden">
+      <Card className="border border-border/50 shadow-sm overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
             <div className="p-10 flex items-center justify-center">

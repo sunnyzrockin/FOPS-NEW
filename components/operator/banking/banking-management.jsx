@@ -9,6 +9,8 @@ import { Plus, Calculator, Loader2, Pencil, Trash2 } from 'lucide-react';
 import BankingFormulaBuilder from '@/components/operator/banking/banking-formula-builder';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * BankingManagement — Operator-facing wrapper around BankingFormulaBuilder.
  * Lists existing banking formulas per site and lets the operator create/
@@ -16,6 +18,7 @@ import { authedFetch } from '@/lib/authed-fetch';
  * dashboard monolith refactor.
  */
 export default function BankingManagement({ user, sites }) {
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirmDialog();
   const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
   const [formulas, setFormulas] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -47,17 +50,17 @@ export default function BankingManagement({ user, sites }) {
   }, [loadFormulas]);
 
   const handleDelete = async (formulaId) => {
-    if (!confirm('Delete this formula?')) return;
+    if (!(await confirmDialog('Delete formula?', 'This formula will be removed from this site.', { destructive: true, confirmLabel: 'Delete' }))) return;
     try {
       const res = await authedFetch(`/api/banking-formulas/${formulaId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(`Failed to delete formula: ${data.error || data.message || res.status}`);
+        toast.error(`Failed to delete formula: ${data.error || data.message || res.status}`);
         return;
       }
       loadFormulas();
     } catch (err) {
-      alert('Failed to delete formula: ' + err.message);
+      toast.error('Failed to delete formula: ' + err.message);
     }
   };
 
@@ -88,7 +91,7 @@ export default function BankingManagement({ user, sites }) {
       </div>
 
       {showBuilder && (
-        <Card className="border-0 shadow-xl">
+        <Card className="border border-border/50 shadow-sm">
           <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
             <CardTitle className="flex items-center gap-2">
               <Calculator className="h-5 w-5" /> {editingFormula ? 'Edit Formula' : 'Create Banking Formula'}
@@ -173,6 +176,8 @@ export default function BankingManagement({ user, sites }) {
           )}
         </div>
       )}
-    </div>
+    
+    <ConfirmDialog />
+  </div>
   );
 }

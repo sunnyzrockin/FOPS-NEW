@@ -14,6 +14,7 @@ import {
 import { authedFetch } from '@/lib/authed-fetch';
 import { formatDateTime } from '@/lib/format';
 
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * DipsManagement — Operator-facing screen for logging fuel-tank dip
  * readings (in litres) and deliveries received. Shows the latest reading
@@ -30,6 +31,7 @@ import { formatDateTime } from '@/lib/format';
  * Consumption math is computed by the API. Frontend just displays it.
  */
 export default function DipsManagement({ user, sites }) {
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirmDialog();
   const [selectedSite, setSelectedSite] = useState(() => sites[0]?.id || '');
   const [current, setCurrent] = useState([]); // [{site_id, current, previous, consumption_since_previous}]
   const [history, setHistory] = useState([]);
@@ -119,7 +121,7 @@ export default function DipsManagement({ user, sites }) {
     }
   };
 
-  const startEdit = (row) => {
+  const startEdit = async (row) => {
     setEditingId(row.id);
     setEditForm({
       reading_label: row.reading_label || '',
@@ -136,7 +138,7 @@ export default function DipsManagement({ user, sites }) {
     });
   };
 
-  const cancelEdit = () => {
+  const cancelEdit = async () => {
     setEditingId(null);
     setEditForm(emptyForm);
   };
@@ -165,7 +167,7 @@ export default function DipsManagement({ user, sites }) {
   };
 
   const deleteRow = async (id) => {
-    if (!confirm('Delete this dip reading? This cannot be undone.')) return;
+    if (!(await confirmDialog('Delete dip reading?', 'This cannot be undone.', { destructive: true, confirmLabel: 'Delete' }))) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -195,7 +197,7 @@ export default function DipsManagement({ user, sites }) {
 
   if (sites.length === 0) {
     return (
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-6 text-center text-muted-foreground">
           No sites assigned yet.
         </CardContent>
@@ -206,7 +208,7 @@ export default function DipsManagement({ user, sites }) {
   return (
     <div className="space-y-6">
       {/* Site picker + status banner */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-3">
             <Label className="text-sm font-medium">Site</Label>
@@ -253,7 +255,7 @@ export default function DipsManagement({ user, sites }) {
           const lvl = currentForSite?.current?.[`${fuel}_litres`];
           const consumed = currentForSite?.consumption_since_previous?.[fuel];
           return (
-            <Card key={fuel} className="overflow-hidden border-0 shadow-lg">
+            <Card key={fuel} className="overflow-hidden border border-border/50 shadow-sm">
               <div className={`bg-gradient-to-br ${colorMap[fuel]} p-5 text-white`}>
                 <div className="flex items-center justify-between">
                   <div>
@@ -276,7 +278,7 @@ export default function DipsManagement({ user, sites }) {
       </div>
 
       {/* Log a new reading */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Plus className="h-5 w-5" /> Log fuel levels — {siteName}
@@ -374,7 +376,7 @@ export default function DipsManagement({ user, sites }) {
       </Card>
 
       {/* History */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg">Recent readings</CardTitle>
           <CardDescription>
@@ -497,6 +499,8 @@ export default function DipsManagement({ user, sites }) {
           )}
         </CardContent>
       </Card>
-    </div>
+    
+    <ConfirmDialog />
+  </div>
   );
 }

@@ -13,6 +13,7 @@ import {
 import { Plus, Loader2, MapPin, Pencil, Building2, Trash2, AlertTriangle, Download } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
 /**
  * SiteManagement — Owner-facing CRUD UI for fuel station sites. Lets owners
  * add, edit, and delete sites (with a guarded confirm + JSON export step
@@ -32,7 +33,7 @@ export default function SiteManagement({ user, sites, onRefresh }) {
 
   const handleSubmit = async () => {
     if (!form.name || !form.code) {
-      alert('Site name and code are required');
+      toast.error('Site name and code are required');
       return;
     }
     setLoading(true);
@@ -50,10 +51,10 @@ export default function SiteManagement({ user, sites, onRefresh }) {
         onRefresh?.();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || data.message || `Failed to save site (HTTP ${res.status})`);
+        toast.error(data.error || data.message || `Failed to save site (HTTP ${res.status})`);
       }
     } catch (err) {
-      alert('Failed to save site: ' + err.message);
+      toast.error('Failed to save site: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -100,7 +101,7 @@ export default function SiteManagement({ user, sites, onRefresh }) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert('Export failed: ' + err.message);
+      toast.error('Export failed: ' + err.message);
     } finally {
       setExportBusy(false);
     }
@@ -116,10 +117,10 @@ export default function SiteManagement({ user, sites, onRefresh }) {
         onRefresh?.();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || data.message || `Failed to delete site (HTTP ${res.status})`);
+        toast.error(data.error || data.message || `Failed to delete site (HTTP ${res.status})`);
       }
     } catch (err) {
-      alert('Failed to delete: ' + err.message);
+      toast.error('Failed to delete: ' + err.message);
     } finally {
       setDeleteBusy(false);
     }

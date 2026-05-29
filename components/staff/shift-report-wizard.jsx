@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
 /** Safe arithmetic evaluator — duplicated from shift-report-form to avoid
  *  cross-importing client components. Whitelisted, no eval(). */
 function evalFormula(input) {
@@ -171,14 +172,14 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
           setForm(reset);
         }, 2500);
       } else if (res.status === 409 || data.code === 'duplicate_report') {
-        alert(`A ${form.shift_type} report for this date has already been submitted.`);
+        toast.info(`A ${form.shift_type} report for this date has already been submitted.`);
       } else if (res.status === 401) {
-        alert('Your session has expired. Please refresh and log in again.');
+        toast.error('Your session has expired. Please refresh and log in again.');
       } else {
-        alert(data.error || 'Submission failed');
+        toast.error(data.error || 'Submission failed');
       }
     } catch (e) {
-      alert('Submission failed: ' + e.message);
+      toast.error('Submission failed: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -189,7 +190,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
 
   if (success) {
     return (
-      <Card className="border-0 shadow-xl max-w-2xl mx-auto">
+      <Card className="border border-border/50 shadow-sm max-w-2xl mx-auto">
         <CardContent className="py-12 text-center space-y-4">
           <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
             <CheckCircle2 className="h-10 w-10 text-emerald-600" />
@@ -241,7 +242,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
       </Card>
 
       {/* Step content */}
-      <Card className="border-0 shadow-xl">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
           <CardTitle className="flex items-center gap-2 text-lg">
             {(() => { const Icon = STEPS[step].icon; return <Icon className="h-5 w-5 text-blue-600" />; })()}

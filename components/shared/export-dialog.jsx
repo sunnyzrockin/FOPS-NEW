@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Download, Loader2 } from 'lucide-react';
 
+import { toast } from 'sonner';
 /**
  * ExportDialog — Modal launched from a toolbar button to download shift
  * data as XLSX or JSON for a date range. Calls /api/export with the
@@ -50,7 +51,7 @@ export default function ExportDialog({ siteIds }) {
       }
       setOpen(false);
     } catch (err) {
-      alert('Export failed: ' + err.message);
+      toast.error('Export failed: ' + err.message);
     } finally {
       setExporting(false);
     }

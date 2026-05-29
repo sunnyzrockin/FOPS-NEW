@@ -15,6 +15,7 @@ import {
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
+import { toast } from 'sonner';
 /**
  * Safely evaluate a spreadsheet-style numeric expression like "2450+1360",
  * "+2450+1360", "(800+200)*1.1", "1,234.50 - 500". Returns the numeric
@@ -344,12 +345,10 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
         // Don't hard-redirect — authedFetch already retried with a fresh
         // token. If we're still 401 it's a real expiry, but kicking the
         // user out unprompted is jarring. Show a clear message instead.
-        alert('Your session has expired. Please refresh the page and log in again.');
+        toast.error('Your session has expired. Please refresh the page and log in again.');
       } else if (res.status === 409 || data.code === 'duplicate_report') {
-        alert(
-          `A ${form.shift_type} report for this site on ${form.date} has already been submitted.\n\n` +
-          `Tip: try a different shift type or date, or ask your operator to delete the existing one.`
-        );
+        toast.info(`A ${form.shift_type} report for this site on ${form.date} has already been submitted.\n\n` +
+          `Tip: try a different shift type or date, or ask your operator to delete the existing one.`);
       } else {
         alert(
           (data.error || 'Failed to submit report') +
@@ -357,14 +356,14 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
         );
       }
     } catch (err) {
-      alert('Failed to submit report: ' + err.message);
+      toast.error('Failed to submit report: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Card className="border-0 shadow-xl">
+    <Card className="border border-border/50 shadow-sm">
       <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
         <CardTitle className="flex items-center gap-2">
           <ClipboardList className="h-5 w-5" /> Submit Shift Report

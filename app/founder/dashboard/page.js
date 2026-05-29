@@ -334,7 +334,7 @@ export default function FounderDashboardPage() {
         </Card>
 
         {/* Timeline */}
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-border/50 shadow-sm">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base flex items-center gap-2">
               <Calendar className="h-4 w-4 text-blue-600" /> Audit Timeline

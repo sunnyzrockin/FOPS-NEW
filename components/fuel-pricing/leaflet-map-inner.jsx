@@ -51,7 +51,7 @@ export default function LeafletMapInner({ currentSite, competitors, priceData })
     const validCompetitors = competitors.filter((c) => c.latitude && c.longitude);
 
     return (
-      <Card className="border-0 shadow-lg overflow-hidden">
+      <Card className="border border-border/50 shadow-sm overflow-hidden">
         <div className="h-[600px]">
           <MapContainer
             center={[currentSite.latitude, currentSite.longitude]}
@@ -120,7 +120,7 @@ export default function LeafletMapInner({ currentSite, competitors, priceData })
   } catch (error) {
     console.error('Map render error:', error);
     return (
-      <Card className="border-0 shadow-lg overflow-hidden">
+      <Card className="border border-border/50 shadow-sm overflow-hidden">
         <CardContent className="h-[600px] flex flex-col items-center justify-center p-8">
           <AlertTriangle className="h-12 w-12 text-orange-500 mb-4" />
           <p className="text-lg font-semibold mb-2">Map View Unavailable</p>

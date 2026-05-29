@@ -145,7 +145,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-end gap-4">
@@ -175,7 +175,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
         </div>
       ) : (
         <>
-          <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-indigo-50">
+          <Card className="border border-border/50 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Fuel className="h-5 w-5" /> Morning Price Brief
@@ -201,7 +201,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
               {(stats.topPerformingSite || stats.lowestPerformingSite) && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {stats.topPerformingSite && (
-                    <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-50">
+                    <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div>
@@ -217,7 +217,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
                     </Card>
                   )}
                   {stats.lowestPerformingSite && (
-                    <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-amber-50">
+                    <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-orange-50 to-amber-50">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div>
@@ -240,7 +240,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
           <FuelPriceComparisonSection sites={sites} siteIds={siteIds} />
 
           <div className="grid lg:grid-cols-2 gap-6">
-            <Card className="border-0 shadow-lg">
+            <Card className="border border-border/50 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <TrendingUp className="h-5 w-5" /> Revenue Trend
@@ -269,7 +269,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg">
+            <Card className="border border-border/50 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" /> Site Comparison
@@ -291,7 +291,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
             </Card>
           </div>
 
-          <Card className="border-0 shadow-lg">
+          <Card className="border border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 {viewType === 'daily' ? <Calendar className="h-5 w-5" /> : <FileText className="h-5 w-5" />}

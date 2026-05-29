@@ -164,11 +164,11 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
       {/* Header / controls */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+              <div className="p-2 rounded-lg bg-blue-600">
                 <BarChart3 className="h-5 w-5 text-white" />
               </div>
               <div>
@@ -217,7 +217,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
       )}
 
       {/* 12-month trend */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-blue-600" /> 12-Month Rolling Trend
@@ -256,7 +256,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
 
       {/* Top / Bottom performers */}
       <div className="grid lg:grid-cols-2 gap-4">
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-border/50 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -284,7 +284,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-border/50 shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-rose-600" /> Bottom {performers.bottom.length || 5} Performers
@@ -302,7 +302,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
       </div>
 
       {/* Volume by grade */}
-      <Card className="border-0 shadow-lg">
+      <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Droplets className="h-5 w-5 text-cyan-600" /> Volume Sold by Fuel Grade
@@ -382,7 +382,7 @@ function KpiCard({ title, value, icon: Icon, sub, from, to }) {
 function VarianceCard({ title, data, icon: Icon }) {
   const Up = data.variancePct.revenue >= 0;
   return (
-    <Card className="border-0 shadow-lg">
+    <Card className="border border-border/50 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
           <Icon className="h-4 w-4 text-blue-600" /> {title}

@@ -53,11 +53,11 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
               <Fuel className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">FOPS</h1>
+              <h1 className="font-bold text-lg text-blue-600">FOPS</h1>
               <p className="text-xs text-muted-foreground capitalize">{user.role} Dashboard</p>
             </div>
           </div>
