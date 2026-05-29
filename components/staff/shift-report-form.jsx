@@ -251,10 +251,10 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
     if (Object.keys(newErrors).length > 0) {
       // Tell the user exactly what's missing — silent failure was the
       // original "Submit Report button does nothing" complaint.
-      alert(
-        'Please fix the following before submitting:\n• ' +
-        Object.values(newErrors).join('\n• ')
-      );
+      const messages = Object.values(newErrors);
+      toast.error('Please fix the following before submitting', {
+        description: messages.join(' • '),
+      });
       return;
     }
 
