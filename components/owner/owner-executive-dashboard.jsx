@@ -52,8 +52,22 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
     end: new Date().toISOString().split('T')[0],
   });
   const [performerMetric, setPerformerMetric] = useState('revenue');
+  const [lastLoaded, setLastLoaded] = useState(null);
 
   const siteIds = useMemo(() => sites.map((s) => s.id).join(','), [sites]);
+
+  // Human-readable "X min ago / just now" string. Re-derived on every
+  // render so it stays accurate without needing a refresh timer.
+  const lastLoadedLabel = useMemo(() => {
+    if (!lastLoaded) return null;
+    const delta = Math.max(0, Date.now() - lastLoaded);
+    const mins = Math.floor(delta / 60_000);
+    if (mins < 1) return 'just now';
+    if (mins === 1) return '1 min ago';
+    if (mins < 60) return `${mins} mins ago`;
+    const hrs = Math.floor(mins / 60);
+    return hrs === 1 ? '1 hr ago' : `${hrs} hrs ago`;
+  }, [lastLoaded]);
 
   const loadData = useCallback(async () => {
     if (!siteIds) { setLoading(false); return; }
@@ -72,6 +86,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
       setVariance(v);
       setPerformers(p && !p.error ? p : { top: [], bottom: [], metric: 'revenue' });
       setVolumeByGrade(vol && !vol.error ? vol : { grades: [], totalLitres: 0 });
+      setLastLoaded(Date.now());
     } catch (e) {
       console.error('Executive dashboard load failed', e);
     } finally {
@@ -185,10 +200,15 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
                 <Label className="text-xs">To</Label>
                 <Input type="date" value={dateRange.end} onChange={(e) => setDateRange((p) => ({ ...p, end: e.target.value }))} className="w-[150px]" />
               </div>
-              <Button variant="outline" size="sm" onClick={loadData} className="gap-2">
-                <RefreshCw className="h-4 w-4" /> Refresh
+              {lastLoadedLabel && (
+                <div className="text-xs text-muted-foreground self-end pb-2 whitespace-nowrap">
+                  Last updated: <span className="font-medium text-foreground">{lastLoadedLabel}</span>
+                </div>
+              )}
+              <Button variant="outline" size="sm" onClick={loadData} className="gap-2" disabled={loading} aria-label="Refresh">
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
               </Button>
-              <Button onClick={exportPdf} className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+              <Button onClick={exportPdf} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
                 <Download className="h-4 w-4" /> Export PDF
               </Button>
             </div>

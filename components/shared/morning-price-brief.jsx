@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { authedFetch } from '@/lib/authed-fetch';
 
 /**
  * MorningPriceBrief — at-a-glance card grid showing each site's ULP price vs.
@@ -22,7 +23,7 @@ export default function MorningPriceBrief({ sites, selectedDate }) {
       try {
         const siteIds = sites.map((s) => s.id).join(',');
         const date = selectedDate || new Date().toISOString().split('T')[0];
-        const res = await fetch(`/api/fuel-price-comparison?siteIds=${siteIds}&date=${date}`);
+        const res = await authedFetch(`/api/fuel-price-comparison?siteIds=${siteIds}&date=${date}`);
         const data = await res.json();
         setBriefData(Array.isArray(data) ? data : []);
       } catch (err) {

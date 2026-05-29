@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Loader2, Fuel, Building2 } from 'lucide-react';
+import { authedFetch } from '@/lib/authed-fetch';
 
 /**
  * FuelPriceComparisonSection — Owner-facing "Fuel Price Intelligence" section.
@@ -24,7 +25,7 @@ export default function FuelPriceComparisonSection({ sites, siteIds }) {
     if (!siteIds) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/fuel-price-comparison?siteIds=${siteIds}&date=${selectedDate}`);
+      const res = await authedFetch(`/api/fuel-price-comparison?siteIds=${siteIds}&date=${selectedDate}`);
       const data = await res.json();
       setPriceData(Array.isArray(data) ? data : []);
     } catch (err) {
