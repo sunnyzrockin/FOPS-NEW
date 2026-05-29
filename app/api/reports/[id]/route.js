@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const OPTIONS = optionsHandler;
 export const GET = async (request, { params }) => {
   const { id } = await params;
-  return handleGetReportById(id);
+  return handleGetReportById(id, request);
 };
 export const DELETE = async (request, { params }) => {
   const { id } = await params;

@@ -15,8 +15,15 @@ export async function OPTIONS() {
 }
 
 // GET /api/users  -> list users (optional ?role=staff|operator|owner)
+//
+// Auth required. Any authenticated user can list users — frontends
+// generally need this to populate selectors (operators selecting staff
+// to assign, owners selecting operators, etc).
 export async function GET(request) {
   try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) return auth.response;
+
     if (!supabase) {
       return NextResponse.json(
         { error: 'Server misconfigured', status: supabaseStatus() },
