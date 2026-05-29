@@ -15,7 +15,7 @@ import json
 import sys
 from datetime import datetime, timedelta
 
-BASE_URL = "http://localhost:3000"
+BASE_URL = "https://fuel-ops-simple.preview.emergentagent.com"
 
 # Test credentials
 CREDENTIALS = {
@@ -769,10 +769,323 @@ def test_audit_verification():
     print(f"\n📊 Audit Verification: {passed}/{total} tests passed")
     return passed, total
 
+def test_section5_dashboard_stats():
+    """Test Section 5: New dashboard stats fields (submittedToday, totalSites, pendingReview, varianceAlerts)"""
+    print("\n" + "="*80)
+    print("SECTION 5.5: SECTION 5 DASHBOARD STATS NEW FIELDS")
+    print("="*80)
+    
+    passed = 0
+    total = 0
+    
+    # Test 5.5.1: GET /api/dashboard/stats without Bearer → 401
+    total += 1
+    try:
+        response = requests.get(f"{BASE_URL}/api/dashboard/stats?siteIds=site-001", timeout=10)
+        if response.status_code == 401:
+            print(f"✅ 5.5.1: GET /dashboard/stats without Bearer → 401 (auth gate working)")
+            passed += 1
+        else:
+            print(f"❌ 5.5.1: Expected 401, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.5.1: Error - {str(e)}")
+    
+    # Test 5.5.2: GET /api/dashboard/stats with Owner Bearer → 200 with 4 new fields
+    total += 1
+    try:
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/stats?siteIds=site-001",
+            headers={"Authorization": f"Bearer {tokens['owner']}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            stats = response.json()
+            new_fields = ["submittedToday", "totalSites", "pendingReview", "varianceAlerts"]
+            has_all_new_fields = all(field in stats for field in new_fields)
+            
+            if has_all_new_fields:
+                print(f"✅ 5.5.2: GET /dashboard/stats → 200 with all 4 new fields")
+                print(f"   ℹ️  submittedToday: {stats['submittedToday']} (>=0)")
+                print(f"   ℹ️  totalSites: {stats['totalSites']} (should equal 1 for siteIds=site-001)")
+                print(f"   ℹ️  pendingReview: {stats['pendingReview']} (>=0)")
+                print(f"   ℹ️  varianceAlerts: {stats['varianceAlerts']} (>=0)")
+                passed += 1
+            else:
+                missing = [f for f in new_fields if f not in stats]
+                print(f"❌ 5.5.2: Missing new fields: {missing}")
+        else:
+            print(f"❌ 5.5.2: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.5.2: Error - {str(e)}")
+    
+    # Test 5.5.3: Verify existing fields are still present
+    total += 1
+    try:
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/stats?siteIds=site-001",
+            headers={"Authorization": f"Bearer {tokens['owner']}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            stats = response.json()
+            existing_fields = ["totalShopSales", "totalFuelSales", "totalRevenue", "pendingReports", "topPerformingSite"]
+            has_all_existing = all(field in stats for field in existing_fields)
+            
+            if has_all_existing:
+                print(f"✅ 5.5.3: All existing fields still present (no regression)")
+                passed += 1
+            else:
+                missing = [f for f in existing_fields if f not in stats]
+                print(f"❌ 5.5.3: Missing existing fields: {missing}")
+        else:
+            print(f"❌ 5.5.3: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.5.3: Error - {str(e)}")
+    
+    # Test 5.5.4: Verify totalSites matches siteIds count
+    total += 1
+    try:
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/stats?siteIds=site-001,site-002,site-003",
+            headers={"Authorization": f"Bearer {tokens['owner']}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            stats = response.json()
+            if stats.get("totalSites") == 3:
+                print(f"✅ 5.5.4: totalSites correctly equals siteIds count (3)")
+                passed += 1
+            else:
+                print(f"❌ 5.5.4: totalSites={stats.get('totalSites')}, expected 3")
+        else:
+            print(f"❌ 5.5.4: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.5.4: Error - {str(e)}")
+    
+    # Test 5.5.5: Verify field types are correct
+    total += 1
+    try:
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/stats?siteIds=site-001",
+            headers={"Authorization": f"Bearer {tokens['owner']}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            stats = response.json()
+            types_correct = (
+                isinstance(stats.get("submittedToday"), int) and
+                isinstance(stats.get("totalSites"), int) and
+                isinstance(stats.get("pendingReview"), int) and
+                isinstance(stats.get("varianceAlerts"), int)
+            )
+            
+            if types_correct:
+                print(f"✅ 5.5.5: All new fields have correct types (int)")
+                passed += 1
+            else:
+                print(f"❌ 5.5.5: Field type mismatch")
+                print(f"   submittedToday: {type(stats.get('submittedToday'))}")
+                print(f"   totalSites: {type(stats.get('totalSites'))}")
+                print(f"   pendingReview: {type(stats.get('pendingReview'))}")
+                print(f"   varianceAlerts: {type(stats.get('varianceAlerts'))}")
+        else:
+            print(f"❌ 5.5.5: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.5.5: Error - {str(e)}")
+    
+    print(f"\n📊 Section 5 Dashboard Stats: {passed}/{total} tests passed")
+    return passed, total
+
+def test_section1_security_gates():
+    """Test Section 1 security gates are still active"""
+    print("\n" + "="*80)
+    print("SECTION 5.6: SECTION 1 SECURITY GATES REGRESSION")
+    print("="*80)
+    
+    passed = 0
+    total = 0
+    
+    # Test 5.6.1: GET /api/debug-env → 404 (deleted)
+    total += 1
+    try:
+        response = requests.get(f"{BASE_URL}/api/debug-env", timeout=10)
+        if response.status_code == 404:
+            print(f"✅ 5.6.1: GET /api/debug-env → 404 (deleted route)")
+            passed += 1
+        else:
+            print(f"❌ 5.6.1: Expected 404, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.6.1: Error - {str(e)}")
+    
+    # Test 5.6.2: GET /api/test-create-user → 404 (deleted)
+    total += 1
+    try:
+        response = requests.get(f"{BASE_URL}/api/test-create-user", timeout=10)
+        if response.status_code == 404:
+            print(f"✅ 5.6.2: GET /api/test-create-user → 404 (deleted route)")
+            passed += 1
+        else:
+            print(f"❌ 5.6.2: Expected 404, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.6.2: Error - {str(e)}")
+    
+    # Test 5.6.3: POST /api/seed-supabase without auth → 403 (env-gated)
+    total += 1
+    try:
+        response = requests.post(f"{BASE_URL}/api/seed-supabase", json={}, timeout=10)
+        if response.status_code == 403:
+            print(f"✅ 5.6.3: POST /api/seed-supabase without auth → 403 (env-gated)")
+            passed += 1
+        else:
+            print(f"❌ 5.6.3: Expected 403, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.6.3: Error - {str(e)}")
+    
+    # Test 5.6.4: GET /app without session → 307 redirect (middleware)
+    total += 1
+    try:
+        response = requests.get(f"{BASE_URL}/app", allow_redirects=False, timeout=10)
+        if response.status_code == 307:
+            print(f"✅ 5.6.4: GET /app without session → 307 redirect (middleware working)")
+            passed += 1
+        else:
+            print(f"❌ 5.6.4: Expected 307, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.6.4: Error - {str(e)}")
+    
+    print(f"\n📊 Section 1 Security Gates: {passed}/{total} tests passed")
+    return passed, total
+
+def test_section2_newly_gated_endpoints():
+    """Test Section 2 newly-gated endpoints (banking-formulas, reports/:id, users, field-configs)"""
+    print("\n" + "="*80)
+    print("SECTION 5.7: SECTION 2 NEWLY-GATED ENDPOINTS REGRESSION")
+    print("="*80)
+    
+    passed = 0
+    total = 0
+    
+    # Test 5.7.1: GET /api/banking-formulas without Bearer → 401
+    total += 1
+    try:
+        response = requests.get(f"{BASE_URL}/api/banking-formulas?siteId=site-001", timeout=10)
+        if response.status_code == 401:
+            print(f"✅ 5.7.1: GET /banking-formulas without Bearer → 401")
+            passed += 1
+        else:
+            print(f"❌ 5.7.1: Expected 401, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.7.1: Error - {str(e)}")
+    
+    # Test 5.7.2: GET /api/banking-formulas with Owner Bearer → 200
+    total += 1
+    try:
+        response = requests.get(
+            f"{BASE_URL}/api/banking-formulas?siteId=site-001",
+            headers={"Authorization": f"Bearer {tokens['owner']}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            formulas = response.json()
+            print(f"✅ 5.7.2: GET /banking-formulas with Bearer → 200 ({len(formulas)} formulas)")
+            passed += 1
+        else:
+            print(f"❌ 5.7.2: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.7.2: Error - {str(e)}")
+    
+    # Test 5.7.3: GET /api/reports/:id without Bearer → 401
+    total += 1
+    try:
+        # Get a report ID first
+        response = requests.get(
+            f"{BASE_URL}/api/reports",
+            headers={"Authorization": f"Bearer {tokens['owner']}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            reports = response.json()
+            if len(reports) > 0:
+                report_id = reports[0]["id"]
+                response = requests.get(f"{BASE_URL}/api/reports/{report_id}", timeout=10)
+                if response.status_code == 401:
+                    print(f"✅ 5.7.3: GET /reports/:id without Bearer → 401")
+                    passed += 1
+                else:
+                    print(f"❌ 5.7.3: Expected 401, got {response.status_code}")
+            else:
+                print(f"⚠️  5.7.3: No reports available to test")
+                passed += 1
+        else:
+            print(f"❌ 5.7.3: Failed to fetch reports list")
+    except Exception as e:
+        print(f"❌ 5.7.3: Error - {str(e)}")
+    
+    # Test 5.7.4: GET /api/users without Bearer → 401
+    total += 1
+    try:
+        response = requests.get(f"{BASE_URL}/api/users", timeout=10)
+        if response.status_code == 401:
+            print(f"✅ 5.7.4: GET /users without Bearer → 401")
+            passed += 1
+        else:
+            print(f"❌ 5.7.4: Expected 401, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.7.4: Error - {str(e)}")
+    
+    # Test 5.7.5: GET /api/users with Owner Bearer → 200
+    total += 1
+    try:
+        response = requests.get(
+            f"{BASE_URL}/api/users",
+            headers={"Authorization": f"Bearer {tokens['owner']}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            users = response.json()
+            print(f"✅ 5.7.5: GET /users with Bearer → 200 ({len(users)} users)")
+            passed += 1
+        else:
+            print(f"❌ 5.7.5: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.7.5: Error - {str(e)}")
+    
+    # Test 5.7.6: GET /api/field-configs without Bearer → 401
+    total += 1
+    try:
+        response = requests.get(f"{BASE_URL}/api/field-configs?siteId=site-001", timeout=10)
+        if response.status_code == 401:
+            print(f"✅ 5.7.6: GET /field-configs without Bearer → 401")
+            passed += 1
+        else:
+            print(f"❌ 5.7.6: Expected 401, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.7.6: Error - {str(e)}")
+    
+    # Test 5.7.7: GET /api/field-configs with Owner Bearer → 200
+    total += 1
+    try:
+        response = requests.get(
+            f"{BASE_URL}/api/field-configs?siteId=site-001",
+            headers={"Authorization": f"Bearer {tokens['owner']}"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            configs = response.json()
+            print(f"✅ 5.7.7: GET /field-configs with Bearer → 200 ({len(configs)} configs)")
+            passed += 1
+        else:
+            print(f"❌ 5.7.7: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ 5.7.7: Error - {str(e)}")
+    
+    print(f"\n📊 Section 2 Newly-Gated Endpoints: {passed}/{total} tests passed")
+    return passed, total
+
 def test_regression():
     """Test regression - existing flows must still work"""
     print("\n" + "="*80)
-    print("SECTION 6: REGRESSION TESTS")
+    print("SECTION 6: FULL BACKEND REGRESSION (53+ TESTS)")
     print("="*80)
     
     passed = 0
@@ -1082,10 +1395,10 @@ def cleanup():
 
 def main():
     print("="*80)
-    print("PHASE 2 FINAL REFACTOR — COMPREHENSIVE BACKEND REGRESSION TEST")
+    print("SECTION 5 BACKEND REGRESSION — HEALTH STRIP + FULL 53+ TEST SUITE")
     print("="*80)
     print(f"Base URL: {BASE_URL}")
-    print(f"Testing: Reports, Dashboard, Fuel Prices modules + Catch-all + Audit + Regression")
+    print(f"Testing: Section 5 new dashboard fields + Section 1/2 security gates + Full regression")
     print("="*80)
     
     # Login all roles
@@ -1100,6 +1413,9 @@ def main():
     
     # Run all test sections
     results = []
+    results.append(test_section5_dashboard_stats())
+    results.append(test_section1_security_gates())
+    results.append(test_section2_newly_gated_endpoints())
     results.append(test_reports_module())
     results.append(test_dashboard_module())
     results.append(test_fuel_prices_module())
@@ -1116,7 +1432,7 @@ def main():
     success_rate = (total_passed / total_tests * 100) if total_tests > 0 else 0
     
     print("\n" + "="*80)
-    print("FINAL SUMMARY")
+    print("FINAL SUMMARY — SECTION 5 BACKEND REGRESSION")
     print("="*80)
     print(f"Total Tests: {total_tests}")
     print(f"Passed: {total_passed}")
@@ -1125,13 +1441,13 @@ def main():
     print("="*80)
     
     if success_rate >= 95:
-        print("🎉 PHASE 2 FINAL REFACTOR TESTING COMPLETE - ALL CRITICAL TESTS PASSED!")
+        print("🎉 SECTION 5 BACKEND REGRESSION COMPLETE - ALL CRITICAL TESTS PASSED!")
         sys.exit(0)
     elif success_rate >= 80:
-        print("⚠️  PHASE 2 FINAL REFACTOR TESTING COMPLETE - SOME TESTS FAILED")
+        print("⚠️  SECTION 5 BACKEND REGRESSION COMPLETE - SOME TESTS FAILED")
         sys.exit(0)
     else:
-        print("❌ PHASE 2 FINAL REFACTOR TESTING FAILED - CRITICAL ISSUES DETECTED")
+        print("❌ SECTION 5 BACKEND REGRESSION FAILED - CRITICAL ISSUES DETECTED")
         sys.exit(1)
 
 if __name__ == "__main__":

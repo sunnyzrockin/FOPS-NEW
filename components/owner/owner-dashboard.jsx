@@ -13,10 +13,11 @@ import {
 import {
   Fuel, ShoppingCart, DollarSign, Droplets, FileText, TrendingUp,
   BarChart3, Loader2, AlertTriangle, Calculator, Calendar, RefreshCw,
-  AlertCircle,
+  AlertCircle, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 import StatCard from '@/components/shared/stat-card';
+import HealthStrip from '@/components/shared/health-strip';
 import ViewToggle from '@/components/shared/view-toggle';
 import DailyRollupRow from '@/components/shared/daily-rollup-row';
 import ReportRow from '@/components/shared/report-row';
@@ -56,6 +57,23 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
     end: new Date().toISOString().split('T')[0],
   });
   const [loading, setLoading] = useState(true);
+  const [lastLoaded, setLastLoaded] = useState(null);
+
+  // Morning Brief expand/collapse (persisted in localStorage)
+  const [briefCollapsed, setBriefCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('fops_morning_brief_collapsed');
+      if (v === 'true') setBriefCollapsed(true);
+    } catch {}
+  }, []);
+  const toggleBrief = useCallback(() => {
+    setBriefCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('fops_morning_brief_collapsed', String(next)); } catch {}
+      return next;
+    });
+  }, []);
 
   const siteIds = sites.map((s) => s.id).join(',');
 
@@ -80,6 +98,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
       setShiftReports(Array.isArray(shiftsData) ? shiftsData : []);
       setSiteStats(Array.isArray(siteStatsData) ? siteStatsData : []);
       setChartData(Array.isArray(chartDataRes) ? chartDataRes : []);
+      setLastLoaded(Date.now());
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
@@ -175,17 +194,31 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
         </div>
       ) : (
         <>
-          <Card className="border border-border/50 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Fuel className="h-5 w-5" /> Morning Price Brief
-              </CardTitle>
-              <CardDescription>Quick pricing overview across all your sites</CardDescription>
+          {/* Morning Brief — promoted to top of Dashboard tab (Section 5e),
+              collapsible with state persisted in localStorage. */}
+          <Card className="border border-border/50 shadow-sm">
+            <CardHeader className="cursor-pointer" onClick={toggleBrief}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Fuel className="h-5 w-5" /> Morning Price Brief
+                  </CardTitle>
+                  <CardDescription>Quick pricing overview across all your sites</CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={briefCollapsed ? 'Expand' : 'Collapse'}>
+                  {briefCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent>
-              <MorningPriceBrief sites={sites} selectedDate={dateRange.to} />
-            </CardContent>
+            {!briefCollapsed && (
+              <CardContent>
+                <MorningPriceBrief sites={sites} selectedDate={dateRange.end} />
+              </CardContent>
+            )}
           </Card>
+
+          {/* HealthStrip — at-a-glance ops summary above the KPI cards. */}
+          {stats && <HealthStrip stats={stats} lastLoaded={lastLoaded} />}
 
           {stats && (
             <>

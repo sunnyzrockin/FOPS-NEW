@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
+import { evalFormula, looksLikeFormula } from '@/lib/eval-formula';
+import { useShiftDraft } from '@/hooks/use-shift-draft';
 
 import { toast } from 'sonner';
 /**
@@ -34,36 +36,6 @@ import { toast } from 'sonner';
  *   - number if the expression evaluates cleanly to a finite number
  *   - null   if the input is empty, plain text, or evaluates to NaN/Infinity
  */
-function evalFormula(input) {
-  if (input == null) return null;
-  const raw = String(input).trim();
-  if (!raw) return null;
-  const stripped = raw.replace(/^\+/, '');
-  // Remove thousands-separator commas (only between digits).
-  const noCommas = stripped.replace(/(\d),(?=\d{3}(\D|$))/g, '$1');
-  // Whitelist check — refuses anything outside the math vocabulary.
-  if (!/^[0-9+\-*/().\s]+$/.test(noCommas)) return null;
-  // Reject sequences that would be obviously invalid (lone operator etc.)
-  if (/[+\-*/]\s*$/.test(noCommas) || /^\s*[*/]/.test(noCommas)) return null;
-  try {
-    // eslint-disable-next-line no-new-func
-    const fn = new Function(`"use strict"; return (${noCommas});`);
-    const v = fn();
-    if (typeof v !== 'number' || !Number.isFinite(v)) return null;
-    // Round to 2 decimal places to avoid float artefacts (1.1 + 2.2 etc.)
-    return Math.round(v * 100) / 100;
-  } catch {
-    return null;
-  }
-}
-
-/** True if the user is mid-formula (contains an operator beyond the leading "+"). */
-function looksLikeFormula(s) {
-  if (!s) return false;
-  const stripped = String(s).trim().replace(/^\+/, '');
-  return /[+\-*/(]/.test(stripped);
-}
-
 /**
  * ShiftReportForm — Staff-facing form to submit a shift report. Loads the
  * site's field configurations and any staff-visible banking formulas, then
@@ -78,7 +50,7 @@ function looksLikeFormula(s) {
  * Extracted from /app/app/app/page.js as Phase D of the dashboard monolith
  * refactor. Behaviour unchanged outside the explicit upgrades above.
  */
-export default function ShiftReportForm({ user, sites, onSuccess }) {
+export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [fieldConfigs, setFieldConfigs] = useState([]);
@@ -94,6 +66,14 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
   // the operator. They render in their own section below the built-in
   // ULP / Diesel / Premium grades, each with a level + delivery input.
   const [dipFieldConfigs, setDipFieldConfigs] = useState([]);
+
+  // Auto-save draft to sessionStorage so a refresh or accidental close
+  // never loses staff entries. Key is per (site, date).
+  const { availableDraft, restoreDraft, dismissDraft, clearDraft } = useShiftDraft({
+    siteId: form.site_id,
+    date: form.date,
+    form,
+  });
 
   // Load field configs for the selected site — split into sales (the
   // existing "Sales & Payments" section) and dip (the new custom-grade
@@ -339,6 +319,7 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
         resetForm.delivery_diesel_litres = '';
         resetForm.delivery_premium_litres = '';
         setForm(resetForm);
+        clearDraft();
         onSuccess?.();
         setTimeout(() => setSuccess(false), 3000);
       } else if (res.status === 401) {
@@ -350,9 +331,9 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
         toast.info(`A ${form.shift_type} report for this site on ${form.date} has already been submitted.\n\n` +
           `Tip: try a different shift type or date, or ask your operator to delete the existing one.`);
       } else {
-        alert(
+        toast.error(
           (data.error || 'Failed to submit report') +
-          (data.detail && !String(data.error || '').includes(data.detail) ? `\n\nDetail: ${data.detail}` : '')
+          (data.detail && !String(data.error || '').includes(data.detail) ? ` — ${data.detail}` : '')
         );
       }
     } catch (err) {
@@ -364,13 +345,44 @@ export default function ShiftReportForm({ user, sites, onSuccess }) {
 
   return (
     <Card className="border border-border/50 shadow-sm">
-      <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
-        <CardTitle className="flex items-center gap-2">
-          <ClipboardList className="h-5 w-5" /> Submit Shift Report
-        </CardTitle>
-        <CardDescription>Complete the form below to submit your shift report</CardDescription>
+      <CardHeader className="border-b bg-muted/30">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" /> Submit Shift Report
+            </CardTitle>
+            <CardDescription>Complete the form below to submit your shift report</CardDescription>
+          </div>
+          {modeToggle}
+        </div>
       </CardHeader>
       <CardContent className="pt-6">
+        {availableDraft && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md flex items-start gap-3 text-sm">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-amber-900">
+                Unsaved draft from {new Date(availableDraft.savedAt).toLocaleString()}
+              </p>
+              <p className="text-amber-800 text-xs mt-0.5">
+                Restore it, or dismiss to start fresh.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => {
+                const restored = restoreDraft();
+                if (restored) setForm(restored);
+              }}
+              className="h-8"
+            >
+              Restore
+            </Button>
+            <Button size="sm" variant="ghost" onClick={dismissDraft} className="h-8">
+              Dismiss
+            </Button>
+          </div>
+        )}
         {success && (
           <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-2 text-green-700">
             <CheckCircle className="h-5 w-5" />

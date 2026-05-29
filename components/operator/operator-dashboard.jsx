@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import StatCard from '@/components/shared/stat-card';
+import HealthStrip from '@/components/shared/health-strip';
 import ViewToggle from '@/components/shared/view-toggle';
 import DailyRollupRow from '@/components/shared/daily-rollup-row';
 import ReportRow from '@/components/shared/report-row';
@@ -44,6 +45,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
     end: new Date().toISOString().split('T')[0],
   });
   const [loading, setLoading] = useState(true);
+  const [lastLoaded, setLastLoaded] = useState(null);
 
   const siteIds = sites.map((s) => s.id).join(',');
 
@@ -62,6 +64,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
       setReports(Array.isArray(reportsData) ? reportsData : []);
       setDailyRollups(Array.isArray(dailyData) ? dailyData : []);
       setStats(statsData);
+      setLastLoaded(Date.now());
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
@@ -155,6 +158,9 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* HealthStrip — at-a-glance ops summary above the KPI cards. */}
+      {stats && <HealthStrip stats={stats} lastLoaded={lastLoaded} />}
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

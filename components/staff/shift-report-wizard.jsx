@@ -12,27 +12,10 @@ import {
   Droplets, Building2, Calendar, ShoppingBag, FileText, Truck,
 } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
+import { evalFormula, looksLikeFormula } from '@/lib/eval-formula';
+import { useShiftDraft } from '@/hooks/use-shift-draft';
 
 import { toast } from 'sonner';
-/** Safe arithmetic evaluator — duplicated from shift-report-form to avoid
- *  cross-importing client components. Whitelisted, no eval(). */
-function evalFormula(input) {
-  if (input == null) return null;
-  const raw = String(input).trim();
-  if (!raw) return null;
-  const stripped = raw.replace(/^\+/, '').replace(/(\d),(?=\d{3}(\D|$))/g, '$1');
-  if (!/^[0-9+\-*/().\s]+$/.test(stripped)) return null;
-  if (/[+\-*/]\s*$/.test(stripped) || /^\s*[*/]/.test(stripped)) return null;
-  try {
-    // eslint-disable-next-line no-new-func
-    const v = new Function(`"use strict"; return (${stripped});`)();
-    if (typeof v !== 'number' || !Number.isFinite(v)) return null;
-    return Math.round(v * 100) / 100;
-  } catch { return null; }
-}
-
-const looksLikeFormula = (s) => !!s && /[+\-*/(]/.test(String(s).trim().replace(/^\+/, ''));
-
 const STEPS = [
   { id: 'basics', label: 'Shift', icon: Calendar },
   { id: 'sales', label: 'Sales', icon: ShoppingBag },
@@ -46,7 +29,7 @@ const STEPS = [
  * Designed so an attendant on a phone can fill out a shift without ever
  * scrolling sideways.
  */
-export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToClassic }) {
+export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToClassic, modeToggle }) {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -59,6 +42,15 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
     site_id: sites[0]?.id || '',
     date: new Date().toISOString().split('T')[0],
     shift_type: 'Morning',
+  });
+
+  // Draft autosave — keyed by (site, date). Restoring keeps wizard step at
+  // the current position; we don't try to also persist `step` because the
+  // user is most likely to want to start at Step 1 (Basics) anyway.
+  const { availableDraft, restoreDraft, dismissDraft, clearDraft } = useShiftDraft({
+    siteId: form.site_id,
+    date: form.date,
+    form,
   });
 
   // Load field configs whenever site changes
@@ -164,6 +156,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setSuccess(true);
+        clearDraft();
         onSuccess?.();
         setTimeout(() => {
           setSuccess(false);
@@ -204,8 +197,34 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+      {availableDraft && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-md flex items-start gap-3 text-sm">
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-amber-900">
+              Unsaved draft from {new Date(availableDraft.savedAt).toLocaleString()}
+            </p>
+            <p className="text-amber-800 text-xs mt-0.5">
+              Restore it, or dismiss to start fresh.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => {
+              const restored = restoreDraft();
+              if (restored) setForm(restored);
+            }}
+            className="h-8"
+          >
+            Restore
+          </Button>
+          <Button size="sm" variant="ghost" onClick={dismissDraft} className="h-8">
+            Dismiss
+          </Button>
+        </div>
+      )}
+
       {/* Progress strip */}
-      <Card className="border-0 shadow-md">
+      <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -243,17 +262,22 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
 
       {/* Step content */}
       <Card className="border border-border/50 shadow-sm">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            {(() => { const Icon = STEPS[step].icon; return <Icon className="h-5 w-5 text-blue-600" />; })()}
-            Step {step + 1} of {STEPS.length}: {STEPS[step].label}
-          </CardTitle>
-          <CardDescription>
-            {step === 0 && 'Tell us which site, date and shift this report is for.'}
-            {step === 1 && 'Enter today\'s sales & payment totals. Formulas like +2450+1360 are supported.'}
-            {step === 2 && 'Record current fuel tank levels and any deliveries received.'}
-            {step === 3 && 'Review your entries below and tap Submit to send the report.'}
-          </CardDescription>
+        <CardHeader className="border-b bg-muted/30">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                {(() => { const Icon = STEPS[step].icon; return <Icon className="h-5 w-5 text-blue-600" />; })()}
+                Step {step + 1} of {STEPS.length}: {STEPS[step].label}
+              </CardTitle>
+              <CardDescription>
+                {step === 0 && 'Tell us which site, date and shift this report is for.'}
+                {step === 1 && 'Enter today\'s sales & payment totals. Formulas like +2450+1360 are supported.'}
+                {step === 2 && 'Record current fuel tank levels and any deliveries received.'}
+                {step === 3 && 'Review your entries below and tap Submit to send the report.'}
+              </CardDescription>
+            </div>
+            {modeToggle}
+          </div>
         </CardHeader>
         <CardContent className="pt-6 space-y-5">
           {step === 0 && <StepBasics sites={sites} form={form} handle={handle} errors={errors} />}

@@ -25,15 +25,26 @@ export default function StaffDashboard({ user, sites, activeTab }) {
   const [reports, setReports] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Default is Classic to keep behaviour unchanged for existing users;
-  // Wizard is opt-in. Choice persists in localStorage.
+  // Default mode is determined by:
+  //   1. localStorage preference (returning users — never overridden)
+  //   2. Viewport size on first visit: <768px → 'wizard' (mobile-first),
+  //      otherwise 'classic'
   const [formMode, setFormMode] = useState('classic');
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(FORM_MODE_KEY);
-      if (saved === 'wizard' || saved === 'classic') setFormMode(saved);
+      if (saved === 'wizard' || saved === 'classic') {
+        setFormMode(saved);
+        return;
+      }
     } catch {}
+    // No saved preference — pick a default based on viewport.
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setFormMode('wizard');
+    } else {
+      setFormMode('classic');
+    }
   }, []);
 
   const switchMode = (mode) => {
@@ -79,41 +90,52 @@ export default function StaffDashboard({ user, sites, activeTab }) {
     <div className="container mx-auto px-4 py-6">
       <StaffPriceChangeBanner user={user} />
 
-      {activeTab === 'submit' && (
-        <>
-          {/* Mode toggle */}
-          <div className="max-w-2xl mx-auto mb-4 flex items-center justify-end gap-2">
-            <span className="text-xs text-muted-foreground mr-1">Form mode:</span>
-            <Button
-              size="sm"
-              variant={formMode === 'classic' ? 'default' : 'outline'}
+      {activeTab === 'submit' && (() => {
+        // Build the Classic ↔ Wizard toggle once and render it inside the
+        // form card header (more discoverable than floating above the card).
+        const ModeToggle = (
+          <div className="inline-flex rounded-md border bg-background shadow-sm shrink-0">
+            <button
+              type="button"
               onClick={() => switchMode('classic')}
-              className="gap-1.5 h-8"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-l-md transition-colors ${
+                formMode === 'classic'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-transparent text-muted-foreground hover:bg-muted'
+              }`}
             >
               <FileSpreadsheet className="h-3.5 w-3.5" /> Classic
-            </Button>
-            <Button
-              size="sm"
-              variant={formMode === 'wizard' ? 'default' : 'outline'}
+            </button>
+            <button
+              type="button"
               onClick={() => switchMode('wizard')}
-              className="gap-1.5 h-8"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-r-md transition-colors ${
+                formMode === 'wizard'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-transparent text-muted-foreground hover:bg-muted'
+              }`}
             >
               <Smartphone className="h-3.5 w-3.5" /> Wizard
-            </Button>
+            </button>
           </div>
-
-          {formMode === 'wizard' ? (
-            <ShiftReportWizard
-              user={user}
-              sites={sites}
-              onSuccess={loadReports}
-              onSwitchToClassic={() => switchMode('classic')}
-            />
-          ) : (
-            <ShiftReportForm user={user} sites={sites} onSuccess={loadReports} />
-          )}
-        </>
-      )}
+        );
+        return formMode === 'wizard' ? (
+          <ShiftReportWizard
+            user={user}
+            sites={sites}
+            onSuccess={loadReports}
+            onSwitchToClassic={() => switchMode('classic')}
+            modeToggle={ModeToggle}
+          />
+        ) : (
+          <ShiftReportForm
+            user={user}
+            sites={sites}
+            onSuccess={loadReports}
+            modeToggle={ModeToggle}
+          />
+        );
+      })()}
 
       {activeTab === 'history' && (
         <Card className="border border-border/50 shadow-sm">
