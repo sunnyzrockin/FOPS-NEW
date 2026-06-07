@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { OnboardingModal } from '@/components/shared/onboarding-modal';
 import { HelpPanel } from '@/components/shared/help-panel';
+import { NotificationsPanel } from '@/components/shared/notifications-panel';
 
 /* ---------------------------------------------------------------- */
 /*  ROLE → NAV GROUP DEFINITIONS                                    */
@@ -124,7 +125,10 @@ function TopBar({ user, onLogout, onToggleMobileSidebar, showMobileToggle }) {
 
       <div className="flex-1" />
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Notifications bell — Phase 2 Section E. Lives at the shell
+            level so every authed page gets it. */}
+        <NotificationsPanel user={user} />
         <div className="text-right hidden sm:block">
           <p className="text-sm font-medium leading-tight">{user.name}</p>
           <p className="text-xs text-muted-foreground leading-tight">{user.email}</p>
@@ -286,7 +290,7 @@ function Sidebar({
 /* ---------------------------------------------------------------- */
 /*  MAIN COMPONENT                                                  */
 /* ---------------------------------------------------------------- */
-export default function AppShell({ user, onLogout, children }) {
+export default function AppShell({ user, onLogout, onboardingComplete, children }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -354,7 +358,13 @@ export default function AppShell({ user, onLogout, children }) {
   const onboardingNode = (
     <OnboardingModal
       open={showOnboarding}
-      onClose={() => setShowOnboarding(false)}
+      onClose={() => {
+        setShowOnboarding(false);
+        // Tell the parent so it can update its own user state + localStorage.
+        // Without this the modal would re-trigger on the next render (or a
+        // soft reload) because the in-memory user.first_login is still true.
+        onboardingComplete?.();
+      }}
       user={user}
     />
   );

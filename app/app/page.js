@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
@@ -126,6 +126,20 @@ function AppInner() {
     }
   };
 
+  // Fired by the OnboardingModal once it has successfully PATCHed
+  // /api/users/me with { first_login: false }. We mirror the change into
+  // local state + localStorage so the modal doesn't re-trigger between
+  // renders or on a soft reload before the next login refreshes the user
+  // row from the server.
+  const handleOnboardingComplete = useCallback(() => {
+    if (!user) return;
+    const updated = { ...user, first_login: false };
+    setUser(updated);
+    try {
+      localStorage.setItem('workflowlite_user', JSON.stringify(updated));
+    } catch (_) { /* localStorage unavailable in some private-mode contexts */ }
+  }, [user]);
+
   if (!mounted || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
@@ -137,8 +151,17 @@ function AppInner() {
   // AppShell wraps the role-specific dashboard. Tab state is driven from
   // the URL `?tab=` via AppShell internals; we receive it via render-prop
   // so we can pass it down to the legacy `activeTab` prop on dashboards.
+  //
+  // `onboardingComplete` is fired by the OnboardingModal after it successfully
+  // PATCHes /api/users/me with { first_login: false }. We mirror the change
+  // into local state + localStorage so the modal doesn't re-trigger on the
+  // next render or reload before a full re-login fetches the row again.
   return (
-    <AppShell user={user} onLogout={handleLogout}>
+    <AppShell
+      user={user}
+      onLogout={handleLogout}
+      onboardingComplete={handleOnboardingComplete}
+    >
       {({ activeTab }) => (
         <>
           {user.role === 'staff' && (
