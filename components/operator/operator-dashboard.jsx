@@ -75,7 +75,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
   useEffect(() => { if (activeTab === 'dashboard') loadData(); }, [loadData, activeTab]);
 
   const handleStatusChange = async (reportId, status, reviewedBy) => {
-    await fetch(`/api/reports/${reportId}/status`, {
+    await authedFetch(`/api/reports/${reportId}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, reviewed_by_user_id: reviewedBy }),
@@ -85,7 +85,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
   };
 
   const handleReportClick = async (reportId) => {
-    const res = await fetch(`/api/reports/${reportId}`);
+    const res = await authedFetch(`/api/reports/${reportId}`);
     const data = await res.json();
     setSelectedReport(data);
   };

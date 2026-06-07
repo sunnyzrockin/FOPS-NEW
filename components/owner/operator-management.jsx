@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { toast } from 'sonner';
+import { authedFetch } from '@/lib/authed-fetch';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * OperatorManagement — Owner-facing UI to create operators and assign sites
@@ -35,8 +36,8 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
   const loadData = useCallback(async () => {
     try {
       const [operatorsRes, assignmentsRes] = await Promise.all([
-        fetch('/api/users?role=operator'),
-        fetch(`/api/operator-assignments?ownerId=${user.id}`),
+        authedFetch('/api/users?role=operator'),
+        authedFetch(`/api/operator-assignments?ownerId=${user.id}`),
       ]);
       const [operatorsData, assignmentsData] = await Promise.all([
         operatorsRes.json(),
@@ -56,7 +57,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
   const handleCreateOperator = async () => {
     if (!form.name || !form.email) { toast.error('Name and email are required'); return; }
     try {
-      const res = await fetch('/api/users', {
+      const res = await authedFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, role: 'operator', creatorRole: 'owner' }),
@@ -95,7 +96,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
   const handleDeleteOperator = async (operatorId) => {
     if (!(await confirmDialog('Delete operator?', 'This will remove all site assignments for this operator.', { destructive: true, confirmLabel: 'Delete' }))) return;
     try {
-      const res = await fetch(`/api/users/${operatorId}`, { method: 'DELETE' });
+      const res = await authedFetch(`/api/users/${operatorId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast.error(`Failed to delete operator: ${data.error || data.message || res.status}`);
@@ -130,7 +131,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
 
     try {
       for (const siteId of toAdd) {
-        await fetch('/api/operator-assignments', {
+        await authedFetch('/api/operator-assignments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -141,7 +142,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
         });
       }
       for (const assignmentId of toRemove) {
-        await fetch(`/api/operator-assignments/${assignmentId}`, { method: 'DELETE' });
+        await authedFetch(`/api/operator-assignments/${assignmentId}`, { method: 'DELETE' });
       }
       setShowAssignSites(null);
       loadData();

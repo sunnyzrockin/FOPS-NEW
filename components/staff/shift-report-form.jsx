@@ -82,7 +82,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
     const loadFieldConfigs = async () => {
       if (!form.site_id) return;
       try {
-        const res = await fetch(`/api/field-configs?siteId=${form.site_id}`);
+        const res = await authedFetch(`/api/field-configs?siteId=${form.site_id}`);
         const data = await res.json();
         const all = Array.isArray(data) ? data : [];
         const enabled = all
@@ -112,7 +112,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
     const loadFormulas = async () => {
       if (!form.site_id) return;
       try {
-        const res = await fetch(`/api/banking-formulas?siteId=${form.site_id}`);
+        const res = await authedFetch(`/api/banking-formulas?siteId=${form.site_id}`);
         const data = await res.json();
         const list = (Array.isArray(data) ? data : []).filter((f) => f.visible_to_staff);
 

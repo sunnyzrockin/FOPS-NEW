@@ -23,7 +23,7 @@ export default function StaffPriceChangeBanner({ user }) {
 
   const loadPendingChanges = async () => {
     try {
-      const res = await fetch(`/api/fuel-prices/pending?userId=${user.id}&role=staff`);
+      const res = await authedFetch(`/api/fuel-prices/pending?userId=${user.id}&role=staff`);
       const data = await res.json();
       setPendingChanges(Array.isArray(data) ? data : []);
     } catch (err) {

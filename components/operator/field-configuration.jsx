@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 
 import { toast } from 'sonner';
+import { authedFetch } from '@/lib/authed-fetch';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * FieldConfiguration — Operator-facing UI to customize the shift report
@@ -62,7 +63,7 @@ export default function FieldConfiguration({ user, sites }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await authedFetch(
         `/api/field-configs?siteId=${selectedSite}&category=${category}`,
         { cache: 'no-store' }
       );
@@ -84,7 +85,7 @@ export default function FieldConfiguration({ user, sites }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/field-configs/bulk', {
+      const res = await authedFetch('/api/field-configs/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ configs: fields }),
@@ -114,7 +115,7 @@ export default function FieldConfiguration({ user, sites }) {
         .replace(/^_+|_+$/g, '')
         .substring(0, 60) || `field_${Date.now()}`;
 
-      const res = await fetch('/api/field-configs', {
+      const res = await authedFetch('/api/field-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -170,7 +171,7 @@ export default function FieldConfiguration({ user, sites }) {
     if (!(await confirmDialog('Delete field?', confirmMsg, { destructive: true, confirmLabel: 'Delete' }))) return;
 
     try {
-      const res = await fetch(`/api/field-configs/${fieldId}`, { method: 'DELETE' });
+      const res = await authedFetch(`/api/field-configs/${fieldId}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         // 409 means the field is referenced by an active banking formula —
@@ -217,7 +218,7 @@ export default function FieldConfiguration({ user, sites }) {
     if (!siteId) return;
     setCopyLoadingSource(true);
     try {
-      const res = await fetch(`/api/field-configs?siteId=${siteId}&category=${category}`);
+      const res = await authedFetch(`/api/field-configs?siteId=${siteId}&category=${category}`);
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
       setCopySourceFields(list);
@@ -258,7 +259,7 @@ export default function FieldConfiguration({ user, sites }) {
       }
       try {
         if (existing && copyConflictMode === 'overwrite') {
-          const res = await fetch(`/api/field-configs/${existing.id}`, {
+          const res = await authedFetch(`/api/field-configs/${existing.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -272,7 +273,7 @@ export default function FieldConfiguration({ user, sites }) {
           });
           if (res.ok) updated++; else failed++;
         } else {
-          const res = await fetch('/api/field-configs', {
+          const res = await authedFetch('/api/field-configs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

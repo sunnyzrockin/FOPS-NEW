@@ -13,6 +13,7 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 
 import { toast } from 'sonner';
+import { authedFetch } from '@/lib/authed-fetch';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
  * CompetitorManagement — Operator-facing CRUD UI for nearby competitor
@@ -30,7 +31,7 @@ export default function CompetitorManagement({ user, sites }) {
 
   const loadCompetitors = useCallback(async () => {
     if (!selectedSite) return;
-    const res = await fetch(`/api/site-competitors?siteId=${selectedSite}`);
+    const res = await authedFetch(`/api/site-competitors?siteId=${selectedSite}`);
     const data = await res.json();
     setCompetitors(Array.isArray(data) ? data : []);
   }, [selectedSite]);
@@ -39,7 +40,7 @@ export default function CompetitorManagement({ user, sites }) {
 
   const handleAdd = async () => {
     if (!form.competitor_name) { toast.error('Competitor name required'); return; }
-    await fetch('/api/site-competitors', {
+    await authedFetch('/api/site-competitors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, site_id: selectedSite }),
@@ -51,7 +52,7 @@ export default function CompetitorManagement({ user, sites }) {
 
   const handleDelete = async (id) => {
     if (!(await confirmDialog('Delete competitor?', 'This competitor will be removed from your tracking.', { destructive: true, confirmLabel: 'Delete' }))) return;
-    await fetch(`/api/site-competitors/${id}`, { method: 'DELETE' });
+    await authedFetch(`/api/site-competitors/${id}`, { method: 'DELETE' });
     loadCompetitors();
   };
 

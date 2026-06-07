@@ -12,6 +12,7 @@ import {
 import { Download, Loader2 } from 'lucide-react';
 
 import { toast } from 'sonner';
+import { authedFetch } from '@/lib/authed-fetch';
 /**
  * ExportDialog — Modal launched from a toolbar button to download shift
  * data as XLSX or JSON for a date range. Calls /api/export with the
@@ -34,14 +35,14 @@ export default function ExportDialog({ siteIds }) {
       const url = `/api/export?format=${format}&viewType=${viewType}&siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`;
 
       if (format === 'xlsx') {
-        const res = await fetch(url);
+        const res = await authedFetch(url);
         const blob = await res.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `workflowlite_export_${new Date().toISOString().split('T')[0]}.xlsx`;
         link.click();
       } else {
-        const res = await fetch(url);
+        const res = await authedFetch(url);
         const data = await res.json();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const link = document.createElement('a');

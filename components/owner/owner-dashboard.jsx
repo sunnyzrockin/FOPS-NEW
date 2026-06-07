@@ -109,7 +109,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
   useEffect(() => { if (activeTab === 'dashboard') loadData(); }, [loadData, activeTab]);
 
   const handleReportClick = async (reportId) => {
-    const res = await fetch(`/api/reports/${reportId}`);
+    const res = await authedFetch(`/api/reports/${reportId}`);
     const data = await res.json();
     setSelectedReport(data);
   };

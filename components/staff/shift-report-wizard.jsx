@@ -58,7 +58,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
     if (!form.site_id) return;
     (async () => {
       try {
-        const res = await fetch(`/api/field-configs?siteId=${form.site_id}`);
+        const res = await authedFetch(`/api/field-configs?siteId=${form.site_id}`);
         const data = await res.json();
         const all = (Array.isArray(data) ? data : [])
           .filter((f) => f.is_enabled)

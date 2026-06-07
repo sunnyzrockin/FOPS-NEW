@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, Save } from 'lucide-react';
 
 import { toast } from 'sonner';
+import { authedFetch } from '@/lib/authed-fetch';
 /**
  * FuelPriceEntry — Operator-facing form to record both their own pump
  * prices and competitor prices for a given date. Calls
@@ -25,7 +26,7 @@ export default function FuelPriceEntry({ user, sites }) {
 
   useEffect(() => {
     if (selectedSite) {
-      fetch(`/api/site-competitors?siteId=${selectedSite}`)
+      authedFetch(`/api/site-competitors?siteId=${selectedSite}`)
         .then((r) => r.json())
         .then((d) => setCompetitors(Array.isArray(d) ? d : []));
     }
@@ -36,7 +37,7 @@ export default function FuelPriceEntry({ user, sites }) {
     try {
       for (const [fuelType, price] of Object.entries(prices)) {
         if (price) {
-          await fetch('/api/fuel-price-entries', {
+          await authedFetch('/api/fuel-price-entries', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -53,7 +54,7 @@ export default function FuelPriceEntry({ user, sites }) {
       for (const [key, price] of Object.entries(competitorPrices)) {
         if (price) {
           const [compName, fuelType] = key.split('_');
-          await fetch('/api/competitor-prices', {
+          await authedFetch('/api/competitor-prices', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

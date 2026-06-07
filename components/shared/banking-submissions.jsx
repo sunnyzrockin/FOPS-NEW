@@ -127,7 +127,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
     if (!expandedDetail[reportId]) {
       setLoadingDetail(reportId);
       try {
-        const res = await fetch(`/api/form-submissions/${reportId}`);
+        const res = await authedFetch(`/api/form-submissions/${reportId}`);
         const data = await res.json();
         setExpandedDetail((prev) => ({ ...prev, [reportId]: data }));
       } catch (e) {

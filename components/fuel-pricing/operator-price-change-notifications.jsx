@@ -29,7 +29,7 @@ export default function OperatorPriceChangeNotifications({ user, sites }) {
 
   const loadPendingChanges = async () => {
     try {
-      const res = await fetch(`/api/fuel-prices/pending?userId=${user.id}&role=operator`);
+      const res = await authedFetch(`/api/fuel-prices/pending?userId=${user.id}&role=operator`);
       const data = await res.json();
       setPendingChanges(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -49,7 +49,7 @@ export default function OperatorPriceChangeNotifications({ user, sites }) {
   const handleNotifyStaff = async (priceChangeId) => {
     setNotifying(priceChangeId);
     try {
-      const res = await fetch(`/api/fuel-prices/${priceChangeId}/notify-staff`, {
+      const res = await authedFetch(`/api/fuel-prices/${priceChangeId}/notify-staff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operatorUserId: user.id }),
