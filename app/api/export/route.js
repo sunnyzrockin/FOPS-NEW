@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { corsHeaders } from '@/lib/api/cors';
 import { supabaseAdmin, supabase } from '@/lib/supabase';
+import { verifyAuth } from '@/lib/auth-helpers';
+import { getAllowedSiteIds } from '@/lib/api/site-access';
 import * as XLSX from 'xlsx';
 
 // Heavy dependency (xlsx ~1MB). Isolated to its own route so the catch-all
@@ -15,6 +17,19 @@ export async function OPTIONS() {
 
 export async function GET(request) {
   try {
+    // -------- AUTH (Fix 1) --------
+    // Previously this endpoint was UNAUTHENTICATED and returned full shift-
+    // report financials for any siteIds the caller passed. We now require a
+    // valid Bearer token AND intersect the requested siteIds with the
+    // caller's allowed sites (owner -> sites they own, operator/staff ->
+    // assignment tables) before querying. Empty intersection => 403.
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+
     const url = new URL(request.url);
     const siteIds = url.searchParams.get('siteIds');
     const startDate = url.searchParams.get('startDate');
@@ -27,7 +42,17 @@ export async function GET(request) {
       );
     }
 
-    const siteIdArray = siteIds.split(',');
+    const requested = siteIds.split(',').map((s) => s.trim()).filter(Boolean);
+    const allowed = await getAllowedSiteIds(auth.user);
+    const allowedSet = new Set(allowed);
+    const siteIdArray = requested.filter((id) => allowedSet.has(id));
+    if (siteIdArray.length === 0) {
+      return NextResponse.json(
+        { error: 'You are not authorised to export data for the requested sites.' },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
     const client = supabaseAdmin || supabase;
 
     let query = client

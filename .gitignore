@@ -918,3 +918,5 @@ credentials.json
 *.pem
 *.key
 .credentials
+.next/cache/webpack/client-production/0.pack
+.next/cache/webpack/server-production/0.pack

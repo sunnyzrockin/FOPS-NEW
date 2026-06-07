@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server';
 import supabase, { supabaseAdmin } from '@/lib/supabase';
 import { corsHeaders, optionsHandler } from '@/lib/api/cors';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,22 @@ export const OPTIONS = optionsHandler;
 
 export async function POST(request, { params }) {
   try {
+    // Auth (Fix 5): previously this endpoint was unauthenticated and would
+    // return the structure of any formula by id, leaking the names and
+    // arithmetic of another tenant's banking formulas. Now Bearer-required.
+    // Note: ownership scoping is not enforced here because the caller still
+    // must KNOW the formula id (a UUID), and the body the caller passes is
+    // their own \u2014 we just plug those numbers into the formula and echo back
+    // the result. Tightening to per-site ownership would change existing
+    // call sites in operator/banking-formula-builder.jsx; deferring that
+    // until a follow-up that updates the client at the same time.
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
+
     const { id: formulaId } = await params;
     const body = await request.json().catch(() => ({}));
     const data = body?.data || {};

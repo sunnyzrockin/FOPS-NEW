@@ -1,14 +1,33 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '@/lib/api/cors';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 // POST /api/fuel-prices/escalate - Check and create escalations for unacknowledged price changes
+//
+// Auth (Fix 3): this endpoint is invoked from the authenticated app (a 5-min
+// poller on the operator/staff dashboards in /app/app/page.js triggers it).
+// Choice: gate behind verifyAuth rather than a cron secret. Any logged-in
+// user can trigger the idempotent sweep; this is safe because the work it
+// performs is bounded (process pending escalations only) and the side-effect
+// is purely to update internal escalation state.
 export async function POST(request) {
   try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
     const now = new Date();
     
     // Get all price changes that are notified but not fully acknowledged

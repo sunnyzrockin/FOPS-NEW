@@ -1,14 +1,33 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '@/lib/api/cors';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 // GET /api/fuel-prices/pending - Get pending price changes for a user
+//
+// Auth (Fix 5): previously unauthenticated; any caller could pass
+// ?userId=<anyone>&role=operator and read another operator's pending
+// price-change pipeline. Now requires a Bearer token, and the userId
+// query param MUST match the authenticated user (any mismatch -> 403).
+// We continue to accept the param (rather than infer from JWT) only to
+// avoid changing the existing request shape from the frontend.
 export async function GET(request) {
   try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) {
+      const r = auth.response;
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v));
+      return r;
+    }
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const role = searchParams.get('role');
@@ -16,7 +35,15 @@ export async function GET(request) {
     if (!userId || !role) {
       return NextResponse.json(
         { error: 'userId and role required' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // Identity-spoof guard: the caller can only ask about themselves.
+    if (userId !== auth.user.id || role !== auth.user.role) {
+      return NextResponse.json(
+        { error: 'You can only request your own pending price changes.' },
+        { status: 403, headers: corsHeaders }
       );
     }
 

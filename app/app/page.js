@@ -67,7 +67,7 @@ function AppInner() {
 
     const checkEscalations = async () => {
       try {
-        await fetch('/api/fuel-prices/escalate', { method: 'POST' });
+        await authedFetch('/api/fuel-prices/escalate', { method: 'POST' });
       } catch (err) {
         console.error('Escalation check failed:', err);
       }

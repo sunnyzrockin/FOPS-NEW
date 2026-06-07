@@ -1,48 +1,28 @@
+/**
+ * /api/fuel-prices/verify-schema  —  DELETED (Fix 5)
+ *
+ * This was an unauthenticated info-disclosure endpoint that reported which
+ * fuel-pricing tables exist in the database. Removed entirely; the file is
+ * kept as a stub so any stray client call gets a clean 410 Gone with no
+ * payload rather than a confusing 404 from the catch-all.
+ */
+
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '@/lib/api/cors';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-export async function GET(request) {
-  try {
-    const results = {
-      tables: {},
-      ready: false
-    };
-
-    // Check each table
-    const tables = [
-      'fuel_price_changes',
-      'fuel_price_notifications',
-      'fuel_price_acknowledgements',
-      'fuel_price_escalations'
-    ];
-
-    for (const tableName of tables) {
-      try {
-        const { data, error } = await supabase
-          .from(tableName)
-          .select('*')
-          .limit(1);
-
-        if (error) {
-          results.tables[tableName] = { exists: false, error: error.message };
-        } else {
-          results.tables[tableName] = { exists: true, rowCount: data ? data.length : 0 };
-        }
-      } catch (err) {
-        results.tables[tableName] = { exists: false, error: err.message };
-      }
-    }
-
-    // Check if all tables exist
-    results.ready = Object.values(results.tables).every(t => t.exists);
-
-    return NextResponse.json(results);
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
 }
+
+function gone() {
+  return NextResponse.json(
+    { error: 'Endpoint removed for security' },
+    { status: 410, headers: corsHeaders }
+  );
+}
+
+export async function GET() { return gone(); }
+export async function POST() { return gone(); }
