@@ -4,6 +4,7 @@ import { supabaseAdmin, supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { sendInviteEmail } from '@/lib/mailer';
 import { verifyAuth, rateLimit, clientIp } from '@/lib/auth-helpers';
+import { getAllowedSiteIds } from '@/lib/api/site-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,25 +14,60 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
+// Strip the `token` field from invite rows before returning them to a list
+// caller — only the inviter who just created it should ever see the raw
+// token (we return it on POST). Listing should never leak active tokens.
+function sanitizeInvite(row) {
+  if (!row) return row;
+  const { token: _omit, ...safe } = row;
+  void _omit;
+  return safe;
+}
+
 // ---------------------- GET /api/invites ----------------------
-//   ?invitedBy=<userId>   list invites a user has created
 //   ?status=pending       filter by status
+//   ?invitedBy=<userId>   (support only) filter by inviter
+//
+// Security (Sprint Part 2):
+//   - Bearer required.
+//   - Owner/Operator: invited_by_user_id is FORCED to JWT user.id;
+//     ?invitedBy is ignored.
+//   - Staff: 403.
+//   - Support: ?invitedBy is honoured; no filter = all invites.
+//   - `token` is stripped from every row.
 export async function GET(request) {
   try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) return auth.response;
+
+    const currentUser = auth.user;
+    if (currentUser.role === 'staff') {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
     const url = new URL(request.url);
-    const invitedBy = url.searchParams.get('invitedBy');
+    const invitedByParam = url.searchParams.get('invitedBy');
     const status = url.searchParams.get('status');
 
     let q = (supabaseAdmin || supabase)
       .from('user_invites')
       .select('*')
       .order('created_at', { ascending: false });
-    if (invitedBy) q = q.eq('invited_by_user_id', invitedBy);
+
+    if (currentUser.role === 'support') {
+      if (invitedByParam) q = q.eq('invited_by_user_id', invitedByParam);
+    } else {
+      // owner / operator: always scoped to their own invites
+      q = q.eq('invited_by_user_id', currentUser.id);
+    }
     if (status) q = q.eq('status', status);
 
     const { data, error } = await q;
     if (error) throw error;
-    return NextResponse.json(data || [], { headers: corsHeaders });
+    return NextResponse.json((data || []).map(sanitizeInvite), { headers: corsHeaders });
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to fetch invites', message: error?.message },
@@ -41,10 +77,18 @@ export async function GET(request) {
 }
 
 // ---------------------- POST /api/invites ----------------------
-// Body:
-//   { email, role, site_ids?: string[], invited_by_user_id }
-//   When called by an authenticated user, the JWT is preferred over the
-//   invited_by_user_id field.
+// Body: { email, role, site_ids?: string[] }
+//
+// Security (Sprint Part 2):
+//   - Bearer required (no allowAnon).
+//   - Role gates:
+//       owner    → may invite operator | staff
+//       operator → may invite staff
+//       support  → may invite anyone
+//       staff    → 403
+//   - For every requested site_id, caller MUST have site access via
+//     getAllowedSiteIds — otherwise 403 with foreign_site_ids: [...].
+//   - invited_by_user_id is FORCED to JWT user.id (no body spoofing).
 export async function POST(request) {
   // Light rate-limit so spam invites can't be fired off in a loop.
   const ip = clientIp(request);
@@ -52,9 +96,12 @@ export async function POST(request) {
   if (!rl.ok) return rl.response;
 
   try {
+    const auth = await verifyAuth(request);
+    if (!auth.ok) return auth.response;
+    const inviterUser = auth.user;
+
     const body = await request.json();
     const { email, role, site_ids = [] } = body || {};
-    let { invited_by_user_id } = body || {};
 
     if (!email || !role) {
       return NextResponse.json(
@@ -63,36 +110,41 @@ export async function POST(request) {
       );
     }
 
-    // Verify caller (optional during migration)
-    let inviterUser = null;
-    const auth = await verifyAuth(request, { allowAnon: true });
-    if (auth.user) {
-      inviterUser = auth.user;
-      invited_by_user_id = auth.user.id;
+    // Role-based permission
+    const allowedTransitions = {
+      owner: ['operator', 'staff'],
+      operator: ['staff'],
+      support: ['owner', 'operator', 'staff'],
+    };
+    const allowed = allowedTransitions[inviterUser.role] || [];
+    if (!allowed.includes(role)) {
+      return NextResponse.json(
+        {
+          error: `Your role (${inviterUser.role}) cannot invite users with role "${role}"`,
+          allowed,
+        },
+        { status: 403, headers: corsHeaders }
+      );
+    }
 
-      // Role-based permission
-      const allowedTransitions = {
-        owner: ['operator', 'staff'],
-        operator: ['staff'],
-      };
-      const allowed = allowedTransitions[auth.user.role] || [];
-      if (!allowed.includes(role)) {
+    // Site-ownership intersection: every requested site_id must be in
+    // caller's allowed sites (support bypasses this check).
+    const cleanSiteIds = Array.isArray(site_ids)
+      ? site_ids.filter((id) => typeof id === 'string' && id)
+      : [];
+    if (inviterUser.role !== 'support' && cleanSiteIds.length) {
+      const callerAllowed = await getAllowedSiteIds(inviterUser);
+      const allowedSet = new Set(callerAllowed);
+      const foreign = cleanSiteIds.filter((id) => !allowedSet.has(id));
+      if (foreign.length) {
         return NextResponse.json(
           {
-            error: `Your role (${auth.user.role}) cannot invite users with role "${role}"`,
-            allowed,
+            error: 'You do not have access to one or more requested sites',
+            foreign_site_ids: foreign,
           },
           { status: 403, headers: corsHeaders }
         );
       }
-    } else if (invited_by_user_id) {
-      // Legacy: look up by id from body
-      const { data: inviter } = await (supabaseAdmin || supabase)
-        .from('users')
-        .select('id, name, email, role')
-        .eq('id', invited_by_user_id)
-        .single();
-      inviterUser = inviter;
     }
 
     // Generate token (UUID)
@@ -102,9 +154,10 @@ export async function POST(request) {
       id: uuidv4(),
       email: String(email).toLowerCase().trim(),
       role,
-      invited_by_user_id: invited_by_user_id || null,
-      site_id: site_ids[0] || null, // primary site (legacy single-site column)
-      site_ids: site_ids.length ? site_ids : null,
+      // FORCE invited_by_user_id to caller's JWT — never trust body
+      invited_by_user_id: inviterUser.id,
+      site_id: cleanSiteIds[0] || null, // primary site (legacy single-site column)
+      site_ids: cleanSiteIds.length ? cleanSiteIds : null,
       token,
       status: 'pending',
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),

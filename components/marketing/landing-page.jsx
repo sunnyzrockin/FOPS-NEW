@@ -171,12 +171,12 @@ function Hero() {
             For multi-site fuel retailers
           </span>
           <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight text-[#0E1B2A] sm:text-5xl lg:text-6xl">
-            Run every site from one place.
+            Run every site<br />from <span className="text-[#0A7C7C]">one place.</span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#0E1B2A]/75">
-            Replace WhatsApp threads and spreadsheets with structured shift reports,
-            banking and fuel-pricing tools — designed for the way independent operators
-            actually run their forecourts.
+            FOPS replaces the WhatsApp chaos with structured daily shift reports,
+            automated banking, and live fuel-price intelligence &mdash; across all
+            your stations, with the right people seeing the right data.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Link href="/signup" className={PRIMARY_CTA_CLASS}>
@@ -184,7 +184,7 @@ function Hero() {
             </Link>
             <Link href="/login" className={SECONDARY_CTA_CLASS}>Log in</Link>
           </div>
-          <p className="mt-3 text-xs text-[#0E1B2A]/55">No card required.</p>
+          <p className="mt-3 text-xs text-[#0E1B2A]/55">No card required &middot; Set up your first site in minutes</p>
         </div>
 
         {/* Dashboard mock */}
@@ -264,7 +264,7 @@ function HowItWorks() {
       <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <div className="max-w-2xl">
           <h2 className="text-3xl font-bold tracking-tight text-[#0E1B2A] sm:text-4xl">
-            One simple flow, three clear roles.
+            Your team, set up in three steps.
           </h2>
           <p className="mt-3 text-[#0E1B2A]/70">
             Access cascades down the hierarchy. Everyone sees only the sites that
@@ -314,30 +314,30 @@ function HowItWorks() {
 function Features() {
   const items = [
     { icon: ClipboardList, title: 'Shift reporting',
-      body: 'Tablet-friendly shift forms that auto-save, accept Excel-style formulas and adapt to each site’s fields.' },
+      body: 'Mobile-first daily reports with live validation, autosave, and a guided wizard.' },
     { icon: LineChart, title: 'Multi-site dashboard',
-      body: 'Roll up sales, variance and fuel volume across every site you own. Drill in when something looks off.' },
+      body: "One health strip across every site \u2014 who's reported, what's pending, where the variances are." },
     { icon: Calculator, title: 'Banking & calculations',
-      body: 'Set the bank-deposit formula once. FOPS evaluates it on every shift submission and flags variances automatically.' },
+      body: 'Per-site banking formulas calculate and reconcile automatically, with daily rollups.' },
     { icon: Fuel, title: 'Fuel price intelligence',
-      body: 'Track competitor pump prices, hold-out levels and your own boardposts — live, on a map, by grade.' },
+      body: 'Live competitor pricing on a map, plus a morning price brief to start the day informed.' },
   ];
   return (
     <section id="features" className="border-t border-[#0E1B2A]/10 bg-[#FAFAF6]">
       <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <div className="max-w-2xl">
           <h2 className="text-3xl font-bold tracking-tight text-[#0E1B2A] sm:text-4xl">
-            Built for forecourt operations.
+            Everything a multi-site operator needs.
           </h2>
           <p className="mt-3 text-[#0E1B2A]/70">
-            The four jobs you spend most of your week on — in one place.
+            The four jobs you spend most of your week on &mdash; in one place.
           </p>
         </div>
-        <div className="mt-12 grid gap-5 sm:grid-cols-2">
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {items.map((f) => {
             const Icon = f.icon;
             return (
-              <div key={f.title} className="rounded-2xl border border-[#0E1B2A]/10 bg-white p-6 transition hover:shadow-md">
+              <div key={f.title} className="rounded-2xl border border-[#0E1B2A]/10 bg-white p-6 transition hover:-translate-y-1 hover:shadow-md">
                 <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#0F9E9E]/10 text-[#0A7C7C]">
                   <Icon className="h-5 w-5" />
                 </div>
@@ -417,7 +417,7 @@ function CtaBand() {
     <section className="bg-[#0E1B2A] text-white">
       <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 py-16 sm:px-6 md:flex-row md:items-center md:justify-between">
         <div className="max-w-xl">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Ready to see it on your sites?</h2>
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Ready to retire the WhatsApp group?</h2>
           <p className="mt-3 text-white/70">
             Start with a free owner account, add a site and invite an operator in under
             five minutes. No card. No commitment.
@@ -449,18 +449,17 @@ function Footer() {
   const cols = [
     { title: 'Product', items: [
       { label: 'Features', href: '#features' },
-      { label: 'How it works', href: '#how' },
       { label: 'Pricing', href: '#pricing' },
+      { label: 'How it works', href: '#how' },
     ]},
     { title: 'Support', items: [
+      { label: 'Help centre', href: '#support' },
       { label: 'Contact us', href: '#support' },
-      { label: 'Help & FAQs', href: '#support' },
-      { label: 'Status', href: '#support' },
+      { label: 'System status', href: '#support' },
     ]},
     { title: 'Get started', items: [
-      { label: 'Create an owner account', href: '/signup' },
+      { label: 'Sign up as owner', href: '/signup' },
       { label: 'Log in', href: '/login' },
-      { label: 'Talk to sales', href: '#support' },
     ]},
   ];
   return (
@@ -475,7 +474,7 @@ function Footer() {
               <span className="text-base font-semibold tracking-tight text-[#0E1B2A]">FOPS</span>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-[#0E1B2A]/65">
-              Multi-site fuel retail operations — reports, banking and pricing in one app.
+              Field Operations System for multi-site fuel operators. Made in Queensland.
             </p>
           </div>
           {cols.map((col) => (
