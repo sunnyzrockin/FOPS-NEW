@@ -17,7 +17,7 @@ import { authedFetch } from '@/lib/authed-fetch';
 import { createFopsPdf, addSectionTitle, addTable, saveFopsPdf } from '@/lib/pdf-export';
 
 const ACTION_COLORS = {
-  login: 'bg-blue-100 text-blue-700',
+  login: 'bg-teal-100 text-teal-700',
   login_failed: 'bg-red-100 text-red-700',
   insert: 'bg-emerald-100 text-emerald-700',
   update: 'bg-amber-100 text-amber-700',
@@ -252,10 +252,10 @@ export default function FounderDashboardPage() {
         {/* System overview cards */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <SystemCard icon={Database} label="Tenants (Owners)" value={stats.roleBreakdown?.owner ?? 0} color="from-blue-500 to-indigo-600" />
+            <SystemCard icon={Database} label="Tenants (Owners)" value={stats.roleBreakdown?.owner ?? 0} color="from-teal-500 to-indigo-600" />
             <SystemCard icon={Users} label="Operators" value={stats.roleBreakdown?.operator ?? 0} color="from-emerald-500 to-teal-600" />
             <SystemCard icon={Users} label="Staff" value={stats.roleBreakdown?.staff ?? 0} color="from-purple-500 to-pink-600" />
-            <SystemCard icon={Building2} label="Sites" value={stats.counts?.sites ?? 0} color="from-cyan-500 to-blue-600" />
+            <SystemCard icon={Building2} label="Sites" value={stats.counts?.sites ?? 0} color="from-cyan-500 to-teal-600" />
             <SystemCard icon={FileText} label="Reports" value={stats.counts?.shift_reports ?? 0} color="from-amber-500 to-orange-600" />
             <SystemCard icon={Activity} label="Audit Events 7d" value={stats.auditActivity?.last7d ?? 0} color="from-rose-500 to-red-600" />
           </div>
@@ -337,7 +337,7 @@ export default function FounderDashboardPage() {
         <Card className="border border-border/50 shadow-sm">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-blue-600" /> Audit Timeline
+              <Calendar className="h-4 w-4 text-teal-600" /> Audit Timeline
             </CardTitle>
             <div className="flex items-center gap-2">
               <Button onClick={exportCsv} variant="outline" size="sm" className="gap-1.5 h-8">

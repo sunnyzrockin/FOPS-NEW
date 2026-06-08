@@ -53,11 +53,11 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 bg-teal-600 rounded-xl flex items-center justify-center shadow-md">
               <Fuel className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg text-blue-600">FOPS</h1>
+              <h1 className="font-bold text-lg text-teal-600">FOPS</h1>
               <p className="text-xs text-muted-foreground capitalize">{user.role} Dashboard</p>
             </div>
           </div>
@@ -80,7 +80,7 @@ export default function Header({ user, onLogout, activeTab, setActiveTab }) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                    ? 'border-teal-500 text-teal-600 bg-teal-50/50'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-slate-50'
                 } rounded-t-lg`}
               >

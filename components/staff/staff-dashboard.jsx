@@ -100,7 +100,7 @@ export default function StaffDashboard({ user, sites, activeTab }) {
               onClick={() => switchMode('classic')}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-l-md transition-colors ${
                 formMode === 'classic'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-teal-600 text-white'
                   : 'bg-transparent text-muted-foreground hover:bg-muted'
               }`}
             >
@@ -111,7 +111,7 @@ export default function StaffDashboard({ user, sites, activeTab }) {
               onClick={() => switchMode('wizard')}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-r-md transition-colors ${
                 formMode === 'wizard'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-teal-600 text-white'
                   : 'bg-transparent text-muted-foreground hover:bg-muted'
               }`}
             >
@@ -146,7 +146,7 @@ export default function StaffDashboard({ user, sites, activeTab }) {
           <CardContent>
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
               </div>
             ) : reports.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">No reports submitted yet</p>

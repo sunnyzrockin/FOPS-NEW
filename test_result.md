@@ -1625,4 +1625,19 @@ frontend:
   - agent: "testing"
     message: "Security Sprint Part 2 backend testing complete. ALL 20 TESTS PASSED (100% success rate). Tested all 14 scenarios (A-O) plus 5 regression tests. Key findings: (1) Bearer auth gates working perfectly (401 without token), (2) Role-based permissions enforced correctly (owner/operator/staff/support), (3) Site-ownership intersection working (foreign_site_ids returned for unauthorized sites), (4) Token field correctly stripped from GET /api/invites responses (only present in POST response), (5) *_by_*_id columns forced to JWT user.id (no body spoofing possible), (6) Query params ignored for non-support roles (invitedBy, ownerId, operatorId), (7) Cross-tenant isolation working (operator2 cannot delete operator1's assignments), (8) All regression tests passing (no breaking changes). Zero critical issues found. Security Sprint Part 2 is PRODUCTION-READY and can be deployed."
 
+  - task: "Teal reskin — blue→teal palette migration across components/ + app/"
+    implemented: true
+    working: true
+    file: "45 files in components/ + app/ (excluding app/app/dashboard-backup.js); components/marketing/landing-page.jsx (hex → Tailwind teal-600/teal-700)"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Cosmetic-only colour migration to match the new teal landing page. NO logic, behaviour, props, routing, copy, or business-logic changes — only Tailwind className strings. (1) Across 45 .js/.jsx files in components/ + app/ (excluding app/app/dashboard-backup.js dead code), every `blue-N` Tailwind utility class was replaced with the same-numbered `teal-N` class via `sed -i -E 's/blue-([0-9])/teal-\\1/g'`. Covers all prefixes: bg-/text-/border-/ring-/focus:ring-/from-/to-/via-/hover:bg-/hover:text-/hover:border-. ~176 occurrences converted. Numeric shades preserved (blue-600 → teal-600, blue-50 → teal-50, etc.) so contrast is preserved. Word 'blue' in comments/copy/variable names was NOT touched (regex anchored to `blue-` followed by digit). (2) Semantic status colours LEFT ALONE: green (success), red/rose (danger/variance), amber/orange (warnings, fuel accents). (3) globals.css --primary navy token LEFT ALONE per brief. (4) Login page navy gradient side-panel LEFT ALONE per brief. (5) components/marketing/landing-page.jsx hex literals migrated to Tailwind teal scale: bg-[linear-gradient(135deg,#0F9E9E,#0A7C7C)] → bg-gradient-to-br from-teal-600 to-teal-700; text-[#0F9E9E] → text-teal-600; text-[#0A7C7C] → text-teal-700; bg-[#0F9E9E]/10 → bg-teal-600/10. TEAL/TEAL_DARK JS constants updated to '#0d9488'/'#0f766e' (exact Tailwind teal-600/700 hex) so the inline-style backgrounds remain pixel-identical to the className-based teal. (6) Verified visually via screenshots: (a) /  landing page CTAs/icons/badges all teal, (b) /login page 'Login to FOPS' button + Forgot/Sign-up links + FOPS logo square all teal, (c) /app owner dashboard active sidebar item, header logo, KPI accents, Daily Summary tab, FAB/help buttons all teal — variance alerts amber + notification bell red badge preserved as semantic colours, (d) /app operator dashboard same pattern. Grep verified ZERO remaining `blue-N` classes in components/ + app/ (excluding dashboard-backup). Lint clean on landing-page.jsx. App services healthy after restart to clear stale Next.js dev chunks."
+
+  - agent: "main"
+    message: "Teal re-skin complete in one cosmetic commit. 45 files touched, ~176 blue-N → teal-N replacements, landing-page hex migrated to Tailwind teal scale. Zero logic/copy/behaviour changes. Login screen, owner dashboard, and operator dashboard all visually verified — every blue accent is now teal, while green/amber/red status colours and the navy ink/sidebar gradient are preserved as semantic. App health restored after clearing stale Next.js dev cache."
+
 

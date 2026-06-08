@@ -41,7 +41,7 @@ const TYPE_ICON = {
 };
 
 const TYPE_COLOR = {
-  report_submitted: 'text-blue-600 bg-blue-50',
+  report_submitted: 'text-teal-600 bg-teal-50',
   report_status_changed: 'text-green-600 bg-green-50',
   site_assigned: 'text-indigo-600 bg-indigo-50',
   site_unassigned: 'text-amber-600 bg-amber-50',
@@ -200,7 +200,7 @@ export function NotificationsPanel({ user }) {
           className={cn(
             'relative inline-flex h-9 w-9 items-center justify-center rounded-md',
             'text-muted-foreground hover:bg-muted hover:text-foreground transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-blue-500/40'
+            'focus:outline-none focus:ring-2 focus:ring-teal-500/40'
           )}
         >
           <Bell className="h-4 w-4" />
@@ -275,7 +275,7 @@ export function NotificationsPanel({ user }) {
                     className={cn(
                       'w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors',
                       'flex items-start gap-2.5',
-                      unread && 'bg-blue-50/40'
+                      unread && 'bg-teal-50/40'
                     )}
                   >
                     <div className={cn('rounded-md p-1.5 shrink-0', colorCls)}>
@@ -290,7 +290,7 @@ export function NotificationsPanel({ user }) {
                           {n.title}
                         </p>
                         {unread && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-blue-600 shrink-0" aria-label="unread" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-teal-600 shrink-0" aria-label="unread" />
                         )}
                       </div>
                       {n.body && (

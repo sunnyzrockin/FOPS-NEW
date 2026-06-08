@@ -86,7 +86,7 @@ export default function SignupPage() {
             <p className="text-slate-600 mb-4">
               Your account has been created successfully. Redirecting to login...
             </p>
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600 mx-auto" />
+            <Loader2 className="h-6 w-6 animate-spin text-teal-600 mx-auto" />
           </CardContent>
         </Card>
       </div>
@@ -109,7 +109,7 @@ export default function SignupPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1 text-center">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl mx-auto mb-4"></div>
+            <div className="w-12 h-12 bg-gradient-to-br from-teal-600 to-indigo-600 rounded-xl mx-auto mb-4"></div>
             <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
             <CardDescription>Sign up to get started with FOPS</CardDescription>
           </CardHeader>
@@ -175,8 +175,8 @@ export default function SignupPage() {
                 />
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-xs text-blue-800">
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
+                <p className="text-xs text-teal-800">
                   <strong>Note:</strong> New accounts are created with Staff role by default. Contact your administrator to upgrade your role.
                 </p>
               </div>
@@ -195,7 +195,7 @@ export default function SignupPage() {
 
             <div className="mt-6 text-center text-sm text-slate-600">
               Already have an account?{' '}
-              <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
+              <Link href="/login" className="text-teal-600 hover:text-teal-700 font-medium transition-colors">
                 Sign in
               </Link>
             </div>

@@ -41,11 +41,11 @@ export default function FuelPriceComparisonSection({ sites, siteIds }) {
     if (type === 'good') return 'bg-green-50 text-green-700 border-green-200';
     if (type === 'warning') return 'bg-orange-50 text-orange-700 border-orange-200';
     if (type === 'danger') return 'bg-red-50 text-red-700 border-red-200';
-    return 'bg-blue-50 text-blue-700 border-blue-200';
+    return 'bg-teal-50 text-teal-700 border-teal-200';
   };
 
   const getPriceColor = (isOwn, isMin, isMax) => {
-    if (isOwn) return 'text-blue-600 font-bold';
+    if (isOwn) return 'text-teal-600 font-bold';
     if (isMin) return 'text-green-600 font-semibold';
     if (isMax) return 'text-red-600';
     return 'text-gray-700';
@@ -54,7 +54,7 @@ export default function FuelPriceComparisonSection({ sites, siteIds }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
       </div>
     );
   }
@@ -93,7 +93,7 @@ export default function FuelPriceComparisonSection({ sites, siteIds }) {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{fuelType}</span>
                     {data.own_price && (
-                      <span className="text-lg font-bold text-blue-600">
+                      <span className="text-lg font-bold text-teal-600">
                         ${(data.own_price / 100).toFixed(1)}
                       </span>
                     )}

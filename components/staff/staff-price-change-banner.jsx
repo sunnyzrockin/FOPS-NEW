@@ -108,7 +108,7 @@ export default function StaffPriceChangeBanner({ user }) {
                           <ChevronRight className="h-4 w-4" />
                         </>
                       )}
-                      <span className="text-xl font-bold text-blue-600">{pc.new_price}¢/L</span>
+                      <span className="text-xl font-bold text-teal-600">{pc.new_price}¢/L</span>
                     </div>
                   </div>
                   <div>

@@ -112,7 +112,7 @@ function TopBar({ user, onLogout, onToggleMobileSidebar, showMobileToggle }) {
         </button>
       )}
       <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center">
+        <div className="w-8 h-8 bg-teal-600 rounded-md flex items-center justify-center">
           <Fuel className="w-4 h-4 text-white" />
         </div>
         <div className="flex flex-col leading-tight">
@@ -165,7 +165,7 @@ function StaffTopNav({ activeTab, onChangeTab }) {
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-teal-600 text-white'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
@@ -268,7 +268,7 @@ function Sidebar({
                           'w-full flex items-center gap-2.5 text-sm font-medium rounded-md transition-colors',
                           collapsed ? 'mx-1 px-2 py-2 justify-center' : 'mx-2 px-2.5 py-2',
                           isActive
-                            ? 'bg-blue-600 text-white hover:bg-blue-600'
+                            ? 'bg-teal-600 text-white hover:bg-teal-600'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
                       >

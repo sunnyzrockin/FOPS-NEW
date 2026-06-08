@@ -465,7 +465,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
                     />
                     {/* Live preview while the user is typing a formula. */}
                     {preview != null && (
-                      <p className="text-xs text-blue-600 font-medium">
+                      <p className="text-xs text-teal-600 font-medium">
                         = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </p>
                     )}
@@ -481,7 +481,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
               <Separator />
               <div>
                 <h3 className="font-medium mb-4 flex items-center gap-2">
-                  <Calculator className="h-4 w-4 text-blue-600" />
+                  <Calculator className="h-4 w-4 text-teal-600" />
                   Live Calculations
                   <Badge variant="outline" className="text-xs">Auto-updating</Badge>
                 </h3>
@@ -489,13 +489,13 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
                   {formulas.map((formula) => (
                     <div
                       key={formula.id}
-                      className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200"
+                      className="bg-gradient-to-br from-teal-50 to-indigo-50 p-4 rounded-xl border border-teal-200"
                     >
                       <p className="text-xs text-muted-foreground mb-1">{formula.name}</p>
-                      <p className="text-2xl font-bold text-blue-700">
+                      <p className="text-2xl font-bold text-teal-700">
                         {formatCurrency(formulaResults[formula.id] || 0)}
                       </p>
-                      <p className="text-xs text-blue-600 mt-1">{formula.result_label || 'Result'}</p>
+                      <p className="text-xs text-teal-600 mt-1">{formula.result_label || 'Result'}</p>
                     </div>
                   ))}
                 </div>
@@ -536,7 +536,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
                       onBlur={() => handleNumericBlur(key)}
                     />
                     {preview != null && (
-                      <p className="text-xs text-blue-600 font-medium">
+                      <p className="text-xs text-teal-600 font-medium">
                         = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
                       </p>
                     )}
@@ -566,7 +566,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
                       onBlur={() => handleNumericBlur(key)}
                     />
                     {preview != null && (
-                      <p className="text-xs text-blue-600 font-medium">
+                      <p className="text-xs text-teal-600 font-medium">
                         = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
                       </p>
                     )}
@@ -612,7 +612,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
                             onBlur={() => handleNumericBlur(levelKey)}
                           />
                           {lvlPreview != null && (
-                            <p className="text-xs text-blue-600 font-medium">
+                            <p className="text-xs text-teal-600 font-medium">
                               = {lvlPreview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
                             </p>
                           )}
@@ -626,7 +626,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
                             onBlur={() => handleNumericBlur(deliveryKey)}
                           />
                           {delPreview != null && (
-                            <p className="text-xs text-blue-600 font-medium">
+                            <p className="text-xs text-teal-600 font-medium">
                               = {delPreview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
                             </p>
                           )}
@@ -653,7 +653,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
 
           <Button
             type="submit"
-            className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-indigo-600"
+            className="w-full sm:w-auto bg-gradient-to-r from-teal-500 to-indigo-600"
             disabled={loading}
           >
             {loading

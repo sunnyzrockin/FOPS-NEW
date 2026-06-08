@@ -17,7 +17,7 @@ const LiveFuelPricesMap = dynamic(() => import('./live-fuel-prices-map'), {
   ssr: false,
   loading: () => (
     <div className="h-[600px] w-full flex items-center justify-center bg-slate-50 rounded-xl">
-      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
     </div>
   ),
 });
@@ -367,7 +367,7 @@ export default function LiveFuelPricesDashboard() {
         <CardContent className="p-0 relative">
           {stationsLoading && (
             <div className="absolute inset-0 z-[450] flex items-center justify-center bg-white/60 pointer-events-none">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
             </div>
           )}
           <LiveFuelPricesMap

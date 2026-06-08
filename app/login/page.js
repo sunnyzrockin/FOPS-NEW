@@ -88,7 +88,7 @@ export default function LoginPage() {
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
       </div>
     );
   }
@@ -100,7 +100,7 @@ export default function LoginPage() {
         <div>
           {/* Logo */}
           <div className="flex items-center gap-3 mb-16">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">F</span>
             </div>
             <div>
@@ -119,21 +119,21 @@ export default function LoginPage() {
             {/* Value Bullets */}
             <div className="space-y-4">
               <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                <CheckCircle2 className="h-5 w-5 text-teal-400 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-white font-medium">Multi-site visibility</p>
                   <p className="text-slate-400 text-sm">Monitor all locations from one dashboard</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                <CheckCircle2 className="h-5 w-5 text-teal-400 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-white font-medium">Shift reporting</p>
                   <p className="text-slate-400 text-sm">Real-time updates from your team</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                <CheckCircle2 className="h-5 w-5 text-teal-400 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-white font-medium">Banking and pricing insights</p>
                   <p className="text-slate-400 text-sm">Automated calculations and competitor tracking</p>
@@ -154,7 +154,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">F</span>
             </div>
             <div>
@@ -202,7 +202,7 @@ export default function LoginPage() {
                   </Label>
                   <Link 
                     href="/forgot-password" 
-                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    className="text-sm text-teal-600 hover:text-teal-700 font-medium"
                   >
                     Forgot password?
                   </Link>
@@ -236,7 +236,7 @@ export default function LoginPage() {
               {/* Submit Button */}
               <Button 
                 type="submit" 
-                className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700"
+                className="w-full h-12 text-base font-semibold bg-teal-600 hover:bg-teal-700"
                 disabled={loading}
               >
                 {loading ? (
@@ -263,7 +263,7 @@ export default function LoginPage() {
               <div className="pt-3 border-t border-slate-100">
                 <p className="text-sm text-slate-600 text-center">
                   Don't have an account?{' '}
-                  <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
+                  <Link href="/signup" className="text-teal-600 hover:text-teal-700 font-medium transition-colors">
                     Sign up
                   </Link>
                 </p>

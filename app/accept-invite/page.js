@@ -79,9 +79,9 @@ function AcceptInviteContent() {
   // ---------- Render states ----------
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4">
         <div className="flex flex-col items-center gap-3 text-slate-600">
-          <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
+          <Loader2 className="h-10 w-10 animate-spin text-teal-500" />
           <p>Validating your invitation...</p>
         </div>
       </div>
@@ -90,7 +90,7 @@ function AcceptInviteContent() {
 
   if (status === 'invalid') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4">
         <Card className="max-w-md w-full border-red-200">
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -135,11 +135,11 @@ function AcceptInviteContent() {
   // status === 'valid' or 'accepting'
   const roleLabel = invite?.role === 'staff' ? 'Staff' : invite?.role === 'operator' ? 'Operator' : 'Owner';
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 px-4 py-10">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4 py-10">
       <Card className="max-w-md w-full shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-3 mb-2">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-teal-600 to-indigo-600 flex items-center justify-center">
               <Building2 className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -149,7 +149,7 @@ function AcceptInviteContent() {
           </div>
           <CardDescription>
             {invite?.invited_by_name ? <><strong>{invite.invited_by_name}</strong> invited you </> : 'You\'ve been invited '}
-            to join FOPS as <strong className="text-blue-700">{roleLabel}</strong>.
+            to join FOPS as <strong className="text-teal-700">{roleLabel}</strong>.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -217,7 +217,7 @@ export default function AcceptInvitePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
+        <Loader2 className="h-10 w-10 animate-spin text-teal-500" />
       </div>
     }>
       <AcceptInviteContent />

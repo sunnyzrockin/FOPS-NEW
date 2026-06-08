@@ -74,7 +74,7 @@ export default function LeafletMapInner({ currentSite, competitors, priceData })
                       data.own_price && (
                         <div key={type} className="flex justify-between">
                           <span className="font-medium">{type}:</span>
-                          <span className="text-blue-600 font-bold">${(data.own_price / 100).toFixed(1)}</span>
+                          <span className="text-teal-600 font-bold">${(data.own_price / 100).toFixed(1)}</span>
                         </div>
                       )
                     ))}

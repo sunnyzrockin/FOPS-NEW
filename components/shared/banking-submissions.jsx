@@ -159,7 +159,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Banknote className="h-6 w-6 text-blue-600" />
+          <Banknote className="h-6 w-6 text-teal-600" />
           Banking Submissions
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -225,7 +225,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
             <p className="text-xs opacity-75 mt-1">across {filteredSubmissions.length} submissions</p>
           </CardContent>
         </Card>
-        <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
+        <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-teal-500 to-indigo-500 text-white">
           <CardContent className="p-4">
             <p className="text-sm opacity-90">Submitted Today</p>
             <p className="text-3xl font-bold mt-1">{summary.submittedToday}</p>
@@ -258,7 +258,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
           )}
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
             </div>
           ) : filteredSubmissions.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -279,8 +279,8 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                         className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition"
                       >
                         <div className="flex items-center gap-4 text-left">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <Building2 className="h-5 w-5 text-blue-600" />
+                          <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
+                            <Building2 className="h-5 w-5 text-teal-600" />
                           </div>
                           <div>
                             <p className="font-semibold">{s.site_name || s.site?.name}</p>
@@ -295,7 +295,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
-                            <p className="text-lg font-bold text-blue-600">{formatCurrency(s.banking_value || s.total_revenue || 0)}</p>
+                            <p className="text-lg font-bold text-teal-600">{formatCurrency(s.banking_value || s.total_revenue || 0)}</p>
                             <p className="text-xs text-muted-foreground">Banking</p>
                           </div>
                           <Badge
@@ -342,15 +342,15 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                               {Array.isArray(detail.formula_results) && detail.formula_results.length > 0 ? (
                                 <div>
                                   <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                                    <Calculator className="h-4 w-4 text-blue-600" />
+                                    <Calculator className="h-4 w-4 text-teal-600" />
                                     Formula Results
                                     <Badge variant="outline" className="text-xs">audit trail</Badge>
                                   </h4>
                                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                     {detail.formula_results.map((fr) => (
-                                      <div key={fr.id} className="bg-white border border-blue-200 rounded-lg p-3">
+                                      <div key={fr.id} className="bg-white border border-teal-200 rounded-lg p-3">
                                         <p className="text-xs text-muted-foreground">{fr.formula_name}</p>
-                                        <p className="text-xl font-bold text-blue-700">{formatCurrency(fr.result_value)}</p>
+                                        <p className="text-xl font-bold text-teal-700">{formatCurrency(fr.result_value)}</p>
                                         <p className="text-[10px] text-muted-foreground mt-1">
                                           calc {formatDateTime(fr.calculated_at)}
                                         </p>

@@ -228,19 +228,19 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-blue-600" />
+              <ClipboardList className="h-5 w-5 text-teal-600" />
               <span className="font-semibold">Shift Report Wizard</span>
             </div>
             <button
               onClick={onSwitchToClassic}
-              className="text-xs text-blue-600 hover:underline"
+              className="text-xs text-teal-600 hover:underline"
             >
               Switch to classic form
             </button>
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
+              className="h-full bg-gradient-to-r from-teal-500 to-indigo-500 transition-all duration-300"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -250,7 +250,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
               const active = i === step;
               const done = i < step;
               return (
-                <div key={s.id} className={`flex items-center gap-1 ${active ? 'text-blue-700 font-semibold' : done ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                <div key={s.id} className={`flex items-center gap-1 ${active ? 'text-teal-700 font-semibold' : done ? 'text-emerald-600' : 'text-muted-foreground'}`}>
                   <Icon className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{s.label}</span>
                 </div>
@@ -266,7 +266,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <CardTitle className="flex items-center gap-2 text-lg">
-                {(() => { const Icon = STEPS[step].icon; return <Icon className="h-5 w-5 text-blue-600" />; })()}
+                {(() => { const Icon = STEPS[step].icon; return <Icon className="h-5 w-5 text-teal-600" />; })()}
                 Step {step + 1} of {STEPS.length}: {STEPS[step].label}
               </CardTitle>
               <CardDescription>
@@ -293,7 +293,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
         {step < STEPS.length - 1 ? (
-          <Button onClick={goNext} className="gap-2 flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-indigo-600">
+          <Button onClick={goNext} className="gap-2 flex-1 sm:flex-none bg-gradient-to-r from-teal-600 to-indigo-600">
             Next <ArrowRight className="h-4 w-4" />
           </Button>
         ) : (
@@ -332,7 +332,7 @@ function StepBasics({ sites, form, handle, errors }) {
               onClick={() => handle('shift_type', s)}
               className={`h-12 rounded-lg border-2 text-sm font-medium transition-all ${
                 form.shift_type === s
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  ? 'border-teal-500 bg-teal-50 text-teal-700'
                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
               }`}
             >
@@ -370,7 +370,7 @@ function StepSales({ fields, form, handle, errors, onBlur }) {
               className={`h-12 text-base ${errors[f.key] ? 'border-red-500' : ''}`}
             />
             {preview != null && (
-              <p className="text-xs text-blue-600 font-medium">
+              <p className="text-xs text-teal-600 font-medium">
                 = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </p>
             )}
@@ -391,7 +391,7 @@ function StepDips({ dipFields, form, handle, onBlur }) {
     <div className="space-y-5">
       <section>
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-          <Droplets className="h-4 w-4 text-blue-600" /> Tank Levels
+          <Droplets className="h-4 w-4 text-teal-600" /> Tank Levels
         </h3>
         <div className="space-y-3">
           {builtIn.map((g) => (

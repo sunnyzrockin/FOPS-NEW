@@ -158,7 +158,7 @@ export default function BankingManagement({ user, sites }) {
                               op.type === 'operator'
                                 ? 'bg-slate-100'
                                 : op.type === 'field'
-                                ? 'bg-blue-100 text-blue-700'
+                                ? 'bg-teal-100 text-teal-700'
                                 : 'bg-amber-100 text-amber-700'
                             }`}
                           >

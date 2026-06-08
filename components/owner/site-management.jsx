@@ -299,7 +299,7 @@ export default function SiteManagement({ user, sites, onRefresh }) {
           }}
         >
           <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button className="bg-teal-600 hover:bg-teal-700">
               <Plus className="h-4 w-4 mr-2" /> Add Site
             </Button>
           </DialogTrigger>
@@ -350,8 +350,8 @@ export default function SiteManagement({ user, sites, onRefresh }) {
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-4 min-w-0">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
-                      <Building2 className="h-6 w-6 text-blue-600" />
+                    <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center shrink-0">
+                      <Building2 className="h-6 w-6 text-teal-600" />
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-semibold truncate">{site.name}</h3>
@@ -438,11 +438,11 @@ export default function SiteManagement({ user, sites, onRefresh }) {
           {/* Tab toggle */}
           <div className="inline-flex rounded-md border bg-background p-0.5 self-start">
             <button type="button" onClick={() => setAssignTab('existing')}
-              className={`px-3 py-1.5 text-xs font-medium rounded ${assignTab === 'existing' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
+              className={`px-3 py-1.5 text-xs font-medium rounded ${assignTab === 'existing' ? 'bg-teal-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
               Existing operator
             </button>
             <button type="button" onClick={() => setAssignTab('invite')}
-              className={`px-3 py-1.5 text-xs font-medium rounded ${assignTab === 'invite' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
+              className={`px-3 py-1.5 text-xs font-medium rounded ${assignTab === 'invite' ? 'bg-teal-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
               Invite new
             </button>
           </div>
@@ -457,7 +457,7 @@ export default function SiteManagement({ user, sites, onRefresh }) {
                 ) : filteredOperators.map((op) => (
                   <button key={op.id} type="button"
                     onClick={() => setPickedOperator(op)}
-                    className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-muted/60 ${pickedOperator?.id === op.id ? 'bg-blue-50' : ''}`}>
+                    className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-muted/60 ${pickedOperator?.id === op.id ? 'bg-teal-50' : ''}`}>
                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 text-sm font-medium">
                       {(op.name || '?').charAt(0).toUpperCase()}
                     </span>
@@ -465,7 +465,7 @@ export default function SiteManagement({ user, sites, onRefresh }) {
                       <span className="block font-medium text-sm truncate">{op.name || op.email}</span>
                       <span className="block text-xs text-muted-foreground truncate">{op.email}</span>
                     </span>
-                    {pickedOperator?.id === op.id && <ChevronRight className="h-4 w-4 text-blue-600" />}
+                    {pickedOperator?.id === op.id && <ChevronRight className="h-4 w-4 text-teal-600" />}
                   </button>
                 ))}
               </div>

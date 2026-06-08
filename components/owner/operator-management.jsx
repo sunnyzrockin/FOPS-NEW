@@ -160,7 +160,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
       </div>
     );
   }
@@ -174,7 +174,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
         </div>
         <Dialog open={showAddOperator} onOpenChange={setShowAddOperator}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-blue-500 to-indigo-600">
+            <Button className="bg-gradient-to-r from-teal-500 to-indigo-600">
               <UserPlus className="h-4 w-4 mr-2" /> Add Operator
             </Button>
           </DialogTrigger>
@@ -260,10 +260,10 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
               {operators.map((operator) => (
                 <div
                   key={operator.id}
-                  className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl border border-slate-100"
+                  className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-teal-50 rounded-xl border border-slate-100"
                 >
                   <div className="flex items-center gap-3 flex-1">
-                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                    <div className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center">
                       <User className="h-5 w-5 text-white" />
                     </div>
                     <div className="flex-1">

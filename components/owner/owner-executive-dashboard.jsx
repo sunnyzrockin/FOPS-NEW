@@ -171,7 +171,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
   if (loading && !stats) {
     return (
       <div className="container mx-auto px-4 py-16 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
       </div>
     );
   }
@@ -183,7 +183,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-600">
+              <div className="p-2 rounded-lg bg-teal-600">
                 <BarChart3 className="h-5 w-5 text-white" />
               </div>
               <div>
@@ -208,7 +208,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
               <Button variant="outline" size="sm" onClick={loadData} className="gap-2" disabled={loading} aria-label="Refresh">
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
               </Button>
-              <Button onClick={exportPdf} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+              <Button onClick={exportPdf} className="gap-2 bg-teal-600 text-white hover:bg-teal-700">
                 <Download className="h-4 w-4" /> Export PDF
               </Button>
             </div>
@@ -220,9 +220,9 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <KpiCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} sub={`${stats.totalReports} reports`} from="from-purple-500" to="to-pink-500" />
-          <KpiCard title="Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} from="from-blue-500" to="to-cyan-500" />
+          <KpiCard title="Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} from="from-teal-500" to="to-cyan-500" />
           <KpiCard title="Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} from="from-emerald-500" to="to-teal-500" />
-          <KpiCard title="Volume Sold" value={`${fmt0(stats.totalLitres)} L`} icon={Droplets} from="from-cyan-500" to="to-blue-500" />
+          <KpiCard title="Volume Sold" value={`${fmt0(stats.totalLitres)} L`} icon={Droplets} from="from-cyan-500" to="to-teal-500" />
           <KpiCard title="Banking" value={formatCurrency(stats.totalBanking)} icon={DollarSign} from="from-amber-500" to="to-orange-500" />
           <KpiCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} from="from-rose-500" to="to-red-500" />
         </div>
@@ -240,7 +240,7 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
       <Card className="border border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-blue-600" /> 12-Month Rolling Trend
+            <TrendingUp className="h-5 w-5 text-teal-600" /> 12-Month Rolling Trend
           </CardTitle>
           <CardDescription>Revenue, Fuel & Shop sales across the trailing 12 months</CardDescription>
         </CardHeader>
@@ -405,7 +405,7 @@ function VarianceCard({ title, data, icon: Icon }) {
     <Card className="border border-border/50 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <Icon className="h-4 w-4 text-blue-600" /> {title}
+          <Icon className="h-4 w-4 text-teal-600" /> {title}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">

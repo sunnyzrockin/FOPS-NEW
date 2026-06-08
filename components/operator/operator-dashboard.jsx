@@ -182,7 +182,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
             </div>
           ) : viewType === 'daily' ? (
             <div className="space-y-4">

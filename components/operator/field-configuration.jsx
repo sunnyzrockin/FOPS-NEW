@@ -329,7 +329,7 @@ export default function FieldConfiguration({ user, sites }) {
           <Button onClick={openCopyDialog} variant="outline" disabled={otherSites.length === 0} title={otherSites.length === 0 ? 'No other sites to copy from' : 'Copy fields from another site'}>
             <Copy className="h-4 w-4 mr-2" /> Copy from site
           </Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-gradient-to-r from-blue-500 to-indigo-600">
+          <Button onClick={handleSave} disabled={saving} className="bg-gradient-to-r from-teal-500 to-indigo-600">
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Save Changes
           </Button>
         </div>
@@ -357,7 +357,7 @@ export default function FieldConfiguration({ user, sites }) {
       </Tabs>
 
       {showAddField && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="border-teal-200 bg-teal-50">
           <CardContent className="pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
               <div className="sm:col-span-4">
@@ -422,14 +422,14 @@ export default function FieldConfiguration({ user, sites }) {
         </Card>
       ) : loading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
         </div>
       ) : (
         <div className="space-y-2">
           {fields.map((field, index) => (
             <Card
               key={field.id}
-              className={`${field.is_core ? 'border-blue-200 bg-blue-50/50' : ''} ${!field.is_enabled ? 'opacity-50' : ''}`}
+              className={`${field.is_core ? 'border-teal-200 bg-teal-50/50' : ''} ${!field.is_enabled ? 'opacity-50' : ''}`}
             >
               <CardContent className="p-4">
                 <div className="flex items-center gap-4 flex-wrap">
@@ -462,7 +462,7 @@ export default function FieldConfiguration({ user, sites }) {
                     />
                   </div>
                   <Badge variant="outline">{field.field_type}</Badge>
-                  {field.is_core && <Badge className="bg-blue-100 text-blue-700">Core Field</Badge>}
+                  {field.is_core && <Badge className="bg-teal-100 text-teal-700">Core Field</Badge>}
 
                   {/* Visibility inline selector */}
                   <Select
@@ -533,7 +533,7 @@ export default function FieldConfiguration({ user, sites }) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Copy className="h-5 w-5 text-blue-600" />
+              <Copy className="h-5 w-5 text-teal-600" />
               Copy fields from another site
             </DialogTitle>
             <DialogDescription>
@@ -579,7 +579,7 @@ export default function FieldConfiguration({ user, sites }) {
                   </Label>
                   {copySourceFields.length > 0 && (
                     <div className="flex gap-2 text-xs">
-                      <button type="button" className="text-blue-600 hover:underline"
+                      <button type="button" className="text-teal-600 hover:underline"
                         onClick={() => setCopySelectedKeys(new Set(copySourceFields.map((f) => f.key)))}>Select all</button>
                       <button type="button" className="text-slate-500 hover:underline"
                         onClick={() => setCopySelectedKeys(new Set())}>Clear</button>
@@ -588,7 +588,7 @@ export default function FieldConfiguration({ user, sites }) {
                 </div>
                 {copyLoadingSource ? (
                   <div className="py-6 flex items-center justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                    <Loader2 className="h-5 w-5 animate-spin text-teal-500" />
                   </div>
                 ) : copySourceFields.length === 0 ? (
                   <div className="py-6 text-center text-sm text-muted-foreground">
@@ -600,7 +600,7 @@ export default function FieldConfiguration({ user, sites }) {
                       const conflict = fields.some((ff) => ff.key === f.key);
                       const checked = copySelectedKeys.has(f.key);
                       return (
-                        <label key={f.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-blue-50' : ''}`}>
+                        <label key={f.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-teal-50' : ''}`}>
                           <input
                             type="checkbox"
                             checked={checked}
@@ -632,7 +632,7 @@ export default function FieldConfiguration({ user, sites }) {
             <Button
               onClick={applyCopy}
               disabled={!copySourceSiteId || copySelectedKeys.size === 0 || copyApplying}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600"
+              className="bg-gradient-to-r from-teal-600 to-indigo-600"
             >
               {copyApplying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
               Copy {copySelectedKeys.size > 0 ? `${copySelectedKeys.size} field${copySelectedKeys.size === 1 ? '' : 's'}` : 'fields'}

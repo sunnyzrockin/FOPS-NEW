@@ -58,14 +58,14 @@ export default function MorningPriceBrief({ sites, selectedDate }) {
         const isCheapest = diff < 0;
 
         let suggestion = '';
-        let actionColor = 'text-blue-600';
+        let actionColor = 'text-teal-600';
 
         if (isCheapest) {
           suggestion = '✅ You are the cheapest';
           actionColor = 'text-green-600';
         } else if (isCompetitive) {
           suggestion = '✅ Competitive pricing';
-          actionColor = 'text-blue-600';
+          actionColor = 'text-teal-600';
         } else if (diff > 5) {
           suggestion = `⚠️ Consider reducing by ${(diff - 1).toFixed(1)}¢`;
           actionColor = 'text-red-600';
@@ -84,7 +84,7 @@ export default function MorningPriceBrief({ sites, selectedDate }) {
 
               <div className="flex items-baseline gap-2">
                 <span className="text-xs text-muted-foreground">Your Price:</span>
-                <span className="text-xl font-bold text-blue-600">
+                <span className="text-xl font-bold text-teal-600">
                   ${(ulpData.own_price / 100).toFixed(1)}
                 </span>
               </div>

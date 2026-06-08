@@ -88,7 +88,7 @@ export default function OwnerFuelPriceManagement({ user, sites }) {
     <div className="container mx-auto px-4 py-6 max-w-6xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Fuel className="h-6 w-6 text-blue-600" />
+          <Fuel className="h-6 w-6 text-teal-600" />
           Fuel Price Management
         </h1>
         <p className="text-muted-foreground mt-1">Create and track fuel price changes across your sites</p>
@@ -174,7 +174,7 @@ export default function OwnerFuelPriceManagement({ user, sites }) {
           <CardContent>
             {loadingChanges ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
               </div>
             ) : priceChanges.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -202,7 +202,7 @@ export default function OwnerFuelPriceManagement({ user, sites }) {
                       <div className="mt-2 flex items-center gap-2 text-sm">
                         {pc.old_price && <span className="line-through text-muted-foreground">{pc.old_price}¢</span>}
                         <ChevronRight className="h-4 w-4" />
-                        <span className="font-bold text-blue-600">{pc.new_price}¢</span>
+                        <span className="font-bold text-teal-600">{pc.new_price}¢</span>
                       </div>
                       <div className="mt-2 text-xs text-muted-foreground">
                         Effective: {new Date(pc.effective_datetime).toLocaleString('en-AU')}

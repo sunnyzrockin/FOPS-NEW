@@ -33,10 +33,10 @@ export default function LoginPage({ onLogin, loading }) {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-md shadow-xl border-0">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+          <div className="mx-auto w-16 h-16 bg-teal-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
             <Fuel className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold text-blue-600">
+          <CardTitle className="text-2xl font-bold text-teal-600">
             FOPS
           </CardTitle>
           <CardDescription>Fuel Station Shift Reporting</CardDescription>
@@ -68,7 +68,7 @@ export default function LoginPage({ onLogin, loading }) {
             {error && <p className="text-sm text-red-500 text-center">{error}</p>}
             <Button
               type="submit"
-              className="w-full h-11 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+              className="w-full h-11 bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-600 hover:to-indigo-700"
               disabled={loading}
             >
               {loading

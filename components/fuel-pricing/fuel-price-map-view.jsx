@@ -101,7 +101,7 @@ export default function FuelPriceMapView({ sites, priceData, selectedDate }) {
 
       {loading ? (
         <div className="h-[600px] bg-slate-100 rounded-lg flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
         </div>
       ) : (
         <LeafletMapClient currentSite={currentSite} competitors={competitors} priceData={currentPriceData} />

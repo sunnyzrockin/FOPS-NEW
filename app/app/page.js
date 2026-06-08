@@ -143,7 +143,7 @@ function AppInner() {
   if (!mounted || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
       </div>
     );
   }
@@ -190,7 +190,7 @@ export default function App() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center bg-muted/30">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
         </div>
       }
     >

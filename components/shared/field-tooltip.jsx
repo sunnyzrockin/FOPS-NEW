@@ -37,8 +37,8 @@ export function FieldTooltip({ id, text, className }) {
           aria-label="More info"
           className={cn(
             'inline-flex h-4 w-4 items-center justify-center rounded-full',
-            'text-muted-foreground hover:text-blue-600 transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-blue-500/40',
+            'text-muted-foreground hover:text-teal-600 transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-teal-500/40',
             'align-middle ml-1',
             className
           )}

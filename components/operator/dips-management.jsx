@@ -247,7 +247,7 @@ export default function DipsManagement({ user, sites }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {['ulp', 'diesel', 'premium'].map((fuel) => {
           const colorMap = {
-            ulp: 'from-blue-500 to-indigo-500',
+            ulp: 'from-teal-500 to-indigo-500',
             diesel: 'from-amber-500 to-orange-600',
             premium: 'from-purple-500 to-fuchsia-600',
           };
@@ -385,7 +385,7 @@ export default function DipsManagement({ user, sites }) {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>
+            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-teal-500" /></div>
           ) : history.length === 0 ? (
             <p className="text-center text-muted-foreground py-6">No readings yet for this site.</p>
           ) : (
@@ -409,7 +409,7 @@ export default function DipsManagement({ user, sites }) {
                     const isEditing = editingId === row.id;
                     if (isEditing) {
                       return (
-                        <tr key={row.id} className="border-b bg-blue-50/30 align-top">
+                        <tr key={row.id} className="border-b bg-teal-50/30 align-top">
                           <td className="py-2 pr-2">
                             <Input type="datetime-local" value={editForm.reading_time}
                               onChange={(e) => onChangeEdit('reading_time', e.target.value)} className="h-8 w-44" />

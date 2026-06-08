@@ -108,7 +108,7 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
   const operators = [
     { value: '+', label: '+', color: 'bg-green-100 text-green-700 hover:bg-green-200' },
     { value: '-', label: '−', color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-    { value: '*', label: '×', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
+    { value: '*', label: '×', color: 'bg-teal-100 text-teal-700 hover:bg-teal-200' },
     { value: '/', label: '÷', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
   ];
 
@@ -245,7 +245,7 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
                     {op.value === '*' ? '×' : op.value === '/' ? '÷' : op.value}
                   </span>
                 ) : op.type === 'field' ? (
-                  <span className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-xl font-medium shadow-sm">
+                  <span className="inline-flex items-center px-4 py-2 bg-teal-100 text-teal-700 rounded-xl font-medium shadow-sm">
                     {op.label || op.value}
                   </span>
                 ) : (
@@ -333,7 +333,7 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
               key={field.key}
               type="button"
               onClick={() => addField(field)}
-              className="px-3 py-2.5 rounded-xl text-sm font-medium bg-slate-100 hover:bg-blue-100 hover:text-blue-700 transition-all text-left"
+              className="px-3 py-2.5 rounded-xl text-sm font-medium bg-slate-100 hover:bg-teal-100 hover:text-teal-700 transition-all text-left"
               title={`Add ${field.label} (${field.key})`}
             >
               {field.label}

@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center px-6">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-12 pb-12">
-            <Mail className="h-16 w-16 text-blue-600 mx-auto mb-4" />
+            <Mail className="h-16 w-16 text-teal-600 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Check your email</h2>
             <p className="text-slate-600 mb-6">
               We've sent a password reset link to <strong>{email}</strong>
@@ -117,7 +117,7 @@ export default function ForgotPasswordPage() {
 
             <div className="mt-6 text-center text-sm text-slate-600">
               Remember your password?{' '}
-              <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
+              <Link href="/login" className="text-teal-600 hover:text-teal-700 font-medium transition-colors">
                 Sign in
               </Link>
             </div>

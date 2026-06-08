@@ -115,7 +115,7 @@ export default function DevDebugPage() {
             <div className="space-y-2">
               <div><strong>ID:</strong> {debugInfo.dbUser.id}</div>
               <div><strong>Name:</strong> {debugInfo.dbUser.name}</div>
-              <div><strong>Role:</strong> <span className="font-bold text-blue-600">{debugInfo.dbUser.role}</span></div>
+              <div><strong>Role:</strong> <span className="font-bold text-teal-600">{debugInfo.dbUser.role}</span></div>
             </div>
           ) : (
             <p className="text-red-600">⚠️ No user record</p>

@@ -299,7 +299,7 @@ export default function StaffAccessManagement({ user, sites }) {
           <h2 className="text-xl font-bold">Staff Management</h2>
           <p className="text-muted-foreground">Manage who can submit shift reports for your sites</p>
         </div>
-        <Button onClick={openAddStaff} className="bg-blue-600 hover:bg-blue-700">
+        <Button onClick={openAddStaff} className="bg-teal-600 hover:bg-teal-700">
           <UserPlus className="h-4 w-4 mr-2" /> Add Staff
         </Button>
       </div>
@@ -349,7 +349,7 @@ export default function StaffAccessManagement({ user, sites }) {
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-teal-100 text-teal-700 font-semibold">
                       {(staff.name || staff.email || '?').charAt(0).toUpperCase()}
                     </span>
                     <div className="min-w-0">
@@ -414,11 +414,11 @@ export default function StaffAccessManagement({ user, sites }) {
 
           <div className="inline-flex rounded-md border bg-background p-0.5 self-start">
             <button type="button" onClick={() => setAddTab('invite')}
-              className={`px-3 py-1.5 text-xs font-medium rounded ${addTab === 'invite' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
+              className={`px-3 py-1.5 text-xs font-medium rounded ${addTab === 'invite' ? 'bg-teal-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
               Invite by email
             </button>
             <button type="button" onClick={() => setAddTab('existing')}
-              className={`px-3 py-1.5 text-xs font-medium rounded ${addTab === 'existing' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
+              className={`px-3 py-1.5 text-xs font-medium rounded ${addTab === 'existing' ? 'bg-teal-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
               Select existing user
             </button>
           </div>
@@ -470,15 +470,15 @@ export default function StaffAccessManagement({ user, sites }) {
                   </div>
                 ) : pickableStaff.map((u) => (
                   <button key={u.id} type="button" onClick={() => setPicked(u)}
-                    className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-muted/60 ${picked?.id === u.id ? 'bg-blue-50' : ''}`}>
-                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
+                    className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-muted/60 ${picked?.id === u.id ? 'bg-teal-50' : ''}`}>
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal-100 text-teal-700 text-sm font-medium">
                       {(u.name || '?').charAt(0).toUpperCase()}
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block font-medium text-sm truncate">{u.name || u.email}</span>
                       <span className="block text-xs text-muted-foreground truncate">{u.email}</span>
                     </span>
-                    {picked?.id === u.id && <ChevronRight className="h-4 w-4 text-blue-600" />}
+                    {picked?.id === u.id && <ChevronRight className="h-4 w-4 text-teal-600" />}
                   </button>
                 ))}
               </div>

@@ -148,13 +148,13 @@ export default function FuelInventoryDashboard({ user, sites }) {
       </Card>
 
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
+        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-teal-500" /></div>
       ) : (
         <>
           {/* Portfolio KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { f: 'ulp', label: 'ULP across portfolio', grad: 'from-blue-500 to-indigo-500' },
+              { f: 'ulp', label: 'ULP across portfolio', grad: 'from-teal-500 to-indigo-500' },
               { f: 'diesel', label: 'Diesel across portfolio', grad: 'from-amber-500 to-orange-600' },
               { f: 'premium', label: 'Premium across portfolio', grad: 'from-purple-500 to-fuchsia-600' },
             ].map((it) => (

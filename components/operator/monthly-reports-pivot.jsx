@@ -228,7 +228,7 @@ export default function MonthlyReportsPivot({ user, sites }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <TableProperties className="h-5 w-5 text-blue-600" />
+            <TableProperties className="h-5 w-5 text-teal-600" />
             Monthly Reports
           </h2>
           <p className="text-muted-foreground text-sm">
@@ -238,7 +238,7 @@ export default function MonthlyReportsPivot({ user, sites }) {
         <Button onClick={exportCsv} disabled={!data?.columns?.length} variant="outline" className="gap-2">
           <Download className="h-4 w-4" /> Export CSV
         </Button>
-        <Button onClick={exportPdf} disabled={!data?.columns?.length} className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90">
+        <Button onClick={exportPdf} disabled={!data?.columns?.length} className="gap-2 bg-gradient-to-r from-teal-600 to-indigo-600 text-white hover:opacity-90">
           <FileDown className="h-4 w-4" /> Export PDF
         </Button>
       </div>
@@ -352,7 +352,7 @@ export default function MonthlyReportsPivot({ user, sites }) {
         <CardContent className="p-0">
           {loading ? (
             <div className="p-10 flex items-center justify-center">
-              <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
+              <Loader2 className="h-7 w-7 animate-spin text-teal-500" />
             </div>
           ) : data?.error ? (
             <div className="p-6 text-sm text-red-700 bg-red-50 border-l-4 border-red-400">
@@ -396,11 +396,11 @@ function PivotTable({ data, augmentedRows, showRowTotal, varianceAgainst, totals
               <th key={c.key} className="px-3 py-2 text-right font-semibold text-slate-700">
                 {c.label}
                 {c.source === 'custom' && (
-                  <span className="ml-1 text-[10px] font-normal text-blue-500" title="Stored in custom_values JSONB">·</span>
+                  <span className="ml-1 text-[10px] font-normal text-teal-500" title="Stored in custom_values JSONB">·</span>
                 )}
               </th>
             ))}
-            {showRowTotal && <th className={`${cellCls} font-semibold text-slate-700 bg-blue-50`}>Row Total</th>}
+            {showRowTotal && <th className={`${cellCls} font-semibold text-slate-700 bg-teal-50`}>Row Total</th>}
             {varianceAgainst !== 'none' && (
               <th className={`${cellCls} font-semibold text-slate-700 bg-amber-50`}>
                 Variance
@@ -417,14 +417,14 @@ function PivotTable({ data, augmentedRows, showRowTotal, varianceAgainst, totals
                 <tr
                   key={r.date}
                   onClick={() => r.has_data && setExpandedDate(isExpanded ? null : r.date)}
-                  className={`border-b hover:bg-blue-50/40 ${
+                  className={`border-b hover:bg-teal-50/40 ${
                     r.has_data ? 'cursor-pointer' : 'opacity-50'
-                  } ${isExpanded ? 'bg-blue-50/60' : ''}`}
+                  } ${isExpanded ? 'bg-teal-50/60' : ''}`}
                 >
                   <td className="px-3 py-2 font-medium sticky left-0 bg-white">
                     {r.date}
                     {r.has_data && (
-                      <span className="ml-1 text-[10px] text-blue-500">
+                      <span className="ml-1 text-[10px] text-teal-500">
                         {isExpanded ? '▾' : '▸'}
                       </span>
                     )}
@@ -438,7 +438,7 @@ function PivotTable({ data, augmentedRows, showRowTotal, varianceAgainst, totals
                     </td>
                   ))}
                   {showRowTotal && (
-                    <td className={`${cellCls} font-semibold bg-blue-50/40`}>
+                    <td className={`${cellCls} font-semibold bg-teal-50/40`}>
                       {r.has_data ? fmtMoney(r.rowTotal) : '—'}
                     </td>
                   )}
@@ -495,7 +495,7 @@ function PivotTable({ data, augmentedRows, showRowTotal, varianceAgainst, totals
               </td>
             ))}
             {showRowTotal && (
-              <td className={`${cellCls} bg-blue-100`}>{fmtMoney(totalsRowTotal)}</td>
+              <td className={`${cellCls} bg-teal-100`}>{fmtMoney(totalsRowTotal)}</td>
             )}
             {varianceAgainst !== 'none' && (
               <td className={`${cellCls} bg-amber-100`}>

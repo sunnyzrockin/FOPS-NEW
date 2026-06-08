@@ -199,7 +199,7 @@ export function OnboardingModal({ open, onClose, user }) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-blue-600" />
+            <Sparkles className="h-5 w-5 text-teal-600" />
             <span>{title}</span>
           </DialogTitle>
           <DialogDescription>{subtitle}</DialogDescription>
@@ -208,7 +208,7 @@ export function OnboardingModal({ open, onClose, user }) {
         {/* Step body */}
         <div className="py-3">
           <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
-            <div className="rounded-md bg-blue-50 text-blue-700 p-2 shrink-0">
+            <div className="rounded-md bg-teal-50 text-teal-700 p-2 shrink-0">
               <StepIcon className="h-5 w-5" />
             </div>
             <div className="min-w-0">
@@ -232,7 +232,7 @@ export function OnboardingModal({ open, onClose, user }) {
                 className={cn(
                   'h-1.5 rounded-full transition-all',
                   i === stepIndex
-                    ? 'w-6 bg-blue-600'
+                    ? 'w-6 bg-teal-600'
                     : 'w-1.5 bg-muted-foreground/30'
                 )}
               />

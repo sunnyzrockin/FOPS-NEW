@@ -115,7 +115,7 @@ export default function ExportDialog({ siteIds }) {
           <Button
             onClick={handleExport}
             disabled={exporting}
-            className="bg-gradient-to-r from-blue-500 to-indigo-600"
+            className="bg-gradient-to-r from-teal-500 to-indigo-600"
           >
             {exporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
             Download

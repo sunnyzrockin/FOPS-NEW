@@ -9,7 +9,7 @@
  * Design tokens (per brief):
  *   bg     warm off-white  #FAFAF6
  *   ink    deep navy        #0E1B2A
- *   teal   primary CTAs     #0F9E9E → #0A7C7C
+ *   teal   primary CTAs     teal-600 → teal-700 (Tailwind scale)
  *   amber  accent (sparing) #F2A33A
  *
  * Notes:
@@ -28,15 +28,15 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
-const TEAL = '#0F9E9E';
-const TEAL_DARK = '#0A7C7C';
+const TEAL = '#0d9488'; // Tailwind teal-600
+const TEAL_DARK = '#0f766e'; // Tailwind teal-700
 const INK = '#0E1B2A';
 const BG = '#FAFAF6';
 const AMBER = '#F2A33A';
 
 const PRIMARY_CTA_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md ' +
-  'bg-[linear-gradient(135deg,#0F9E9E,#0A7C7C)] hover:brightness-110';
+  'bg-gradient-to-br from-teal-600 to-teal-700 hover:brightness-110';
 
 const SECONDARY_CTA_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold transition ' +
@@ -105,7 +105,7 @@ function Header() {
     <header className="sticky top-0 z-40 border-b border-[#0E1B2A]/10 bg-[#FAFAF6]/85 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[linear-gradient(135deg,#0F9E9E,#0A7C7C)] text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br from-teal-600 to-teal-700 text-white">
             <Fuel className="h-4 w-4" />
           </span>
           <span className="text-base font-semibold tracking-tight text-[#0E1B2A]">FOPS</span>
@@ -167,11 +167,11 @@ function Hero() {
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
         <div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0E1B2A]/10 bg-white/60 px-3 py-1 text-xs font-medium text-[#0E1B2A]/70">
-            <Sparkles className="h-3 w-3 text-[#0F9E9E]" />
+            <Sparkles className="h-3 w-3 text-teal-600" />
             For multi-site fuel retailers
           </span>
           <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight text-[#0E1B2A] sm:text-5xl lg:text-6xl">
-            Run every site<br />from <span className="text-[#0A7C7C]">one place.</span>
+            Run every site<br />from <span className="text-teal-700">one place.</span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#0E1B2A]/75">
             FOPS replaces the WhatsApp chaos with structured daily shift reports,
@@ -208,12 +208,12 @@ function DashboardMock() {
       <div className="rounded-2xl border border-[#0E1B2A]/10 bg-white p-4 shadow-xl">
         <div className="flex items-center justify-between border-b border-[#0E1B2A]/10 pb-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[linear-gradient(135deg,#0F9E9E,#0A7C7C)] text-white">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-teal-600 to-teal-700 text-white">
               <Fuel className="h-3.5 w-3.5" />
             </span>
             <span className="text-sm font-semibold text-[#0E1B2A]">Owner dashboard</span>
           </div>
-          <span className="text-[10px] font-medium uppercase tracking-wider text-[#0F9E9E]">Live</span>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-teal-600">Live</span>
         </div>
         <div className="mt-4 grid grid-cols-4 gap-3">
           {stats.map((s) => (
@@ -277,8 +277,8 @@ function HowItWorks() {
             const Icon = s.icon;
             return (
               <div key={s.n} className="relative rounded-2xl border border-[#0E1B2A]/10 bg-[#FAFAF6] p-6">
-                <span className="text-xs font-semibold tracking-wider text-[#0F9E9E]">{s.n} · {s.role.toUpperCase()}</span>
-                <div className="mt-3 flex h-10 w-10 items-center justify-center rounded-md bg-white text-[#0F9E9E] shadow-sm">
+                <span className="text-xs font-semibold tracking-wider text-teal-600">{s.n} · {s.role.toUpperCase()}</span>
+                <div className="mt-3 flex h-10 w-10 items-center justify-center rounded-md bg-white text-teal-600 shadow-sm">
                   <Icon className="h-5 w-5" />
                 </div>
                 <h3 className="mt-4 text-lg font-semibold text-[#0E1B2A]">{s.title}</h3>
@@ -291,13 +291,13 @@ function HowItWorks() {
         {/* Flow rail */}
         <div className="mt-10 overflow-hidden rounded-xl border border-[#0E1B2A]/10 bg-white p-4">
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-medium text-[#0E1B2A]/75 sm:text-sm">
-            <span className="rounded-full bg-[#0F9E9E]/10 px-3 py-1.5 text-[#0A7C7C]">Owner</span>
+            <span className="rounded-full bg-teal-600/10 px-3 py-1.5 text-teal-700">Owner</span>
             <ArrowRight className="h-3.5 w-3.5 text-[#0E1B2A]/45" />
             <span className="text-[#0E1B2A]/55">invites</span>
-            <span className="rounded-full bg-[#0F9E9E]/10 px-3 py-1.5 text-[#0A7C7C]">Operators</span>
+            <span className="rounded-full bg-teal-600/10 px-3 py-1.5 text-teal-700">Operators</span>
             <ArrowRight className="h-3.5 w-3.5 text-[#0E1B2A]/45" />
             <span className="text-[#0E1B2A]/55">invite</span>
-            <span className="rounded-full bg-[#0F9E9E]/10 px-3 py-1.5 text-[#0A7C7C]">Staff</span>
+            <span className="rounded-full bg-teal-600/10 px-3 py-1.5 text-teal-700">Staff</span>
             <ArrowRight className="h-3.5 w-3.5 text-[#0E1B2A]/45" />
             <span className="text-[#0E1B2A]/55">reports flow</span>
             <span className="rounded-full bg-[#F2A33A]/15 px-3 py-1.5 text-[#0E1B2A]">up</span>
@@ -338,7 +338,7 @@ function Features() {
             const Icon = f.icon;
             return (
               <div key={f.title} className="rounded-2xl border border-[#0E1B2A]/10 bg-white p-6 transition hover:-translate-y-1 hover:shadow-md">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#0F9E9E]/10 text-[#0A7C7C]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-teal-600/10 text-teal-700">
                   <Icon className="h-5 w-5" />
                 </div>
                 <h3 className="mt-4 text-lg font-semibold text-[#0E1B2A]">{f.title}</h3>
@@ -377,7 +377,7 @@ function Pricing() {
             <ul className="mt-6 space-y-2.5">
               {bullets.map((b) => (
                 <li key={b} className="flex items-start gap-2.5 text-sm text-[#0E1B2A]/80">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0F9E9E]" />
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
                   <span>{b}</span>
                 </li>
               ))}
@@ -385,7 +385,7 @@ function Pricing() {
           </div>
 
           <div id="support" className="rounded-2xl border border-[#0E1B2A]/10 bg-[#FAFAF6] p-8">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#0F9E9E]/10 text-[#0A7C7C]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-teal-600/10 text-teal-700">
               <Mail className="h-5 w-5" />
             </div>
             <h3 className="mt-4 text-xl font-semibold text-[#0E1B2A]">Contact us</h3>
@@ -400,7 +400,7 @@ function Pricing() {
               Contact us <ArrowRight className="h-4 w-4" />
             </a>
             <p className="mt-3 text-center text-[11px] text-[#0E1B2A]/55">
-              Or try the product first — <Link href="/signup" className="font-semibold text-[#0A7C7C] hover:underline">create an owner account</Link>.
+              Or try the product first — <Link href="/signup" className="font-semibold text-teal-700 hover:underline">create an owner account</Link>.
             </p>
           </div>
         </div>
@@ -426,7 +426,7 @@ function CtaBand() {
         <div className="flex flex-wrap gap-3">
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 rounded-md bg-[linear-gradient(135deg,#0F9E9E,#0A7C7C)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
+            className="inline-flex items-center gap-2 rounded-md bg-gradient-to-br from-teal-600 to-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
           >
             Try FOPS free <ArrowRight className="h-4 w-4" />
           </Link>
@@ -468,7 +468,7 @@ function Footer() {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[linear-gradient(135deg,#0F9E9E,#0A7C7C)] text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br from-teal-600 to-teal-700 text-white">
                 <Fuel className="h-4 w-4" />
               </span>
               <span className="text-base font-semibold tracking-tight text-[#0E1B2A]">FOPS</span>

@@ -32,7 +32,7 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
 
   return (
     <Card className="border border-border/50 shadow-sm">
-      <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
+      <CardHeader className="pb-4 bg-gradient-to-r from-teal-50 to-indigo-50 rounded-t-xl">
         <div className="flex items-start justify-between">
           <div>
             <CardTitle className="text-xl">{report.site_name}</CardTitle>
@@ -69,7 +69,7 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
           </div>
         </div>
 
-        <div className="p-5 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl text-white">
+        <div className="p-5 bg-gradient-to-r from-teal-500 to-indigo-600 rounded-xl text-white">
           <p className="text-sm opacity-90 mb-1">Total Revenue</p>
           <p className="text-3xl font-bold">{formatCurrency(report.total_revenue)}</p>
         </div>

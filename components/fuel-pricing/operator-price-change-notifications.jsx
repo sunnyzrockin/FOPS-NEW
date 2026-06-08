@@ -117,7 +117,7 @@ export default function OperatorPriceChangeNotifications({ user, sites }) {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
         </div>
       ) : pendingChanges.length === 0 ? (
         <Card>
@@ -138,7 +138,7 @@ export default function OperatorPriceChangeNotifications({ user, sites }) {
               <Card key={pc.id} className={`border-2 ${
                 urgency === 'critical' ? 'border-red-500 bg-red-50' :
                 urgency === 'urgent' ? 'border-orange-500 bg-orange-50' :
-                isNotified ? 'border-blue-200' : 'border-slate-300'
+                isNotified ? 'border-teal-200' : 'border-slate-300'
               }`}>
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
@@ -147,7 +147,7 @@ export default function OperatorPriceChangeNotifications({ user, sites }) {
                         <Fuel className={`h-5 w-5 ${
                           urgency === 'critical' ? 'text-red-600' :
                           urgency === 'urgent' ? 'text-orange-600' :
-                          'text-blue-600'
+                          'text-teal-600'
                         }`} />
                         {pc.site?.name} - {pc.fuel_type}
                       </CardTitle>
@@ -179,7 +179,7 @@ export default function OperatorPriceChangeNotifications({ user, sites }) {
                     <ChevronRight className="h-6 w-6 text-muted-foreground" />
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground mb-1">New Price</p>
-                      <p className="text-2xl font-bold text-blue-600">{pc.new_price}¢</p>
+                      <p className="text-2xl font-bold text-teal-600">{pc.new_price}¢</p>
                     </div>
                     <Separator orientation="vertical" className="h-12" />
                     <div className="flex-1">

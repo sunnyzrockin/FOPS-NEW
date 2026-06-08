@@ -13,7 +13,7 @@ export default function ViewToggle({ viewType, setViewType }) {
         onClick={() => setViewType('daily')}
         className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
           viewType === 'daily'
-            ? 'bg-white shadow-sm text-blue-600'
+            ? 'bg-white shadow-sm text-teal-600'
             : 'text-slate-600 hover:text-slate-900'
         }`}
       >
@@ -24,7 +24,7 @@ export default function ViewToggle({ viewType, setViewType }) {
         onClick={() => setViewType('shift')}
         className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
           viewType === 'shift'
-            ? 'bg-white shadow-sm text-blue-600'
+            ? 'bg-white shadow-sm text-teal-600'
             : 'text-slate-600 hover:text-slate-900'
         }`}
       >

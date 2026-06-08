@@ -120,7 +120,7 @@ function WhatsNewTab() {
           <li key={i} className="relative">
             <span
               aria-hidden
-              className="absolute -left-[26px] top-1.5 h-2.5 w-2.5 rounded-full bg-blue-600 ring-4 ring-background"
+              className="absolute -left-[26px] top-1.5 h-2.5 w-2.5 rounded-full bg-teal-600 ring-4 ring-background"
             />
             <div className="flex items-baseline gap-2 flex-wrap">
               <h4 className="text-sm font-semibold">{entry.title}</h4>
@@ -295,10 +295,10 @@ export function HelpPanel({ user }) {
           aria-label="Open help"
           className={cn(
             'fixed bottom-5 right-5 z-40',
-            'h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg',
+            'h-12 w-12 rounded-full bg-teal-600 text-white shadow-lg',
             'flex items-center justify-center',
-            'hover:bg-blue-700 transition-colors',
-            'focus:outline-none focus:ring-4 focus:ring-blue-500/30'
+            'hover:bg-teal-700 transition-colors',
+            'focus:outline-none focus:ring-4 focus:ring-teal-500/30'
           )}
         >
           <HelpCircle className="h-5 w-5" />
@@ -348,7 +348,7 @@ export function HelpPanel({ user }) {
               className="border-t px-4 py-2.5 text-left hover:bg-muted/40 transition-colors"
             >
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                <Sparkles className="h-3.5 w-3.5 text-teal-600" />
                 <span>New: {latestRelease.title}</span>
               </div>
             </button>

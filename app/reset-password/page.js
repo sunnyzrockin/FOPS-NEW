@@ -69,7 +69,7 @@ export default function ResetPasswordPage() {
             <p className="text-slate-600 mb-4">
               Your password has been updated successfully. Redirecting to login...
             </p>
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600 mx-auto" />
+            <Loader2 className="h-6 w-6 animate-spin text-teal-600 mx-auto" />
           </CardContent>
         </Card>
       </div>
@@ -132,7 +132,7 @@ export default function ResetPasswordPage() {
           </form>
 
           <div className="mt-6 text-center text-sm text-slate-600">
-            <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
+            <Link href="/login" className="text-teal-600 hover:text-teal-700 font-medium transition-colors">
               Back to login
             </Link>
           </div>

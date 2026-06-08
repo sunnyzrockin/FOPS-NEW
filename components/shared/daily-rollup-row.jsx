@@ -18,8 +18,8 @@ export default function DailyRollupRow({ rollup, onClick, expanded, onToggle }) 
         onClick={onToggle}
       >
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center">
-            <Calendar className="h-6 w-6 text-blue-600" />
+          <div className="w-12 h-12 bg-gradient-to-br from-teal-100 to-indigo-100 rounded-xl flex items-center justify-center">
+            <Calendar className="h-6 w-6 text-teal-600" />
           </div>
           <div>
             <p className="font-semibold text-lg">{rollup.site_name}</p>
@@ -30,7 +30,7 @@ export default function DailyRollupRow({ rollup, onClick, expanded, onToggle }) 
         </div>
         <div className="flex items-center gap-6">
           <div className="text-right">
-            <p className="text-xl font-bold text-blue-600">{formatCurrency(rollup.total_revenue)}</p>
+            <p className="text-xl font-bold text-teal-600">{formatCurrency(rollup.total_revenue)}</p>
             <p className="text-xs text-muted-foreground">Total Revenue</p>
           </div>
           <div className="flex items-center gap-2">
@@ -81,7 +81,7 @@ export default function DailyRollupRow({ rollup, onClick, expanded, onToggle }) 
           {rollup.formula_results && rollup.formula_results.length > 0 && (
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-3">
-                <Calculator className="h-4 w-4 text-blue-600" />
+                <Calculator className="h-4 w-4 text-teal-600" />
                 <p className="text-sm font-medium">Daily Formula Rollups</p>
                 <Badge variant="outline" className="text-xs">Auto-calculated</Badge>
               </div>
@@ -89,10 +89,10 @@ export default function DailyRollupRow({ rollup, onClick, expanded, onToggle }) 
                 {(rollup.formula_results || []).map((result, idx) => (
                   <div
                     key={idx}
-                    className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 p-3 rounded-lg"
+                    className="bg-gradient-to-br from-teal-50 to-indigo-50 border border-teal-200 p-3 rounded-lg"
                   >
-                    <p className="text-xs text-blue-600 mb-1">{result.formula_name}</p>
-                    <p className="text-lg font-bold text-blue-700">{formatCurrency(result.result_value)}</p>
+                    <p className="text-xs text-teal-600 mb-1">{result.formula_name}</p>
+                    <p className="text-lg font-bold text-teal-700">{formatCurrency(result.result_value)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{result.result_label}</p>
                   </div>
                 ))}
@@ -105,7 +105,7 @@ export default function DailyRollupRow({ rollup, onClick, expanded, onToggle }) 
             {(rollup.shifts || []).map((shift) => (
               <div
                 key={shift.id}
-                className="flex items-center justify-between p-3 bg-white rounded-lg cursor-pointer hover:bg-blue-50 transition-colors"
+                className="flex items-center justify-between p-3 bg-white rounded-lg cursor-pointer hover:bg-teal-50 transition-colors"
                 onClick={(e) => { e.stopPropagation(); onClick(shift.id); }}
               >
                 <div className="flex items-center gap-3">
