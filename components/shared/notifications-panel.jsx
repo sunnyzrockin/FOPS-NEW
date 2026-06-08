@@ -87,8 +87,8 @@ export function NotificationsPanel({ user }) {
       const res = await authedFetch('/api/notifications?limit=50');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setItems(Array.isArray(data?.items) ? data.items : []);
-      setUnreadCount(typeof data?.unread_count === 'number' ? data.unread_count : 0);
+      setItems(Array.isArray(data?.notifications) ? data.notifications : []);
+      setUnreadCount(typeof data?.unreadCount === 'number' ? data.unreadCount : 0);
     } catch (err) {
       // Don't toast on poll failures — too noisy. Just log.
       console.warn('[NotificationsPanel] load failed:', err.message);
@@ -145,10 +145,10 @@ export function NotificationsPanel({ user }) {
 
   const markOne = async (id) => {
     try {
-      const res = await authedFetch(`/api/notifications/${id}`, {
+      const res = await authedFetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ read: true }),
+        body: JSON.stringify({ id }),
       });
       if (!res.ok) return;
       // Optimistic update — mutate locally so the UI doesn't flicker.
@@ -164,7 +164,7 @@ export function NotificationsPanel({ user }) {
   const markAll = async () => {
     setMarking(true);
     try {
-      const res = await authedFetch('/api/notifications/mark-all-read', {
+      const res = await authedFetch('/api/notifications', {
         method: 'POST',
       });
       if (!res.ok) return;

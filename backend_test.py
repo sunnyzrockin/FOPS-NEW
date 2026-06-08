@@ -1,1236 +1,684 @@
 #!/usr/bin/env python3
 """
-Phase 2 Section E — Notifications Centre Backend Tests
-
-Tests all notification endpoints and trigger scenarios:
-- GET /api/notifications (list with filters)
-- PATCH /api/notifications/[id] (mark as read/unread)
-- POST /api/notifications/mark-all-read
-- Trigger: report_submitted (fans out to operators)
-- Trigger: report_status_changed (notifies submitter)
-- Trigger: site_assigned / site_unassigned
-- Cross-user isolation
-- Regression tests
+Backend test for Notifications API Canonical Contract Migration
+Tests the rewritten /api/notifications route (GET/PATCH/POST)
 """
 
 import requests
 import json
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# Base URL from .env
 BASE_URL = "https://fuel-ops-simple.preview.emergentagent.com"
 
-# Demo credentials
-CREDENTIALS = {
-    "owner": {"email": "owner@workflowlite.com", "password": "WorkflowDemo2026!"},
-    "operator": {"email": "operator@workflowlite.com", "password": "WorkflowDemo2026!"},
-    "staff": {"email": "staff@workflowlite.com", "password": "WorkflowDemo2026!"}
-}
+# Test credentials
+OPERATOR_EMAIL = "operator@workflowlite.com"
+OPERATOR_PASSWORD = "WorkflowDemo2026!"
+OPERATOR2_EMAIL = "operator2@workflowlite.com"
+OPERATOR2_PASSWORD = "WorkflowDemo2026!"
+STAFF_EMAIL = "staff@workflowlite.com"
+STAFF_PASSWORD = "WorkflowDemo2026!"
 
-# Global test state
-tokens = {}
-user_ids = {}
-test_data = {
-    "notifications": [],
-    "reports": [],
-    "assignments": []
-}
-
-def login(role):
-    """Login and return Bearer token + user info"""
+def login(email, password):
+    """Login and return JWT token"""
     try:
-        creds = CREDENTIALS[role]
-        resp = requests.post(
+        response = requests.post(
             f"{BASE_URL}/api/auth/login",
-            json=creds,
+            json={"email": email, "password": password},
             timeout=10
         )
-        if resp.status_code == 200:
-            data = resp.json()
-            # Handle both token formats: direct token or session.access_token
-            token = data.get("token") or data.get("session", {}).get("access_token")
-            user = data.get("user", {})
-            user_id = user.get("id")
-            if token and user_id:
-                print(f"✅ {role.upper()} login successful (user_id: {user_id})")
-                return token, user_id, user
-            else:
-                print(f"❌ {role.upper()} login failed: missing token or user_id in response")
-                return None, None, None
+        if response.status_code == 200:
+            data = response.json()
+            # Token is in session.access_token
+            session = data.get("session", {})
+            return session.get("access_token")
         else:
-            print(f"❌ {role.upper()} login failed: {resp.status_code} - {resp.text}")
-            return None, None, None
+            print(f"❌ Login failed for {email}: {response.status_code} - {response.text}")
+            return None
     except Exception as e:
-        print(f"❌ {role.upper()} login error: {e}")
-        return None, None, None
+        print(f"❌ Login exception for {email}: {e}")
+        return None
 
-def auth_headers(role):
-    """Get Authorization headers for a role"""
-    token = tokens.get(role)
-    if not token:
-        print(f"⚠️  No token for {role}")
-        return {}
-    return {"Authorization": f"Bearer {token}"}
-
-# ============================================================================
-# A. /api/notifications (GET list) - 6 tests
-# ============================================================================
-
-def test_a1_get_notifications_without_auth():
-    """Test 1: GET without Authorization → 401"""
-    print("\n[A.1] GET /api/notifications without Authorization")
-    try:
-        resp = requests.get(f"{BASE_URL}/api/notifications", timeout=10)
-        if resp.status_code == 401:
-            print("✅ A.1 PASS: Returns 401 without Bearer token")
-            return True
-        else:
-            print(f"❌ A.1 FAIL: Expected 401, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ A.1 ERROR: {e}")
-        return False
-
-def test_a2_get_notifications_with_invalid_bearer():
-    """Test 2: GET with invalid Bearer → 401"""
-    print("\n[A.2] GET /api/notifications with invalid Bearer")
-    try:
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications",
-            headers={"Authorization": "Bearer invalid-token-12345"},
-            timeout=10
-        )
-        if resp.status_code == 401:
-            print("✅ A.2 PASS: Returns 401 with invalid Bearer token")
-            return True
-        else:
-            print(f"❌ A.2 FAIL: Expected 401, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ A.2 ERROR: {e}")
-        return False
-
-def test_a3_get_notifications_with_owner_bearer():
-    """Test 3: GET with Owner Bearer → 200 with {items, unread_count}"""
-    print("\n[A.3] GET /api/notifications with Owner Bearer")
-    try:
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            if "items" in data and "unread_count" in data:
-                if isinstance(data["items"], list) and isinstance(data["unread_count"], int):
-                    print(f"✅ A.3 PASS: Returns 200 with correct shape (items: {len(data['items'])}, unread_count: {data['unread_count']})")
-                    return True
-                else:
-                    print(f"❌ A.3 FAIL: Invalid types - items: {type(data['items'])}, unread_count: {type(data['unread_count'])}")
-                    return False
-            else:
-                print(f"❌ A.3 FAIL: Missing required fields - data: {data}")
-                return False
-        else:
-            print(f"❌ A.3 FAIL: Expected 200, got {resp.status_code} - {resp.text}")
-            return False
-    except Exception as e:
-        print(f"❌ A.3 ERROR: {e}")
-        return False
-
-def test_a4_get_notifications_with_limit_200():
-    """Test 4: GET with ?limit=200 → 200; items.length <= 100 (server caps at 100)"""
-    print("\n[A.4] GET /api/notifications?limit=200 (server should cap at 100)")
-    try:
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications?limit=200",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            items_count = len(data.get("items", []))
-            if items_count <= 100:
-                print(f"✅ A.4 PASS: Returns 200, items count {items_count} <= 100 (server cap working)")
-                return True
-            else:
-                print(f"❌ A.4 FAIL: items count {items_count} > 100 (server cap not working)")
-                return False
-        else:
-            print(f"❌ A.4 FAIL: Expected 200, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ A.4 ERROR: {e}")
-        return False
-
-def test_a5_get_notifications_with_invalid_limit():
-    """Test 5: GET with ?limit=invalid → 200; falls back to default 50"""
-    print("\n[A.5] GET /api/notifications?limit=invalid (should fallback to default)")
-    try:
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications?limit=invalid",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        if resp.status_code == 200:
-            print("✅ A.5 PASS: Returns 200 with invalid limit (fallback working)")
-            return True
-        else:
-            print(f"❌ A.5 FAIL: Expected 200, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ A.5 ERROR: {e}")
-        return False
-
-def test_a6_get_notifications_unread_only():
-    """Test 6: GET with ?unread=1 → 200; every item has read_at === null"""
-    print("\n[A.6] GET /api/notifications?unread=1")
-    try:
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications?unread=1",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            items = data.get("items", [])
-            all_unread = all(item.get("read_at") is None for item in items)
-            if all_unread:
-                print(f"✅ A.6 PASS: Returns 200, all {len(items)} items have read_at=null")
-                return True
-            else:
-                read_items = [item for item in items if item.get("read_at") is not None]
-                print(f"❌ A.6 FAIL: Found {len(read_items)} items with read_at not null")
-                return False
-        else:
-            print(f"❌ A.6 FAIL: Expected 200, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ A.6 ERROR: {e}")
-        return False
-
-# ============================================================================
-# B. /api/notifications/[id] (PATCH) - 5 tests
-# ============================================================================
-
-def test_b7_patch_fake_notification():
-    """Test 7: PATCH a fake UUID → 404"""
-    print("\n[B.7] PATCH /api/notifications/[fake-uuid]")
-    try:
-        fake_id = "00000000-0000-0000-0000-000000000000"
-        resp = requests.patch(
-            f"{BASE_URL}/api/notifications/{fake_id}",
-            headers=auth_headers("owner"),
-            json={"read": True},
-            timeout=10
-        )
-        if resp.status_code == 404:
-            print("✅ B.7 PASS: Returns 404 for fake UUID")
-            return True
-        else:
-            print(f"❌ B.7 FAIL: Expected 404, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ B.7 ERROR: {e}")
-        return False
-
-def test_b8_b9_patch_mark_as_read():
-    """Test 8-9: Create notification, PATCH to mark as read, verify read_at set and unread_count decreased"""
-    print("\n[B.8-9] PATCH notification to mark as read")
-    # This will be tested after we create a notification via trigger in test C
-    # For now, we'll skip and test it in the trigger section
-    print("⏭️  B.8-9: Will be tested after creating notification via trigger (see test C)")
-    return None
-
-def test_b10_patch_mark_as_unread():
-    """Test 10: PATCH with {read: false} → 200, read_at is null again"""
-    print("\n[B.10] PATCH notification to mark as unread")
-    # Will be tested after B.8-9
-    print("⏭️  B.10: Will be tested after B.8-9")
-    return None
-
-def test_b11_patch_cross_user_isolation():
-    """Test 11: Operator's Bearer trying to PATCH Owner's notification → 404"""
-    print("\n[B.11] PATCH cross-user isolation test")
-    # Will be tested after we have notifications for both users
-    print("⏭️  B.11: Will be tested after creating notifications")
-    return None
-
-# ============================================================================
-# C. Trigger: report_submitted - 3 tests
-# ============================================================================
-
-def test_c12_c13_c14_report_submitted_trigger():
-    """Test 12-14: Staff submits report → Operator gets notification, Staff doesn't"""
-    print("\n[C.12-14] Trigger: report_submitted")
+def test_shape_get():
+    """Test SHAPE / GET scenarios"""
+    print("\n" + "="*80)
+    print("SECTION A: SHAPE / GET TESTS")
+    print("="*80)
     
-    # First, get a site that has an operator assigned
-    print("  → Getting sites for Staff...")
+    # (A) GET without Bearer → 401
+    print("\n[A] GET /api/notifications without Bearer → expect 401")
     try:
-        resp = requests.get(
-            f"{BASE_URL}/api/sites",
-            headers=auth_headers("staff"),
+        response = requests.get(f"{BASE_URL}/api/notifications", timeout=10)
+        if response.status_code == 401:
+            print(f"✅ PASS: Got 401 without Bearer")
+        else:
+            print(f"❌ FAIL: Expected 401, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    # (B) GET with bogus Bearer → 401
+    print("\n[B] GET /api/notifications with bogus Bearer → expect 401")
+    try:
+        headers = {"Authorization": "Bearer bogus-token-12345"}
+        response = requests.get(f"{BASE_URL}/api/notifications", headers=headers, timeout=10)
+        if response.status_code == 401:
+            print(f"✅ PASS: Got 401 with bogus Bearer")
+        else:
+            print(f"❌ FAIL: Expected 401, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    # Login as Operator for remaining tests
+    operator_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    if not operator_token:
+        print("❌ FAIL: Cannot login as Operator, skipping remaining GET tests")
+        return None
+    
+    # (C) GET ?limit=50 as Operator → 200 with correct shape
+    print("\n[C] GET /api/notifications?limit=50 as Operator → expect 200 with correct shape")
+    try:
+        headers = {"Authorization": f"Bearer {operator_token}"}
+        response = requests.get(f"{BASE_URL}/api/notifications?limit=50", headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            # Check top-level keys
+            if "notifications" in data and "unreadCount" in data:
+                print(f"✅ PASS: Got 200 with correct top-level keys: notifications (array), unreadCount (number)")
+                print(f"   - notifications count: {len(data['notifications'])}")
+                print(f"   - unreadCount: {data['unreadCount']}")
+                
+                # Check structure of first notification if exists
+                if len(data['notifications']) > 0:
+                    notif = data['notifications'][0]
+                    required_fields = ['id', 'user_id', 'type', 'title', 'body', 'link', 'read_at', 'created_at']
+                    missing_fields = [f for f in required_fields if f not in notif]
+                    if not missing_fields:
+                        print(f"✅ PASS: First notification has all required fields")
+                        return data  # Return data for use in other tests
+                    else:
+                        print(f"❌ FAIL: Missing fields in notification: {missing_fields}")
+                else:
+                    print(f"⚠️  WARNING: No notifications found for operator")
+                    return data
+            else:
+                print(f"❌ FAIL: Missing top-level keys. Got: {list(data.keys())}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    return None
+
+def test_get_filters(operator_token):
+    """Test GET filter scenarios"""
+    print("\n" + "="*80)
+    print("SECTION B: GET FILTER TESTS")
+    print("="*80)
+    
+    if not operator_token:
+        print("❌ SKIP: No operator token available")
+        return
+    
+    headers = {"Authorization": f"Bearer {operator_token}"}
+    
+    # (D) GET ?unread=1 → all returned rows have read_at === null
+    print("\n[D] GET /api/notifications?unread=1 → expect all rows have read_at === null")
+    try:
+        response = requests.get(f"{BASE_URL}/api/notifications?unread=1", headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            notifications = data.get('notifications', [])
+            unread_count = data.get('unreadCount', 0)
+            
+            if len(notifications) > 0:
+                all_unread = all(n.get('read_at') is None for n in notifications)
+                if all_unread:
+                    print(f"✅ PASS: All {len(notifications)} returned notifications have read_at === null")
+                    print(f"   - Total unreadCount: {unread_count}")
+                else:
+                    read_notifications = [n for n in notifications if n.get('read_at') is not None]
+                    print(f"❌ FAIL: Found {len(read_notifications)} notifications with read_at not null")
+            else:
+                print(f"⚠️  WARNING: No unread notifications found (unreadCount: {unread_count})")
+        else:
+            print(f"❌ FAIL: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    # (E) GET ?limit=200 → capped at 100
+    print("\n[E] GET /api/notifications?limit=200 → expect limit capped at 100")
+    try:
+        response = requests.get(f"{BASE_URL}/api/notifications?limit=200", headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            notifications = data.get('notifications', [])
+            if len(notifications) <= 100:
+                print(f"✅ PASS: Returned {len(notifications)} notifications (≤ 100, limit capped)")
+            else:
+                print(f"❌ FAIL: Returned {len(notifications)} notifications (> 100, limit not capped)")
+        else:
+            print(f"❌ FAIL: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+
+def test_patch_mark_one_read(operator_token, operator_data):
+    """Test PATCH (mark one read) scenarios"""
+    print("\n" + "="*80)
+    print("SECTION C: PATCH (MARK ONE READ) TESTS")
+    print("="*80)
+    
+    # (F) PATCH without Bearer → 401
+    print("\n[F] PATCH /api/notifications without Bearer → expect 401")
+    try:
+        response = requests.patch(
+            f"{BASE_URL}/api/notifications",
+            json={"id": "test-id"},
             timeout=10
         )
-        if resp.status_code != 200:
-            print(f"❌ C.12 FAIL: Cannot get sites - {resp.status_code}")
-            return False, False, False
+        if response.status_code == 401:
+            print(f"✅ PASS: Got 401 without Bearer")
+        else:
+            print(f"❌ FAIL: Expected 401, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    if not operator_token:
+        print("❌ SKIP: No operator token available for remaining PATCH tests")
+        return None
+    
+    headers = {"Authorization": f"Bearer {operator_token}"}
+    
+    # (G) PATCH with body {} (missing id) → 400
+    print("\n[G] PATCH /api/notifications with body {} (missing id) → expect 400")
+    try:
+        response = requests.patch(
+            f"{BASE_URL}/api/notifications",
+            json={},
+            headers=headers,
+            timeout=10
+        )
+        if response.status_code == 400:
+            data = response.json()
+            print(f"✅ PASS: Got 400 with error message: {data.get('error')}")
+        else:
+            print(f"❌ FAIL: Expected 400, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    # Find an unread notification for operator
+    own_notification_id = None
+    if operator_data and 'notifications' in operator_data:
+        unread_notifications = [n for n in operator_data['notifications'] if n.get('read_at') is None]
+        if unread_notifications:
+            own_notification_id = unread_notifications[0]['id']
+    
+    # (H) PATCH with body { id: "<own-notification-id>" } → 200
+    print("\n[H] PATCH /api/notifications with body { id: '<own-notification-id>' } → expect 200")
+    if own_notification_id:
+        try:
+            response = requests.patch(
+                f"{BASE_URL}/api/notifications",
+                json={"id": own_notification_id},
+                headers=headers,
+                timeout=10
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('read_at') is not None:
+                    print(f"✅ PASS: Got 200, notification marked as read (read_at: {data.get('read_at')})")
+                else:
+                    print(f"❌ FAIL: Got 200 but read_at is still null")
+            else:
+                print(f"❌ FAIL: Expected 200, got {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"❌ FAIL: Exception - {e}")
+    else:
+        print(f"⚠️  SKIP: No unread notification found for operator")
+    
+    # (I) PATCH with body { id: "00000000-0000-0000-0000-000000000000" } → 404
+    print("\n[I] PATCH /api/notifications with non-existent id → expect 404")
+    try:
+        response = requests.patch(
+            f"{BASE_URL}/api/notifications",
+            json={"id": "00000000-0000-0000-0000-000000000000"},
+            headers=headers,
+            timeout=10
+        )
+        if response.status_code == 404:
+            data = response.json()
+            print(f"✅ PASS: Got 404 with message: {data.get('error')}")
+        else:
+            print(f"❌ FAIL: Expected 404, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    return own_notification_id
+
+def test_cross_tenant_isolation():
+    """Test cross-tenant isolation (J)"""
+    print("\n" + "="*80)
+    print("SECTION D: CROSS-TENANT ISOLATION TEST")
+    print("="*80)
+    
+    # (J) Cross-tenant: Operator2 cannot mark Operator1's notification
+    print("\n[J] Cross-tenant: Operator2 tries to mark Operator1's notification → expect 404")
+    
+    # Login as Operator1 and get an unread notification
+    operator1_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    if not operator1_token:
+        print("❌ SKIP: Cannot login as Operator1")
+        return
+    
+    headers1 = {"Authorization": f"Bearer {operator1_token}"}
+    try:
+        response = requests.get(f"{BASE_URL}/api/notifications?unread=1", headers=headers1, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            notifications = data.get('notifications', [])
+            if len(notifications) > 0:
+                operator1_notification_id = notifications[0]['id']
+                print(f"   - Found Operator1's unread notification: {operator1_notification_id}")
+                
+                # Login as Operator2 and try to mark Operator1's notification
+                operator2_token = login(OPERATOR2_EMAIL, OPERATOR2_PASSWORD)
+                if not operator2_token:
+                    print("❌ SKIP: Cannot login as Operator2")
+                    return
+                
+                headers2 = {"Authorization": f"Bearer {operator2_token}"}
+                response = requests.patch(
+                    f"{BASE_URL}/api/notifications",
+                    json={"id": operator1_notification_id},
+                    headers=headers2,
+                    timeout=10
+                )
+                
+                if response.status_code == 404:
+                    print(f"✅ PASS: Operator2 got 404 when trying to mark Operator1's notification")
+                    
+                    # Verify Operator1's notification is still unread
+                    response = requests.get(f"{BASE_URL}/api/notifications", headers=headers1, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        notif = next((n for n in data['notifications'] if n['id'] == operator1_notification_id), None)
+                        if notif and notif.get('read_at') is None:
+                            print(f"✅ PASS: Operator1's notification is still unread (cross-tenant isolation working)")
+                        else:
+                            print(f"❌ FAIL: Operator1's notification was affected")
+                else:
+                    print(f"❌ FAIL: Expected 404, got {response.status_code}")
+            else:
+                print(f"⚠️  SKIP: No unread notifications found for Operator1")
+        else:
+            print(f"❌ FAIL: Cannot fetch Operator1's notifications: {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+
+def test_post_mark_all_read(operator_token):
+    """Test POST (mark all read) scenarios"""
+    print("\n" + "="*80)
+    print("SECTION E: POST (MARK ALL READ) TESTS")
+    print("="*80)
+    
+    # (K) POST without Bearer → 401
+    print("\n[K] POST /api/notifications without Bearer → expect 401")
+    try:
+        response = requests.post(f"{BASE_URL}/api/notifications", timeout=10)
+        if response.status_code == 401:
+            print(f"✅ PASS: Got 401 without Bearer")
+        else:
+            print(f"❌ FAIL: Expected 401, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    if not operator_token:
+        print("❌ SKIP: No operator token available for remaining POST tests")
+        return
+    
+    headers = {"Authorization": f"Bearer {operator_token}"}
+    
+    # (L) POST as Operator → 200 with { ok: true }, unreadCount becomes 0
+    print("\n[L] POST /api/notifications as Operator → expect 200 with { ok: true }")
+    try:
+        response = requests.post(f"{BASE_URL}/api/notifications", headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('ok') is True:
+                print(f"✅ PASS: Got 200 with {{ ok: true }}")
+                
+                # Verify unreadCount is now 0
+                response = requests.get(f"{BASE_URL}/api/notifications?limit=50", headers=headers, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    unread_count = data.get('unreadCount', -1)
+                    if unread_count == 0:
+                        print(f"✅ PASS: unreadCount is now 0 after mark-all-read")
+                    else:
+                        print(f"❌ FAIL: unreadCount is {unread_count}, expected 0")
+            else:
+                print(f"❌ FAIL: Got 200 but response is not {{ ok: true }}: {data}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    # (M) Calling POST again is idempotent
+    print("\n[M] POST /api/notifications again (idempotent) → expect 200 with { ok: true }")
+    try:
+        response = requests.post(f"{BASE_URL}/api/notifications", headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('ok') is True:
+                print(f"✅ PASS: Got 200 with {{ ok: true }} (idempotent)")
+                
+                # Verify unreadCount is still 0
+                response = requests.get(f"{BASE_URL}/api/notifications?limit=50", headers=headers, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    unread_count = data.get('unreadCount', -1)
+                    if unread_count == 0:
+                        print(f"✅ PASS: unreadCount is still 0 (idempotent)")
+                    else:
+                        print(f"⚠️  WARNING: unreadCount is {unread_count}, expected 0")
+            else:
+                print(f"❌ FAIL: Got 200 but response is not {{ ok: true }}: {data}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+
+def test_legacy_routes_deleted():
+    """Test that legacy routes are deleted"""
+    print("\n" + "="*80)
+    print("SECTION F: LEGACY ROUTES (SHOULD BE DELETED)")
+    print("="*80)
+    
+    # Login to get a valid token
+    operator_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    if not operator_token:
+        print("❌ SKIP: Cannot login as Operator")
+        return
+    
+    headers = {"Authorization": f"Bearer {operator_token}"}
+    
+    # (N) GET /api/notifications/<some-id> → 404
+    print("\n[N] GET /api/notifications/<some-id> → expect 404 (route deleted)")
+    try:
+        response = requests.get(
+            f"{BASE_URL}/api/notifications/test-id-12345",
+            headers=headers,
+            timeout=10
+        )
+        if response.status_code == 404:
+            print(f"✅ PASS: Got 404 (legacy route deleted)")
+        else:
+            print(f"❌ FAIL: Expected 404, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+    
+    # (O) POST /api/notifications/mark-all-read → 404
+    print("\n[O] POST /api/notifications/mark-all-read → expect 404 (route deleted)")
+    try:
+        response = requests.post(
+            f"{BASE_URL}/api/notifications/mark-all-read",
+            headers=headers,
+            timeout=10
+        )
+        if response.status_code == 404:
+            print(f"✅ PASS: Got 404 (legacy route deleted)")
+        else:
+            print(f"❌ FAIL: Expected 404, got {response.status_code}")
+    except Exception as e:
+        print(f"❌ FAIL: Exception - {e}")
+
+def test_regression():
+    """Test regression scenario"""
+    print("\n" + "="*80)
+    print("SECTION G: REGRESSION TEST")
+    print("="*80)
+    
+    # (P) After marking all read, trigger a notification via POST /api/staff-assignments
+    print("\n[P] Regression: Trigger notification via POST /api/staff-assignments")
+    
+    # Login as Operator
+    operator_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    if not operator_token:
+        print("❌ SKIP: Cannot login as Operator")
+        return
+    
+    headers = {"Authorization": f"Bearer {operator_token}"}
+    
+    # Get staff-001 token
+    staff_token = login(STAFF_EMAIL, STAFF_PASSWORD)
+    if not staff_token:
+        print("   ❌ SKIP: Cannot login as Staff")
+        return
+    
+    staff_headers = {"Authorization": f"Bearer {staff_token}"}
+    
+    # First, mark all staff notifications as read
+    print("   - Step 1: Mark all staff notifications as read")
+    try:
+        response = requests.post(f"{BASE_URL}/api/notifications", headers=staff_headers, timeout=10)
+        if response.status_code == 200:
+            print(f"   ✅ Marked all staff notifications as read")
+        else:
+            print(f"   ⚠️  Failed to mark all as read: {response.status_code}")
+    except Exception as e:
+        print(f"   ❌ Exception: {e}")
+    
+    # Verify unreadCount is 0
+    print("   - Step 2: Verify staff unreadCount is 0")
+    try:
+        response = requests.get(f"{BASE_URL}/api/notifications", headers=staff_headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            unread_count = data.get('unreadCount', -1)
+            if unread_count == 0:
+                print(f"   ✅ Staff unreadCount is 0")
+            else:
+                print(f"   ⚠️  Staff unreadCount is {unread_count}, expected 0")
+    except Exception as e:
+        print(f"   ❌ Exception: {e}")
+    
+    # Create a staff assignment to trigger a notification
+    print("   - Step 3: Create/update staff assignment to trigger notification")
+    try:
+        # First, try to delete existing assignment if it exists
+        response = requests.get(f"{BASE_URL}/api/staff-assignments", headers=headers, timeout=10)
+        if response.status_code == 200:
+            assignments = response.json()
+            existing = next(
+                (a for a in assignments if a.get('staff_user_id') == 'staff-001' and a.get('site_id') == 'site-002'),
+                None
+            )
+            if existing:
+                assignment_id = existing.get('id')
+                response = requests.delete(
+                    f"{BASE_URL}/api/staff-assignments/{assignment_id}",
+                    headers=headers,
+                    timeout=10
+                )
+                print(f"   - Deleted existing assignment (status: {response.status_code})")
         
-        sites = resp.json()
-        if not sites:
-            print("❌ C.12 FAIL: Staff has no assigned sites")
-            return False, False, False
-        
-        site_id = sites[0].get("id")
-        site_name = sites[0].get("name", "Unknown")
-        print(f"  → Using site: {site_name} ({site_id})")
-        
-        # Create a shift report as Staff
-        today = datetime.now().strftime("%Y-%m-%d")
-        report_payload = {
-            "site_id": site_id,
-            "date": today,
-            "shift_type": "Morning",
-            "total_sales": 5000,
-            "fuel_sales": 3000,
-            "shop_sales": 2000,
-            "notes": "Test report for notification trigger"
+        # Now create a new assignment
+        assignment_data = {
+            "staff_user_id": "staff-001",
+            "site_id": "site-002"
         }
         
-        print(f"  → Staff submitting report for {today}...")
-        resp = requests.post(
-            f"{BASE_URL}/api/reports",
-            headers=auth_headers("staff"),
-            json=report_payload,
+        response = requests.post(
+            f"{BASE_URL}/api/staff-assignments",
+            json=assignment_data,
+            headers=headers,
             timeout=10
         )
         
-        if resp.status_code == 201:
-            report = resp.json()
-            report_id = report.get("id")
-            test_data["reports"].append(report_id)
-            print(f"✅ C.12 PASS: Report created successfully (id: {report_id})")
+        if response.status_code in [200, 201]:
+            print(f"   ✅ Staff assignment created (status: {response.status_code})")
             
-            # Wait 5 seconds for notification to be created (fire-and-forget)
-            print("  → Waiting 5 seconds for notification trigger...")
-            time.sleep(5)
-            
-            # Test 13: Operator should see the notification
-            print("  → Checking Operator notifications...")
-            resp = requests.get(
+            # Check if staff-001 has a new unread notification
+            print("   - Step 4: Check if staff-001 has new unread notification")
+            response = requests.get(
                 f"{BASE_URL}/api/notifications?unread=1",
-                headers=auth_headers("operator"),
+                headers=staff_headers,
                 timeout=10
             )
             
-            if resp.status_code == 200:
-                data = resp.json()
-                items = data.get("items", [])
-                report_submitted_notifs = [
-                    n for n in items 
-                    if n.get("type") == "report_submitted" 
-                    and "review" in n.get("title", "").lower()
-                ]
+            if response.status_code == 200:
+                data = response.json()
+                unread_count = data.get('unreadCount', 0)
+                notifications = data.get('notifications', [])
                 
-                if report_submitted_notifs:
-                    notif = report_submitted_notifs[0]
-                    test_data["notifications"].append(notif.get("id"))
-                    print(f"✅ C.13 PASS: Operator received 'report_submitted' notification")
-                    print(f"     Title: {notif.get('title')}")
-                    print(f"     Body: {notif.get('body')}")
-                    print(f"     Link: {notif.get('link')}")
-                    c13_pass = True
-                else:
-                    print(f"❌ C.13 FAIL: Operator did not receive 'report_submitted' notification")
-                    print(f"     Found {len(items)} unread notifications, none with type='report_submitted'")
-                    c13_pass = False
-            else:
-                print(f"❌ C.13 FAIL: Cannot get Operator notifications - {resp.status_code}")
-                c13_pass = False
-            
-            # Test 14: Staff should NOT see the notification (excluded via excludeUserId)
-            print("  → Checking Staff notifications (should NOT include report_submitted)...")
-            resp = requests.get(
-                f"{BASE_URL}/api/notifications",
-                headers=auth_headers("staff"),
-                timeout=10
-            )
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                items = data.get("items", [])
-                report_submitted_notifs = [
-                    n for n in items 
-                    if n.get("type") == "report_submitted"
-                ]
-                
-                if not report_submitted_notifs:
-                    print(f"✅ C.14 PASS: Staff correctly excluded from 'report_submitted' notification")
-                    c14_pass = True
-                else:
-                    print(f"❌ C.14 FAIL: Staff received {len(report_submitted_notifs)} 'report_submitted' notifications (should be 0)")
-                    c14_pass = False
-            else:
-                print(f"❌ C.14 FAIL: Cannot get Staff notifications - {resp.status_code}")
-                c14_pass = False
-            
-            return True, c13_pass, c14_pass
-            
-        elif resp.status_code == 409:
-            print(f"⚠️  C.12: Report already exists (409) - using existing report for trigger test")
-            # Still test notifications
-            time.sleep(2)
-            
-            # Check operator notifications
-            resp = requests.get(
-                f"{BASE_URL}/api/notifications?unread=1",
-                headers=auth_headers("operator"),
-                timeout=10
-            )
-            c13_pass = resp.status_code == 200 and any(
-                n.get("type") == "report_submitted" 
-                for n in resp.json().get("items", [])
-            )
-            
-            # Check staff notifications
-            resp = requests.get(
-                f"{BASE_URL}/api/notifications",
-                headers=auth_headers("staff"),
-                timeout=10
-            )
-            c14_pass = resp.status_code == 200 and not any(
-                n.get("type") == "report_submitted" 
-                for n in resp.json().get("items", [])
-            )
-            
-            return True, c13_pass, c14_pass
-        else:
-            print(f"❌ C.12 FAIL: Report creation failed - {resp.status_code} - {resp.text}")
-            return False, False, False
-            
-    except Exception as e:
-        print(f"❌ C.12-14 ERROR: {e}")
-        return False, False, False
-
-# ============================================================================
-# D. Trigger: report_status_changed - 3 tests
-# ============================================================================
-
-def test_d15_d16_d17_report_status_changed_trigger():
-    """Test 15-17: Operator approves report → Staff gets notification, pending transition doesn't trigger"""
-    print("\n[D.15-17] Trigger: report_status_changed")
-    
-    # Get the report we created in test C
-    if not test_data["reports"]:
-        print("⚠️  D.15: No test report available, skipping")
-        return None, None, None
-    
-    report_id = test_data["reports"][0]
-    operator_user_id = user_ids.get("operator")
-    
-    if not operator_user_id:
-        print("❌ D.15 FAIL: Operator user_id not available")
-        return False, False, False
-    
-    # Test 15: Update report status to 'approved'
-    print(f"  → Operator approving report {report_id}...")
-    try:
-        resp = requests.put(
-            f"{BASE_URL}/api/reports/{report_id}/status",
-            headers=auth_headers("operator"),
-            json={
-                "status": "approved",
-                "reviewed_by_user_id": operator_user_id
-            },
-            timeout=10
-        )
-        
-        if resp.status_code == 200:
-            print(f"✅ D.15 PASS: Report status updated to 'approved'")
-            
-            # Wait 5 seconds for notification trigger
-            print("  → Waiting 5 seconds for notification trigger...")
-            time.sleep(5)
-            
-            # Test 16: Staff should see the notification
-            print("  → Checking Staff notifications...")
-            resp = requests.get(
-                f"{BASE_URL}/api/notifications",
-                headers=auth_headers("staff"),
-                timeout=10
-            )
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                items = data.get("items", [])
-                status_changed_notifs = [
-                    n for n in items 
-                    if n.get("type") == "report_status_changed" 
-                    and "approved" in n.get("title", "").lower()
-                ]
-                
-                if status_changed_notifs:
-                    notif = status_changed_notifs[0]
-                    test_data["notifications"].append(notif.get("id"))
-                    print(f"✅ D.16 PASS: Staff received 'report_status_changed' notification")
-                    print(f"     Title: {notif.get('title')}")
-                    print(f"     Body: {notif.get('body')}")
-                    d16_pass = True
-                else:
-                    print(f"❌ D.16 FAIL: Staff did not receive 'report_status_changed' notification")
-                    print(f"     Found {len(items)} notifications, none with type='report_status_changed' and 'approved' in title")
-                    d16_pass = False
-            else:
-                print(f"❌ D.16 FAIL: Cannot get Staff notifications - {resp.status_code}")
-                d16_pass = False
-            
-            # Test 17: Update status to 'pending' (should NOT trigger notification)
-            print("  → Updating report status to 'pending' (should NOT trigger notification)...")
-            resp = requests.put(
-                f"{BASE_URL}/api/reports/{report_id}/status",
-                headers=auth_headers("operator"),
-                json={
-                    "status": "pending",
-                    "reviewed_by_user_id": operator_user_id
-                },
-                timeout=10
-            )
-            
-            if resp.status_code == 200:
-                # Get current unread count
-                resp = requests.get(
-                    f"{BASE_URL}/api/notifications",
-                    headers=auth_headers("staff"),
-                    timeout=10
-                )
-                
-                if resp.status_code == 200:
-                    unread_count_before = resp.json().get("unread_count", 0)
-                    
-                    # Wait 3 seconds
-                    time.sleep(3)
-                    
-                    # Check unread count again
-                    resp = requests.get(
-                        f"{BASE_URL}/api/notifications",
-                        headers=auth_headers("staff"),
-                        timeout=10
-                    )
-                    
-                    if resp.status_code == 200:
-                        unread_count_after = resp.json().get("unread_count", 0)
-                        
-                        if unread_count_after == unread_count_before:
-                            print(f"✅ D.17 PASS: Status change to 'pending' did NOT trigger notification (unread_count unchanged: {unread_count_before})")
-                            d17_pass = True
-                        else:
-                            print(f"❌ D.17 FAIL: Unread count changed from {unread_count_before} to {unread_count_after} (should be unchanged)")
-                            d17_pass = False
+                if unread_count > 0 and len(notifications) > 0:
+                    # Check if the notification has read_at === null
+                    first_notif = notifications[0]
+                    if first_notif.get('read_at') is None:
+                        print(f"   ✅ PASS: Staff has new unread notification (unreadCount: {unread_count})")
+                        print(f"      - Notification type: {first_notif.get('type')}")
+                        print(f"      - Notification title: {first_notif.get('title')}")
                     else:
-                        print(f"❌ D.17 FAIL: Cannot get Staff notifications - {resp.status_code}")
-                        d17_pass = False
+                        print(f"   ❌ FAIL: Notification has read_at not null: {first_notif.get('read_at')}")
                 else:
-                    print(f"❌ D.17 FAIL: Cannot get Staff notifications - {resp.status_code}")
-                    d17_pass = False
+                    print(f"   ❌ FAIL: No unread notifications found for staff (unreadCount: {unread_count})")
             else:
-                print(f"❌ D.17 FAIL: Cannot update report status - {resp.status_code}")
-                d17_pass = False
-            
-            return True, d16_pass, d17_pass
+                print(f"   ❌ FAIL: Cannot fetch staff notifications: {response.status_code}")
         else:
-            print(f"❌ D.15 FAIL: Cannot update report status - {resp.status_code} - {resp.text}")
-            return False, False, False
-            
+            print(f"   ❌ FAIL: Cannot create staff assignment: {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"❌ D.15-17 ERROR: {e}")
-        return False, False, False
+        print(f"   ❌ FAIL: Exception - {e}")
 
-# ============================================================================
-# E. /api/notifications/mark-all-read - 3 tests
-# ============================================================================
-
-def test_e18_e19_e20_mark_all_read():
-    """Test 18-20: POST mark-all-read, verify unread_count=0, idempotent"""
-    print("\n[E.18-20] POST /api/notifications/mark-all-read")
-    
-    # Test 18: Mark all as read for Operator (who has unread notifications from test C)
-    print("  → Operator marking all notifications as read...")
-    try:
-        resp = requests.post(
-            f"{BASE_URL}/api/notifications/mark-all-read",
-            headers=auth_headers("operator"),
-            timeout=10
-        )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("ok") and isinstance(data.get("updated"), int):
-                updated_count = data.get("updated")
-                print(f"✅ E.18 PASS: Mark-all-read successful (updated: {updated_count})")
-                
-                # Test 19: Verify unread_count is now 0
-                print("  → Verifying unread_count is now 0...")
-                resp = requests.get(
-                    f"{BASE_URL}/api/notifications",
-                    headers=auth_headers("operator"),
-                    timeout=10
-                )
-                
-                if resp.status_code == 200:
-                    data = resp.json()
-                    unread_count = data.get("unread_count", -1)
-                    
-                    if unread_count == 0:
-                        print(f"✅ E.19 PASS: unread_count is 0 after mark-all-read")
-                        e19_pass = True
-                    else:
-                        print(f"❌ E.19 FAIL: unread_count is {unread_count} (expected 0)")
-                        e19_pass = False
-                else:
-                    print(f"❌ E.19 FAIL: Cannot get notifications - {resp.status_code}")
-                    e19_pass = False
-                
-                # Test 20: Call mark-all-read again (should be idempotent)
-                print("  → Calling mark-all-read again (idempotent test)...")
-                resp = requests.post(
-                    f"{BASE_URL}/api/notifications/mark-all-read",
-                    headers=auth_headers("operator"),
-                    timeout=10
-                )
-                
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("ok") and data.get("updated") == 0:
-                        print(f"✅ E.20 PASS: Mark-all-read is idempotent (updated: 0)")
-                        e20_pass = True
-                    else:
-                        print(f"❌ E.20 FAIL: Expected updated=0, got {data.get('updated')}")
-                        e20_pass = False
-                else:
-                    print(f"❌ E.20 FAIL: Cannot call mark-all-read - {resp.status_code}")
-                    e20_pass = False
-                
-                return True, e19_pass, e20_pass
-            else:
-                print(f"❌ E.18 FAIL: Invalid response shape - {data}")
-                return False, False, False
-        else:
-            print(f"❌ E.18 FAIL: Expected 200, got {resp.status_code} - {resp.text}")
-            return False, False, False
-            
-    except Exception as e:
-        print(f"❌ E.18-20 ERROR: {e}")
-        return False, False, False
-
-# ============================================================================
-# F. Trigger: site_assigned / site_unassigned - 4 tests
-# ============================================================================
-
-def test_f21_f22_f23_f24_site_assignment_triggers():
-    """Test 21-24: Owner assigns/unassigns operator → notifications created"""
-    print("\n[F.21-24] Trigger: site_assigned / site_unassigned")
-    
-    # Get operator user_id and a site to assign
-    operator_user_id = user_ids.get("operator")
-    if not operator_user_id:
-        print("❌ F.21 FAIL: Operator user_id not available")
-        return False, False, False, False
-    
-    # Get owner's sites
-    print("  → Getting Owner's sites...")
-    try:
-        resp = requests.get(
-            f"{BASE_URL}/api/sites",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        
-        if resp.status_code != 200:
-            print(f"❌ F.21 FAIL: Cannot get sites - {resp.status_code}")
-            return False, False, False, False
-        
-        sites = resp.json()
-        if not sites:
-            print("❌ F.21 FAIL: Owner has no sites")
-            return False, False, False, False
-        
-        # Find a site to assign (prefer one not already assigned to operator)
-        site_id = sites[0].get("id")
-        site_name = sites[0].get("name", "Unknown")
-        print(f"  → Using site: {site_name} ({site_id})")
-        
-        # Test 21: Create operator assignment
-        print(f"  → Owner assigning operator to site...")
-        resp = requests.post(
-            f"{BASE_URL}/api/operator-assignments",
-            headers=auth_headers("owner"),
-            json={
-                "operator_user_id": operator_user_id,
-                "site_id": site_id
-            },
-            timeout=10
-        )
-        
-        if resp.status_code in [200, 201]:
-            assignment = resp.json()
-            assignment_id = assignment.get("id")
-            if assignment_id:
-                test_data["assignments"].append(assignment_id)
-            print(f"✅ F.21 PASS: Operator assignment created")
-            f21_pass = True
-        elif resp.status_code == 500 and "duplicate" in resp.text.lower():
-            print(f"⚠️  F.21: Assignment already exists (duplicate constraint)")
-            # Get existing assignment
-            resp = requests.get(
-                f"{BASE_URL}/api/operator-assignments",
-                headers=auth_headers("owner"),
-                timeout=10
-            )
-            if resp.status_code == 200:
-                assignments = resp.json()
-                existing = [a for a in assignments if a.get("site_id") == site_id and a.get("operator_user_id") == operator_user_id]
-                if existing:
-                    assignment_id = existing[0].get("id")
-                    test_data["assignments"].append(assignment_id)
-                    print(f"  → Using existing assignment: {assignment_id}")
-                    f21_pass = True
-                else:
-                    print(f"❌ F.21 FAIL: Cannot find existing assignment")
-                    f21_pass = False
-            else:
-                print(f"❌ F.21 FAIL: Cannot get assignments - {resp.status_code}")
-                f21_pass = False
-        else:
-            print(f"❌ F.21 FAIL: Cannot create assignment - {resp.status_code} - {resp.text}")
-            f21_pass = False
-        
-        if not f21_pass:
-            return False, False, False, False
-        
-        # Test 22: Operator should see 'site_assigned' notification
-        print("  → Waiting 5 seconds for notification trigger...")
-        time.sleep(5)
-        
-        print("  → Checking Operator notifications...")
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications",
-            headers=auth_headers("operator"),
-            timeout=10
-        )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            items = data.get("items", [])
-            site_assigned_notifs = [
-                n for n in items 
-                if n.get("type") == "site_assigned"
-            ]
-            
-            if site_assigned_notifs:
-                notif = site_assigned_notifs[0]
-                print(f"✅ F.22 PASS: Operator received 'site_assigned' notification")
-                print(f"     Title: {notif.get('title')}")
-                print(f"     Body: {notif.get('body')}")
-                f22_pass = True
-            else:
-                print(f"❌ F.22 FAIL: Operator did not receive 'site_assigned' notification")
-                print(f"     Found {len(items)} notifications, none with type='site_assigned'")
-                f22_pass = False
-        else:
-            print(f"❌ F.22 FAIL: Cannot get Operator notifications - {resp.status_code}")
-            f22_pass = False
-        
-        # Test 23: Delete the assignment
-        if not test_data["assignments"]:
-            print("❌ F.23 FAIL: No assignment ID to delete")
-            return f21_pass, f22_pass, False, False
-        
-        assignment_id = test_data["assignments"][-1]
-        print(f"  → Owner deleting operator assignment {assignment_id}...")
-        resp = requests.delete(
-            f"{BASE_URL}/api/operator-assignments/{assignment_id}",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            if "message" in data and "deleted" in data["message"].lower():
-                print(f"✅ F.23 PASS: Assignment deleted successfully")
-                print(f"     Response: {data}")
-                f23_pass = True
-            else:
-                print(f"❌ F.23 FAIL: Unexpected response - {data}")
-                f23_pass = False
-        else:
-            print(f"❌ F.23 FAIL: Cannot delete assignment - {resp.status_code} - {resp.text}")
-            f23_pass = False
-        
-        # Test 24: Operator should see 'site_unassigned' notification
-        print("  → Waiting 5 seconds for notification trigger...")
-        time.sleep(5)
-        
-        print("  → Checking Operator notifications...")
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications",
-            headers=auth_headers("operator"),
-            timeout=10
-        )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            items = data.get("items", [])
-            site_unassigned_notifs = [
-                n for n in items 
-                if n.get("type") == "site_unassigned"
-            ]
-            
-            if site_unassigned_notifs:
-                notif = site_unassigned_notifs[0]
-                print(f"✅ F.24 PASS: Operator received 'site_unassigned' notification")
-                print(f"     Title: {notif.get('title')}")
-                print(f"     Body: {notif.get('body')}")
-                f24_pass = True
-            else:
-                print(f"❌ F.24 FAIL: Operator did not receive 'site_unassigned' notification")
-                print(f"     Found {len(items)} notifications, none with type='site_unassigned'")
-                f24_pass = False
-        else:
-            print(f"❌ F.24 FAIL: Cannot get Operator notifications - {resp.status_code}")
-            f24_pass = False
-        
-        return f21_pass, f22_pass, f23_pass, f24_pass
-        
-    except Exception as e:
-        print(f"❌ F.21-24 ERROR: {e}")
-        return False, False, False, False
-
-# ============================================================================
-# G. Regression sanity - 4 tests
-# ============================================================================
-
-def test_g25_support_contact():
-    """Test 25: POST /api/support/contact → 200"""
-    print("\n[G.25] POST /api/support/contact (regression)")
-    try:
-        resp = requests.post(
-            f"{BASE_URL}/api/support/contact",
-            headers=auth_headers("owner"),
-            json={
-                "subject": "regression",
-                "message": "check",
-                "category": "question"
-            },
-            timeout=10
-        )
-        if resp.status_code == 200:
-            print("✅ G.25 PASS: Support contact endpoint working")
-            return True
-        else:
-            print(f"❌ G.25 FAIL: Expected 200, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ G.25 ERROR: {e}")
-        return False
-
-def test_g26_users_me():
-    """Test 26: GET /api/users/me → 200"""
-    print("\n[G.26] GET /api/users/me (regression)")
-    try:
-        resp = requests.get(
-            f"{BASE_URL}/api/users/me",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        if resp.status_code == 200:
-            print("✅ G.26 PASS: Users/me endpoint working")
-            return True
-        else:
-            print(f"❌ G.26 FAIL: Expected 200, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ G.26 ERROR: {e}")
-        return False
-
-def test_g27_dashboard_stats():
-    """Test 27: GET /api/dashboard/stats → 200"""
-    print("\n[G.27] GET /api/dashboard/stats (regression)")
-    try:
-        # Get a site ID first
-        resp = requests.get(
-            f"{BASE_URL}/api/sites",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        if resp.status_code == 200:
-            sites = resp.json()
-            if sites:
-                site_id = sites[0].get("id")
-                resp = requests.get(
-                    f"{BASE_URL}/api/dashboard/stats?siteIds={site_id}",
-                    headers=auth_headers("owner"),
-                    timeout=10
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    # Check for health-strip fields
-                    required_fields = ["submittedToday", "totalSites", "pendingReview", "varianceAlerts"]
-                    has_all = all(field in data for field in required_fields)
-                    if has_all:
-                        print(f"✅ G.27 PASS: Dashboard stats endpoint working with health-strip fields")
-                        return True
-                    else:
-                        print(f"⚠️  G.27 PARTIAL: Dashboard stats working but missing some health-strip fields")
-                        return True
-                else:
-                    print(f"❌ G.27 FAIL: Expected 200, got {resp.status_code}")
-                    return False
-            else:
-                print(f"⚠️  G.27: No sites available, skipping")
-                return None
-        else:
-            print(f"❌ G.27 FAIL: Cannot get sites - {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ G.27 ERROR: {e}")
-        return False
-
-def test_g28_users_without_auth():
-    """Test 28: GET /api/users without Bearer → 401"""
-    print("\n[G.28] GET /api/users without Bearer (regression)")
-    try:
-        resp = requests.get(f"{BASE_URL}/api/users", timeout=10)
-        if resp.status_code == 401:
-            print("✅ G.28 PASS: Users endpoint requires auth (401)")
-            return True
-        else:
-            print(f"❌ G.28 FAIL: Expected 401, got {resp.status_code}")
-            return False
-    except Exception as e:
-        print(f"❌ G.28 ERROR: {e}")
-        return False
-
-# ============================================================================
-# Additional tests for B section (after notifications are created)
-# ============================================================================
-
-def test_b_additional():
-    """Run B.8-11 tests after notifications are created"""
+def test_patch_with_staff_notifications():
+    """Test PATCH scenarios using staff account with unread notifications"""
     print("\n" + "="*80)
-    print("SECTION B (ADDITIONAL): PATCH /api/notifications/[id]")
+    print("SECTION H: ADDITIONAL PATCH TESTS (WITH STAFF UNREAD NOTIFICATIONS)")
     print("="*80)
     
-    results = []
+    # Login as Staff (who has unread notifications)
+    staff_token = login(STAFF_EMAIL, STAFF_PASSWORD)
+    if not staff_token:
+        print("❌ SKIP: Cannot login as Staff")
+        return
     
-    # B.8-9: Mark notification as read
-    print("\n[B.8-9] PATCH notification to mark as read")
+    staff_headers = {"Authorization": f"Bearer {staff_token}"}
+    
+    # Get staff's unread notifications
+    print("\n[H.1] Get staff's unread notifications")
     try:
-        # Get operator's notifications
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications?unread=1",
-            headers=auth_headers("operator"),
-            timeout=10
-        )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            items = data.get("items", [])
-            unread_count_before = data.get("unread_count", 0)
+        response = requests.get(f"{BASE_URL}/api/notifications?unread=1", headers=staff_headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            notifications = data.get('notifications', [])
+            unread_count = data.get('unreadCount', 0)
             
-            if items:
-                notif_id = items[0].get("id")
-                print(f"  → Marking notification {notif_id} as read...")
+            if len(notifications) > 0:
+                print(f"✅ Staff has {len(notifications)} unread notifications (unreadCount: {unread_count})")
                 
-                resp = requests.patch(
-                    f"{BASE_URL}/api/notifications/{notif_id}",
-                    headers=auth_headers("operator"),
-                    json={"read": True},
+                # Test PATCH to mark one notification as read
+                print("\n[H.2] PATCH to mark one notification as read")
+                first_notif_id = notifications[0]['id']
+                response = requests.patch(
+                    f"{BASE_URL}/api/notifications",
+                    json={"id": first_notif_id},
+                    headers=staff_headers,
                     timeout=10
                 )
                 
-                if resp.status_code == 200:
-                    notif = resp.json()
-                    if notif.get("read_at") is not None:
-                        print(f"✅ B.8 PASS: Notification marked as read (read_at: {notif.get('read_at')})")
+                if response.status_code == 200:
+                    updated_notif = response.json()
+                    if updated_notif.get('read_at') is not None:
+                        print(f"✅ PASS: Notification marked as read (read_at: {updated_notif.get('read_at')})")
                         
-                        # Check unread_count decreased
-                        resp = requests.get(
-                            f"{BASE_URL}/api/notifications",
-                            headers=auth_headers("operator"),
-                            timeout=10
-                        )
-                        
-                        if resp.status_code == 200:
-                            unread_count_after = resp.json().get("unread_count", 0)
-                            if unread_count_after < unread_count_before:
-                                print(f"✅ B.9 PASS: unread_count decreased from {unread_count_before} to {unread_count_after}")
-                                results.extend([True, True])
+                        # Verify unreadCount decreased
+                        response = requests.get(f"{BASE_URL}/api/notifications", headers=staff_headers, timeout=10)
+                        if response.status_code == 200:
+                            data = response.json()
+                            new_unread_count = data.get('unreadCount', 0)
+                            if new_unread_count == unread_count - 1:
+                                print(f"✅ PASS: unreadCount decreased from {unread_count} to {new_unread_count}")
                             else:
-                                print(f"❌ B.9 FAIL: unread_count did not decrease ({unread_count_before} → {unread_count_after})")
-                                results.extend([True, False])
-                        else:
-                            print(f"❌ B.9 FAIL: Cannot get notifications - {resp.status_code}")
-                            results.extend([True, False])
-                        
-                        # B.10: Mark as unread
-                        print(f"\n[B.10] PATCH notification to mark as unread")
-                        resp = requests.patch(
-                            f"{BASE_URL}/api/notifications/{notif_id}",
-                            headers=auth_headers("operator"),
-                            json={"read": False},
-                            timeout=10
-                        )
-                        
-                        if resp.status_code == 200:
-                            notif = resp.json()
-                            if notif.get("read_at") is None:
-                                print(f"✅ B.10 PASS: Notification marked as unread (read_at: null)")
-                                results.append(True)
-                            else:
-                                print(f"❌ B.10 FAIL: read_at is not null: {notif.get('read_at')}")
-                                results.append(False)
-                        else:
-                            print(f"❌ B.10 FAIL: Cannot mark as unread - {resp.status_code}")
-                            results.append(False)
+                                print(f"⚠️  WARNING: unreadCount is {new_unread_count}, expected {unread_count - 1}")
                     else:
-                        print(f"❌ B.8 FAIL: read_at is still null")
-                        results.extend([False, False, False])
+                        print(f"❌ FAIL: Notification not marked as read (read_at is still null)")
                 else:
-                    print(f"❌ B.8 FAIL: Cannot mark as read - {resp.status_code}")
-                    results.extend([False, False, False])
-            else:
-                print(f"⚠️  B.8-10: No unread notifications available, skipping")
-                results.extend([None, None, None])
-        else:
-            print(f"❌ B.8 FAIL: Cannot get notifications - {resp.status_code}")
-            results.extend([False, False, False])
-    except Exception as e:
-        print(f"❌ B.8-10 ERROR: {e}")
-        results.extend([False, False, False])
-    
-    # B.11: Cross-user isolation
-    print("\n[B.11] PATCH cross-user isolation")
-    try:
-        # Get owner's notification
-        resp = requests.get(
-            f"{BASE_URL}/api/notifications",
-            headers=auth_headers("owner"),
-            timeout=10
-        )
-        
-        if resp.status_code == 200:
-            items = resp.json().get("items", [])
-            if items:
-                owner_notif_id = items[0].get("id")
-                print(f"  → Operator trying to PATCH Owner's notification {owner_notif_id}...")
+                    print(f"❌ FAIL: Expected 200, got {response.status_code}")
                 
-                resp = requests.patch(
-                    f"{BASE_URL}/api/notifications/{owner_notif_id}",
-                    headers=auth_headers("operator"),
-                    json={"read": True},
-                    timeout=10
-                )
-                
-                if resp.status_code == 404:
-                    print(f"✅ B.11 PASS: Cross-user PATCH returns 404 (not 403, no existence leak)")
-                    results.append(True)
-                else:
-                    print(f"❌ B.11 FAIL: Expected 404, got {resp.status_code}")
-                    results.append(False)
+                # Test cross-tenant isolation: Operator2 tries to mark Staff's notification
+                if len(notifications) > 1:
+                    print("\n[H.3] Cross-tenant: Operator2 tries to mark Staff's notification")
+                    operator2_token = login(OPERATOR2_EMAIL, OPERATOR2_PASSWORD)
+                    if operator2_token:
+                        operator2_headers = {"Authorization": f"Bearer {operator2_token}"}
+                        staff_notif_id = notifications[1]['id']  # Use second notification
+                        
+                        response = requests.patch(
+                            f"{BASE_URL}/api/notifications",
+                            json={"id": staff_notif_id},
+                            headers=operator2_headers,
+                            timeout=10
+                        )
+                        
+                        if response.status_code == 404:
+                            print(f"✅ PASS: Operator2 got 404 when trying to mark Staff's notification")
+                            
+                            # Verify Staff's notification is still unread
+                            response = requests.get(f"{BASE_URL}/api/notifications", headers=staff_headers, timeout=10)
+                            if response.status_code == 200:
+                                data = response.json()
+                                notif = next((n for n in data['notifications'] if n['id'] == staff_notif_id), None)
+                                if notif and notif.get('read_at') is None:
+                                    print(f"✅ PASS: Staff's notification is still unread (cross-tenant isolation working)")
+                                else:
+                                    print(f"❌ FAIL: Staff's notification was affected")
+                        else:
+                            print(f"❌ FAIL: Expected 404, got {response.status_code}")
+                    else:
+                        print(f"⚠️  SKIP: Cannot login as Operator2")
             else:
-                print(f"⚠️  B.11: Owner has no notifications, skipping")
-                results.append(None)
+                print(f"⚠️  SKIP: No unread notifications found for staff")
         else:
-            print(f"❌ B.11 FAIL: Cannot get Owner notifications - {resp.status_code}")
-            results.append(False)
+            print(f"❌ FAIL: Cannot fetch staff notifications: {response.status_code}")
     except Exception as e:
-        print(f"❌ B.11 ERROR: {e}")
-        results.append(False)
-    
-    return results
-
-# ============================================================================
-# Main test runner
-# ============================================================================
+        print(f"❌ FAIL: Exception - {e}")
 
 def main():
-    print("="*80)
-    print("PHASE 2 SECTION E — NOTIFICATIONS CENTRE BACKEND TESTS")
+    """Run all tests"""
+    print("\n" + "="*80)
+    print("NOTIFICATIONS API CANONICAL CONTRACT MIGRATION - BACKEND TESTS")
     print("="*80)
     print(f"Base URL: {BASE_URL}")
-    print(f"Test Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
+    print(f"Test started at: {datetime.now().isoformat()}")
     
-    # Login all users
+    # Test SHAPE / GET
+    operator_data = test_shape_get()
+    
+    # Login as Operator for remaining tests
+    operator_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    
+    # Test GET filters
+    test_get_filters(operator_token)
+    
+    # Test PATCH (mark one read)
+    test_patch_mark_one_read(operator_token, operator_data)
+    
+    # Test cross-tenant isolation
+    test_cross_tenant_isolation()
+    
+    # Test POST (mark all read)
+    test_post_mark_all_read(operator_token)
+    
+    # Test legacy routes deleted
+    test_legacy_routes_deleted()
+    
+    # Test regression
+    test_regression()
+    
+    # Additional PATCH tests with staff notifications
+    test_patch_with_staff_notifications()
+    
     print("\n" + "="*80)
-    print("AUTHENTICATION")
+    print("ALL TESTS COMPLETED")
     print("="*80)
-    
-    for role in ["owner", "operator", "staff"]:
-        token, user_id, user = login(role)
-        if token:
-            tokens[role] = token
-            user_ids[role] = user_id
-        else:
-            print(f"❌ CRITICAL: Cannot proceed without {role} login")
-            return
-    
-    print(f"\n✅ All users authenticated successfully")
-    
-    # Track results
-    results = {
-        "passed": 0,
-        "failed": 0,
-        "skipped": 0,
-        "total": 28
-    }
-    
-    # Section A: GET /api/notifications
-    print("\n" + "="*80)
-    print("SECTION A: GET /api/notifications (6 tests)")
-    print("="*80)
-    
-    test_results = [
-        test_a1_get_notifications_without_auth(),
-        test_a2_get_notifications_with_invalid_bearer(),
-        test_a3_get_notifications_with_owner_bearer(),
-        test_a4_get_notifications_with_limit_200(),
-        test_a5_get_notifications_with_invalid_limit(),
-        test_a6_get_notifications_unread_only()
-    ]
-    
-    for result in test_results:
-        if result is True:
-            results["passed"] += 1
-        elif result is False:
-            results["failed"] += 1
-        else:
-            results["skipped"] += 1
-    
-    # Section B: PATCH /api/notifications/[id] (partial - B.7 only)
-    print("\n" + "="*80)
-    print("SECTION B: PATCH /api/notifications/[id] (1 test now, 4 later)")
-    print("="*80)
-    
-    b7_result = test_b7_patch_fake_notification()
-    if b7_result is True:
-        results["passed"] += 1
-    elif b7_result is False:
-        results["failed"] += 1
-    else:
-        results["skipped"] += 1
-    
-    # Section C: Trigger report_submitted
-    print("\n" + "="*80)
-    print("SECTION C: Trigger report_submitted (3 tests)")
-    print("="*80)
-    
-    c12, c13, c14 = test_c12_c13_c14_report_submitted_trigger()
-    for result in [c12, c13, c14]:
-        if result is True:
-            results["passed"] += 1
-        elif result is False:
-            results["failed"] += 1
-        else:
-            results["skipped"] += 1
-    
-    # Section D: Trigger report_status_changed
-    print("\n" + "="*80)
-    print("SECTION D: Trigger report_status_changed (3 tests)")
-    print("="*80)
-    
-    d15, d16, d17 = test_d15_d16_d17_report_status_changed_trigger()
-    for result in [d15, d16, d17]:
-        if result is True:
-            results["passed"] += 1
-        elif result is False:
-            results["failed"] += 1
-        else:
-            results["skipped"] += 1
-    
-    # Section E: POST mark-all-read
-    print("\n" + "="*80)
-    print("SECTION E: POST /api/notifications/mark-all-read (3 tests)")
-    print("="*80)
-    
-    e18, e19, e20 = test_e18_e19_e20_mark_all_read()
-    for result in [e18, e19, e20]:
-        if result is True:
-            results["passed"] += 1
-        elif result is False:
-            results["failed"] += 1
-        else:
-            results["skipped"] += 1
-    
-    # Section F: Trigger site_assigned / site_unassigned
-    print("\n" + "="*80)
-    print("SECTION F: Trigger site_assigned / site_unassigned (4 tests)")
-    print("="*80)
-    
-    f21, f22, f23, f24 = test_f21_f22_f23_f24_site_assignment_triggers()
-    for result in [f21, f22, f23, f24]:
-        if result is True:
-            results["passed"] += 1
-        elif result is False:
-            results["failed"] += 1
-        else:
-            results["skipped"] += 1
-    
-    # Section B (additional): Complete B.8-11
-    b_additional_results = test_b_additional()
-    for result in b_additional_results:
-        if result is True:
-            results["passed"] += 1
-        elif result is False:
-            results["failed"] += 1
-        else:
-            results["skipped"] += 1
-    
-    # Section G: Regression tests
-    print("\n" + "="*80)
-    print("SECTION G: Regression sanity (4 tests)")
-    print("="*80)
-    
-    g_results = [
-        test_g25_support_contact(),
-        test_g26_users_me(),
-        test_g27_dashboard_stats(),
-        test_g28_users_without_auth()
-    ]
-    
-    for result in g_results:
-        if result is True:
-            results["passed"] += 1
-        elif result is False:
-            results["failed"] += 1
-        else:
-            results["skipped"] += 1
-    
-    # Final summary
-    print("\n" + "="*80)
-    print("FINAL SUMMARY")
-    print("="*80)
-    print(f"Total Tests: {results['total']}")
-    print(f"✅ Passed: {results['passed']}")
-    print(f"❌ Failed: {results['failed']}")
-    print(f"⏭️  Skipped: {results['skipped']}")
-    print(f"Success Rate: {results['passed']}/{results['total']} ({results['passed']*100//results['total']}%)")
-    print("="*80)
-    
-    # Cleanup
-    print("\n" + "="*80)
-    print("CLEANUP")
-    print("="*80)
-    print("Note: Test data cleanup is optional. Notifications will naturally age out.")
-    print(f"Created {len(test_data['reports'])} test reports")
-    print(f"Created {len(test_data['notifications'])} test notifications")
-    print(f"Created {len(test_data['assignments'])} test assignments")
-    
-    if results["failed"] == 0:
-        print("\n🎉 ALL TESTS PASSED! Phase 2 Section E is PRODUCTION-READY!")
-    else:
-        print(f"\n⚠️  {results['failed']} test(s) failed. Review the output above for details.")
+    print(f"Test completed at: {datetime.now().isoformat()}")
 
 if __name__ == "__main__":
     main()
