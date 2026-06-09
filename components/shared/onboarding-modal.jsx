@@ -59,7 +59,7 @@ const ROLE_CONTENT = {
         icon: BarChart3,
         title: 'Live portfolio insights',
         body:
-          'Your dashboard rolls up shift submissions, fuel volume, and banking variance across every site. Drill into monthly reports for the detail you need.',
+          'Your dashboard rolls up shift submissions, fuel volume, and banking variance across every site. Use the Analytics Explorer on the Executive page to slice the data however you need.',
       },
       {
         icon: Bell,

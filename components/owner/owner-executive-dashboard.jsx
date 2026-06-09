@@ -18,7 +18,7 @@ import {
 import { authedFetch } from '@/lib/authed-fetch';
 import { formatCurrency } from '@/lib/format';
 import SiteFilter from '@/components/shared/site-filter';
-import AnalyticsExplorer from '@/components/owner/analytics-explorer';
+import AnalyticsExplorer from '@/components/shared/analytics-explorer';
 import {
   createFopsPdf, addKpiStrip, addSectionTitle, addTable, saveFopsPdf,
 } from '@/lib/pdf-export';

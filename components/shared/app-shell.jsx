@@ -1,11 +1,12 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect, no-empty -- pre-existing patterns: localStorage hydration in useEffect + empty catches */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Fuel, LogOut, BarChart3, Building2, Users, Settings,
   Calculator, ClipboardList, FileText, Droplets, Map as MapIcon,
-  TableProperties, TrendingUp, Menu, X, PanelLeftClose, PanelLeftOpen,
+  TrendingUp, Menu, X, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -22,7 +23,6 @@ const OWNER_GROUPS = [
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
       { id: 'executive', label: 'Executive', icon: TrendingUp },
-      { id: 'pivot', label: 'Monthly Reports', icon: TableProperties },
     ],
   },
   {
@@ -48,7 +48,6 @@ const OPERATOR_GROUPS = [
     label: 'Overview',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-      { id: 'pivot', label: 'Monthly Reports', icon: TableProperties },
     ],
   },
   {

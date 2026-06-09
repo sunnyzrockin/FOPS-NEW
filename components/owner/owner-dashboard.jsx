@@ -28,7 +28,6 @@ import OperatorManagement from '@/components/owner/operator-management';
 import OwnerFuelPriceManagement from '@/components/fuel-pricing/owner-fuel-price-management';
 import FuelPriceComparisonSection from '@/components/fuel-pricing/fuel-price-comparison-section';
 import BankingSubmissions from '@/components/shared/banking-submissions';
-import MonthlyReportsPivot from '@/components/operator/monthly-reports-pivot';
 import FuelInventoryDashboard from '@/components/owner/fuel-inventory-dashboard';
 import LiveFuelPricesDashboard from '@/components/fuel-pricing/live-fuel-prices-dashboard';
 import OwnerExecutiveDashboard from '@/components/owner/owner-executive-dashboard';
@@ -139,10 +138,6 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
 
   if (activeTab === 'fuel-prices') {
     return <OwnerFuelPriceManagement user={user} sites={sites} />;
-  }
-
-  if (activeTab === 'pivot') {
-    return <div className="container mx-auto px-4 py-6"><MonthlyReportsPivot user={user} sites={sites} /></div>;
   }
 
   if (activeTab === 'submissions') {

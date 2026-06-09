@@ -14,6 +14,7 @@ import StatCard from '@/components/shared/stat-card';
 import HealthStrip from '@/components/shared/health-strip';
 import ViewToggle from '@/components/shared/view-toggle';
 import SiteFilter from '@/components/shared/site-filter';
+import AnalyticsExplorer from '@/components/shared/analytics-explorer';
 import DailyRollupRow from '@/components/shared/daily-rollup-row';
 import ReportRow from '@/components/shared/report-row';
 import ReportDetail from '@/components/shared/report-detail';
@@ -24,7 +25,6 @@ import FieldConfiguration from '@/components/operator/field-configuration';
 import FuelPricingManagement from '@/components/fuel-pricing/fuel-pricing-management';
 import BankingSubmissions from '@/components/shared/banking-submissions';
 import DipsManagement from '@/components/operator/dips-management';
-import MonthlyReportsPivot from '@/components/operator/monthly-reports-pivot';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -117,9 +117,6 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
   if (activeTab === 'fuel-inventory') {
     return <div className="container mx-auto px-4 py-6"><DipsManagement user={user} sites={sites} /></div>;
   }
-  if (activeTab === 'pivot') {
-    return <div className="container mx-auto px-4 py-6"><MonthlyReportsPivot user={user} sites={sites} /></div>;
-  }
   if (selectedReport) {
     return (
       <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -187,6 +184,11 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
           <StatCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} color="red" />
         </div>
       )}
+
+      {/* Analytics Explorer — operator-scoped aggregate view of the same data.
+          /api/dashboard/timeseries already intersects siteIds with
+          getAllowedSiteIds, so the operator can never see foreign sites. */}
+      <AnalyticsExplorer siteIds={siteIds} sites={sites} dateRange={dateRange} />
 
       <Card className="border border-border/50 shadow-sm">
         <CardHeader>
