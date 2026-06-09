@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect, no-empty -- pre-existing patterns: localStorage/Supabase hydration in useEffect + best-effort empty catches around logout cleanup */
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
@@ -58,25 +59,17 @@ function AppInner() {
         router.replace('/login');
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty array - run only once on mount
 
-  // Global escalation polling - runs every 5 minutes
-  useEffect(() => {
-    if (!mounted || !user) return;
-
-    const checkEscalations = async () => {
-      try {
-        await authedFetch('/api/fuel-prices/escalate', { method: 'POST' });
-      } catch (err) {
-        console.error('Escalation check failed:', err);
-      }
-    };
-
-    checkEscalations();
-    const interval = setInterval(checkEscalations, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [mounted, user]);
+  // -----------------------------------------------------------------
+  // Fuel-price escalation polling used to live here as a 5-minute
+  // setInterval that fired POST /api/fuel-prices/escalate from every
+  // logged-in tab. That endpoint has been retired in favour of a
+  // Vercel Cron job at /api/cron/escalate gated by CRON_SECRET (see
+  // vercel.json + /app/lib/api/handlers/escalations.js). Removing the
+  // poller drops 100% of the per-tab traffic for the same business
+  // outcome.
+  // -----------------------------------------------------------------
 
   const handleLogout = () => {
     // 1) Clear local state + localStorage IMMEDIATELY so UI never hangs.
