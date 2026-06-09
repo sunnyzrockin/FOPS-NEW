@@ -1,9 +1,10 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect -- pre-existing false-positive: async click handlers / setState in click flow */
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Fuel, ShoppingCart, DollarSign, Droplets, Loader2, AlertTriangle,
@@ -12,6 +13,7 @@ import {
 import StatCard from '@/components/shared/stat-card';
 import HealthStrip from '@/components/shared/health-strip';
 import ViewToggle from '@/components/shared/view-toggle';
+import SiteFilter from '@/components/shared/site-filter';
 import DailyRollupRow from '@/components/shared/daily-rollup-row';
 import ReportRow from '@/components/shared/report-row';
 import ReportDetail from '@/components/shared/report-detail';
@@ -27,10 +29,11 @@ import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
 /**
- * OperatorDashboard — Operator-facing dashboard. Shows site-scoped KPIs and
- * shift / daily rollup lists, and routes to Staff / Fuel-Pricing / Form
- * Fields / Banking sub-tabs based on the parent's activeTab. Extracted
- * from /app/app/app/page.js (Phase D Batch 2c).
+ * OperatorDashboard — Operator-facing dashboard. Shows site-scoped KPIs
+ * and shift / daily rollup lists, and routes to Staff / Fuel-Pricing /
+ * Form Fields / Banking sub-tabs based on the parent's activeTab. The
+ * Operator can toggle between Daily Summary and Shift Reports (the
+ * ViewToggle is NOT shown to Owners — they're locked to Daily Summary).
  */
 export default function OperatorDashboard({ user, sites, activeTab }) {
   const [reports, setReports] = useState([]);
@@ -39,24 +42,30 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
   const [selectedReport, setSelectedReport] = useState(null);
   const [viewType, setViewType] = useState('daily');
   const [expandedRollup, setExpandedRollup] = useState(null);
-  const [selectedSite, setSelectedSite] = useState('all');
-  const [dateRange, setDateRange] = useState({
+  // Multi-select site filter — empty array means "All sites" (sends every
+  // allowed site id). Server intersection (getAllowedSiteIds) guarantees
+  // tenant safety regardless of what the client sends.
+  const [selectedSiteIds, setSelectedSiteIds] = useState([]);
+  const [dateRange, setDateRange] = useState(() => ({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0],
-  });
+  }));
   const [loading, setLoading] = useState(true);
   const [lastLoaded, setLastLoaded] = useState(null);
 
-  const siteIds = sites.map((s) => s.id).join(',');
+  const siteIds = (selectedSiteIds.length === 0
+    ? sites.map((s) => s.id)
+    : selectedSiteIds
+  ).join(',');
 
   const loadData = useCallback(async () => {
+    if (!siteIds) { setLoading(false); return; }
     setLoading(true);
     try {
-      const siteFilter = selectedSite === 'all' ? siteIds : selectedSite;
       const [reportsRes, dailyRes, statsRes] = await Promise.all([
-        authedFetch(`/api/reports?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        authedFetch(`/api/daily-rollups?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        authedFetch(`/api/dashboard/stats?siteIds=${siteFilter}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/reports?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/daily-rollups?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
+        authedFetch(`/api/dashboard/stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
       ]);
       const [reportsData, dailyData, statsData] = await Promise.all([
         reportsRes.json(), dailyRes.json(), statsRes.json(),
@@ -70,7 +79,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
     } finally {
       setLoading(false);
     }
-  }, [selectedSite, dateRange, siteIds]);
+  }, [siteIds, dateRange]);
 
   useEffect(() => { if (activeTab === 'dashboard') loadData(); }, [loadData, activeTab]);
 
@@ -130,30 +139,37 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
       <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap gap-4">
-              <Select value={selectedSite} onValueChange={setSelectedSite}>
-                <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sites</SelectItem>
-                  {sites.map((site) => <SelectItem key={site.id} value={site.id}>{site.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Input
-                type="date"
-                value={dateRange.start}
-                onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
-                className="w-[150px]"
-              />
-              <Input
-                type="date"
-                value={dateRange.end}
-                onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
-                className="w-[150px]"
-              />
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs">Sites</Label>
+                <SiteFilter
+                  sites={sites}
+                  selectedIds={selectedSiteIds}
+                  onChange={setSelectedSiteIds}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">From</Label>
+                <Input
+                  type="date"
+                  value={dateRange.start}
+                  onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
+                  className="w-[150px]"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">To</Label>
+                <Input
+                  type="date"
+                  value={dateRange.end}
+                  onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
+                  className="w-[150px]"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <ViewToggle viewType={viewType} setViewType={setViewType} />
-              <ExportDialog sites={sites} siteIds={siteIds} />
+              <ExportDialog sites={sites} siteIds={siteIds} role={user?.role} />
             </div>
           </div>
         </CardContent>

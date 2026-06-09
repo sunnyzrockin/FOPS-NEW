@@ -394,7 +394,7 @@ function Pricing() {
               proposal and a walk-through within one business day.
             </p>
             <a
-              href="mailto:hello@workflowlite.app?subject=FOPS%20pricing%20enquiry"
+              href="mailto:hello@fops.app?subject=FOPS%20pricing%20enquiry"
               className={`mt-5 w-full ${PRIMARY_CTA_CLASS}`}
             >
               Contact us <ArrowRight className="h-4 w-4" />

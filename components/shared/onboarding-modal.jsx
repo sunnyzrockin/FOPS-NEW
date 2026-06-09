@@ -4,7 +4,7 @@
  * <OnboardingModal />
  *
  * A small, role-aware 3-step welcome modal shown to a user the first time
- * they log into WorkflowLite. The flow is intentionally lightweight: a brief
+ * they log into FOPS. The flow is intentionally lightweight: a brief
  * welcome, a few "what you can do here" highlights, and a closing CTA.
  *
  * The modal calls PATCH /api/users/me with { first_login: false } when the
@@ -45,7 +45,7 @@ import { cn } from '@/lib/utils';
 
 const ROLE_CONTENT = {
   owner: {
-    title: (name) => `Welcome to WorkflowLite, ${name || 'Owner'}`,
+    title: (name) => `Welcome to FOPS, ${name || 'Owner'}`,
     subtitle:
       "You're now in command of the Sunstate Group portfolio. Let's walk through the basics.",
     steps: [
@@ -70,7 +70,7 @@ const ROLE_CONTENT = {
     ],
   },
   operator: {
-    title: (name) => `Welcome to WorkflowLite, ${name || 'Operator'}`,
+    title: (name) => `Welcome to FOPS, ${name || 'Operator'}`,
     subtitle:
       "You're the day-to-day owner of your sites. Here's how to get going.",
     steps: [

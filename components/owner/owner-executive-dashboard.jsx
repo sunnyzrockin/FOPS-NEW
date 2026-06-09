@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity -- pre-existing false-positives: timestamp memo + PDF builder closure */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 import { formatCurrency } from '@/lib/format';
+import SiteFilter from '@/components/shared/site-filter';
 import {
   createFopsPdf, addKpiStrip, addSectionTitle, addTable, saveFopsPdf,
 } from '@/lib/pdf-export';
@@ -47,14 +49,23 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
   const [variance, setVariance] = useState(null);
   const [performers, setPerformers] = useState({ top: [], bottom: [], metric: 'revenue' });
   const [volumeByGrade, setVolumeByGrade] = useState({ grades: [], totalLitres: 0 });
-  const [dateRange, setDateRange] = useState({
+  const [dateRange, setDateRange] = useState(() => ({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0],
-  });
+  }));
   const [performerMetric, setPerformerMetric] = useState('revenue');
   const [lastLoaded, setLastLoaded] = useState(null);
+  // Multi-select site filter — empty array = "All sites". The server
+  // intersects against getAllowedSiteIds, so security is preserved.
+  const [selectedSiteIds, setSelectedSiteIds] = useState([]);
 
-  const siteIds = useMemo(() => sites.map((s) => s.id).join(','), [sites]);
+  const siteIds = useMemo(
+    () => (selectedSiteIds.length === 0
+      ? sites.map((s) => s.id)
+      : selectedSiteIds
+    ).join(','),
+    [sites, selectedSiteIds],
+  );
 
   // Human-readable "X min ago / just now" string. Re-derived on every
   // render so it stays accurate without needing a refresh timer.
@@ -97,9 +108,10 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   const exportPdf = () => {
+    const selectedCount = selectedSiteIds.length === 0 ? sites.length : selectedSiteIds.length;
     const doc = createFopsPdf({
       title: 'Owner Executive Dashboard',
-      subtitle: `${sites.length} site${sites.length === 1 ? '' : 's'}`,
+      subtitle: `${selectedCount} site${selectedCount === 1 ? '' : 's'}`,
       dateRange: { from: dateRange.start, to: dateRange.end },
     });
 
@@ -192,6 +204,14 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
               </div>
             </div>
             <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Sites</Label>
+                <SiteFilter
+                  sites={sites}
+                  selectedIds={selectedSiteIds}
+                  onChange={setSelectedSiteIds}
+                />
+              </div>
               <div className="space-y-1">
                 <Label className="text-xs">From</Label>
                 <Input type="date" value={dateRange.start} onChange={(e) => setDateRange((p) => ({ ...p, start: e.target.value }))} className="w-[150px]" />

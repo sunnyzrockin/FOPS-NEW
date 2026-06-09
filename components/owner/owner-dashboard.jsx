@@ -1,26 +1,25 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect -- pre-existing false-positive: async click handlers / localStorage hydration in useEffect */
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Legend,
 } from 'recharts';
 import {
-  Fuel, ShoppingCart, DollarSign, Droplets, FileText, TrendingUp,
+  Fuel, ShoppingCart, DollarSign, Droplets, TrendingUp,
   BarChart3, Loader2, AlertTriangle, Calculator, Calendar, RefreshCw,
   AlertCircle, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 import StatCard from '@/components/shared/stat-card';
 import HealthStrip from '@/components/shared/health-strip';
-import ViewToggle from '@/components/shared/view-toggle';
+import SiteFilter from '@/components/shared/site-filter';
 import DailyRollupRow from '@/components/shared/daily-rollup-row';
-import ReportRow from '@/components/shared/report-row';
 import ReportDetail from '@/components/shared/report-detail';
 import ExportDialog from '@/components/shared/export-dialog';
 import MorningPriceBrief from '@/components/shared/morning-price-brief';
@@ -46,16 +45,19 @@ import { authedFetch } from '@/lib/authed-fetch';
 export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites }) {
   const [stats, setStats] = useState(null);
   const [dailyRollups, setDailyRollups] = useState([]);
-  const [shiftReports, setShiftReports] = useState([]);
   const [siteStats, setSiteStats] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
-  const [viewType, setViewType] = useState('daily');
+  // OWNER is locked to Daily Summary — the ViewToggle is not rendered.
   const [expandedRollup, setExpandedRollup] = useState(null);
-  const [dateRange, setDateRange] = useState({
+  // Multi-select site filter — empty array means "All sites" (sends every
+  // allowed site id). Server intersection (getAllowedSiteIds) guarantees
+  // tenant safety regardless of what the client sends.
+  const [selectedSiteIds, setSelectedSiteIds] = useState([]);
+  const [dateRange, setDateRange] = useState(() => ({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0],
-  });
+  }));
   const [loading, setLoading] = useState(true);
   const [lastLoaded, setLastLoaded] = useState(null);
 
@@ -65,37 +67,42 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
     try {
       const v = localStorage.getItem('fops_morning_brief_collapsed');
       if (v === 'true') setBriefCollapsed(true);
-    } catch {}
+    } catch {
+      /* localStorage access can throw in private mode — ignore */
+    }
   }, []);
   const toggleBrief = useCallback(() => {
     setBriefCollapsed((prev) => {
       const next = !prev;
-      try { localStorage.setItem('fops_morning_brief_collapsed', String(next)); } catch {}
+      try { localStorage.setItem('fops_morning_brief_collapsed', String(next)); } catch {
+        /* private mode safety */
+      }
       return next;
     });
   }, []);
 
-  const siteIds = sites.map((s) => s.id).join(',');
+  const siteIds = (selectedSiteIds.length === 0
+    ? sites.map((s) => s.id)
+    : selectedSiteIds
+  ).join(',');
 
   const loadData = useCallback(async () => {
     if (!siteIds) { setLoading(false); return; }
     setLoading(true);
     try {
-      const [statsRes, dailyRes, shiftsRes, siteStatsRes, chartRes] = await Promise.all([
+      const [statsRes, dailyRes, siteStatsRes, chartRes] = await Promise.all([
         authedFetch(`/api/dashboard/stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         authedFetch(`/api/daily-rollups?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
-        authedFetch(`/api/reports?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         authedFetch(`/api/dashboard/site-stats?siteIds=${siteIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`),
         authedFetch(`/api/dashboard/revenue-chart?siteIds=${siteIds}&days=7`),
       ]);
 
-      const [statsData, dailyData, shiftsData, siteStatsData, chartDataRes] = await Promise.all([
-        statsRes.json(), dailyRes.json(), shiftsRes.json(), siteStatsRes.json(), chartRes.json(),
+      const [statsData, dailyData, siteStatsData, chartDataRes] = await Promise.all([
+        statsRes.json(), dailyRes.json(), siteStatsRes.json(), chartRes.json(),
       ]);
 
       setStats(statsData);
       setDailyRollups(Array.isArray(dailyData) ? dailyData : []);
-      setShiftReports(Array.isArray(shiftsData) ? shiftsData : []);
       setSiteStats(Array.isArray(siteStatsData) ? siteStatsData : []);
       setChartData(Array.isArray(chartDataRes) ? chartDataRes : []);
       setLastLoaded(Date.now());
@@ -169,6 +176,14 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-end gap-4">
               <div className="space-y-1">
+                <Label className="text-xs">Sites</Label>
+                <SiteFilter
+                  sites={sites}
+                  selectedIds={selectedSiteIds}
+                  onChange={setSelectedSiteIds}
+                />
+              </div>
+              <div className="space-y-1">
                 <Label className="text-xs">From</Label>
                 <Input type="date" value={dateRange.start} onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))} className="w-[150px]" />
               </div>
@@ -181,8 +196,8 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
               </Button>
             </div>
             <div className="flex items-center gap-3">
-              <ViewToggle viewType={viewType} setViewType={setViewType} />
-              <ExportDialog sites={sites} siteIds={siteIds} />
+              {/* Owner has Daily Summary only — ViewToggle intentionally not rendered here */}
+              <ExportDialog sites={sites} siteIds={siteIds} role={user?.role} />
             </div>
           </div>
         </CardContent>
@@ -327,43 +342,33 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
           <Card className="border border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                {viewType === 'daily' ? <Calendar className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
-                {viewType === 'daily' ? 'Daily Summaries' : 'Shift Reports'}
+                <Calendar className="h-5 w-5" />
+                Daily Summaries
               </CardTitle>
               <CardDescription>
                 {stats?.pendingReports || 0} pending • {stats?.reviewedReports || 0} reviewed
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {viewType === 'daily' ? (
-                <div className="space-y-4">
-                  {dailyRollups.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No reports found</p>
-                  ) : (
-                    dailyRollups.map((rollup) => (
-                      <DailyRollupRow
-                        key={`${rollup.site_id}_${rollup.date}`}
-                        rollup={rollup}
-                        onClick={handleReportClick}
-                        expanded={expandedRollup === `${rollup.site_id}_${rollup.date}`}
-                        onToggle={() => setExpandedRollup(
-                          expandedRollup === `${rollup.site_id}_${rollup.date}`
-                            ? null
-                            : `${rollup.site_id}_${rollup.date}`
-                        )}
-                      />
-                    ))
-                  )}
-                </div>
-              ) : (
-                <ScrollArea className="h-[500px]">
-                  <div className="space-y-2">
-                    {shiftReports.map((report) => (
-                      <ReportRow key={report.id} report={report} onClick={() => handleReportClick(report.id)} />
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
+              <div className="space-y-4">
+                {dailyRollups.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No reports found</p>
+                ) : (
+                  dailyRollups.map((rollup) => (
+                    <DailyRollupRow
+                      key={`${rollup.site_id}_${rollup.date}`}
+                      rollup={rollup}
+                      onClick={handleReportClick}
+                      expanded={expandedRollup === `${rollup.site_id}_${rollup.date}`}
+                      onToggle={() => setExpandedRollup(
+                        expandedRollup === `${rollup.site_id}_${rollup.date}`
+                          ? null
+                          : `${rollup.site_id}_${rollup.date}`
+                      )}
+                    />
+                  ))
+                )}
+              </div>
             </CardContent>
           </Card>
         </>

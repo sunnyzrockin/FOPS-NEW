@@ -34,6 +34,8 @@ export async function GET(request) {
     const siteIds = url.searchParams.get('siteIds');
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
+    const viewType = (url.searchParams.get('viewType') || 'shift').toLowerCase();
+    const format = (url.searchParams.get('format') || 'xlsx').toLowerCase();
 
     if (!siteIds) {
       return NextResponse.json(
@@ -92,20 +94,33 @@ export async function GET(request) {
         : '',
     }));
 
+    // JSON branch: used by the client-side PDF generator in ExportDialog.
+    // Returns the same exportData rows the XLSX branch would have written.
+    if (format === 'json') {
+      return NextResponse.json(
+        { rows: exportData, viewType, startDate, endDate },
+        { headers: corsHeaders }
+      );
+    }
+
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Shift Reports');
 
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
+    // FOPS-branded, content-aware filename: FOPS_{ViewType}_{from}_to_{to}.xlsx
+    const viewLabel = viewType === 'daily' ? 'DailySummary' : 'ShiftReports';
+    const fromTag = startDate || 'all';
+    const toTag = endDate || 'all';
+    const filename = `FOPS_${viewLabel}_${fromTag}_to_${toTag}.xlsx`;
+
     return new NextResponse(buf, {
       headers: {
         ...corsHeaders,
         'Content-Type':
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="shift-reports-${new Date()
-          .toISOString()
-          .split('T')[0]}.xlsx"`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
   } catch (error) {

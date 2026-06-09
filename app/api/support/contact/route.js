@@ -31,7 +31,7 @@ export const maxDuration = 30;
 export const OPTIONS = optionsHandler;
 
 const SUPPORT_EMAIL =
-  process.env.SUPPORT_EMAIL || 'support@workflowlite.app';
+  process.env.SUPPORT_EMAIL || 'support@fops.app';
 
 const CATEGORIES = new Set(['bug', 'question', 'feature', 'access', 'other']);
 
