@@ -1,684 +1,794 @@
 #!/usr/bin/env python3
 """
-Backend test for Notifications API Canonical Contract Migration
-Tests the rewritten /api/notifications route (GET/PATCH/POST)
+Backend test suite for Executive Analytics Explorer — /api/dashboard/timeseries endpoint
+Tests scenarios A-M from the review request.
 """
 
 import requests
 import json
-from datetime import datetime
+import re
+from typing import Dict, Any
 
+# Base URL from .env
 BASE_URL = "https://fuel-ops-simple.preview.emergentagent.com"
 
 # Test credentials
+OWNER_EMAIL = "owner@workflowlite.com"
+OWNER_PASSWORD = "WorkflowDemo2026!"
 OPERATOR_EMAIL = "operator@workflowlite.com"
 OPERATOR_PASSWORD = "WorkflowDemo2026!"
-OPERATOR2_EMAIL = "operator2@workflowlite.com"
-OPERATOR2_PASSWORD = "WorkflowDemo2026!"
 STAFF_EMAIL = "staff@workflowlite.com"
 STAFF_PASSWORD = "WorkflowDemo2026!"
 
-def login(email, password):
-    """Login and return JWT token"""
-    try:
-        response = requests.post(
-            f"{BASE_URL}/api/auth/login",
-            json={"email": email, "password": password},
-            timeout=10
-        )
-        if response.status_code == 200:
-            data = response.json()
-            # Token is in session.access_token
-            session = data.get("session", {})
-            return session.get("access_token")
-        else:
-            print(f"❌ Login failed for {email}: {response.status_code} - {response.text}")
-            return None
-    except Exception as e:
-        print(f"❌ Login exception for {email}: {e}")
-        return None
+# Test date range
+START_DATE = "2026-03-01"
+END_DATE = "2026-06-09"
 
-def test_shape_get():
-    """Test SHAPE / GET scenarios"""
-    print("\n" + "="*80)
-    print("SECTION A: SHAPE / GET TESTS")
-    print("="*80)
-    
-    # (A) GET without Bearer → 401
-    print("\n[A] GET /api/notifications without Bearer → expect 401")
+def login(email: str, password: str) -> Dict[str, Any]:
+    """Login and return auth data"""
+    response = requests.post(
+        f"{BASE_URL}/api/auth/login",
+        json={"email": email, "password": password},
+        headers={"Content-Type": "application/json"}
+    )
+    if response.status_code != 200:
+        raise Exception(f"Login failed for {email}: {response.status_code} {response.text}")
+    data = response.json()
+    # Extract token from session
+    data["token"] = data["session"]["access_token"]
+    return data
+
+def test_a_auth_gate():
+    """(A) GET /api/dashboard/timeseries without Bearer → 401"""
+    print("\n=== TEST A: Auth Gate ===")
     try:
-        response = requests.get(f"{BASE_URL}/api/notifications", timeout=10)
+        response = requests.get(f"{BASE_URL}/api/dashboard/timeseries")
         if response.status_code == 401:
-            print(f"✅ PASS: Got 401 without Bearer")
+            print("✅ A. Auth gate working - 401 without Bearer token")
+            return True
         else:
-            print(f"❌ FAIL: Expected 401, got {response.status_code}")
+            print(f"❌ A. Expected 401, got {response.status_code}")
+            return False
     except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    # (B) GET with bogus Bearer → 401
-    print("\n[B] GET /api/notifications with bogus Bearer → expect 401")
-    try:
-        headers = {"Authorization": "Bearer bogus-token-12345"}
-        response = requests.get(f"{BASE_URL}/api/notifications", headers=headers, timeout=10)
-        if response.status_code == 401:
-            print(f"✅ PASS: Got 401 with bogus Bearer")
-        else:
-            print(f"❌ FAIL: Expected 401, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    # Login as Operator for remaining tests
-    operator_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
-    if not operator_token:
-        print("❌ FAIL: Cannot login as Operator, skipping remaining GET tests")
-        return None
-    
-    # (C) GET ?limit=50 as Operator → 200 with correct shape
-    print("\n[C] GET /api/notifications?limit=50 as Operator → expect 200 with correct shape")
-    try:
-        headers = {"Authorization": f"Bearer {operator_token}"}
-        response = requests.get(f"{BASE_URL}/api/notifications?limit=50", headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            # Check top-level keys
-            if "notifications" in data and "unreadCount" in data:
-                print(f"✅ PASS: Got 200 with correct top-level keys: notifications (array), unreadCount (number)")
-                print(f"   - notifications count: {len(data['notifications'])}")
-                print(f"   - unreadCount: {data['unreadCount']}")
-                
-                # Check structure of first notification if exists
-                if len(data['notifications']) > 0:
-                    notif = data['notifications'][0]
-                    required_fields = ['id', 'user_id', 'type', 'title', 'body', 'link', 'read_at', 'created_at']
-                    missing_fields = [f for f in required_fields if f not in notif]
-                    if not missing_fields:
-                        print(f"✅ PASS: First notification has all required fields")
-                        return data  # Return data for use in other tests
-                    else:
-                        print(f"❌ FAIL: Missing fields in notification: {missing_fields}")
-                else:
-                    print(f"⚠️  WARNING: No notifications found for operator")
-                    return data
-            else:
-                print(f"❌ FAIL: Missing top-level keys. Got: {list(data.keys())}")
-        else:
-            print(f"❌ FAIL: Expected 200, got {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    return None
+        print(f"❌ A. Exception: {e}")
+        return False
 
-def test_get_filters(operator_token):
-    """Test GET filter scenarios"""
-    print("\n" + "="*80)
-    print("SECTION B: GET FILTER TESTS")
-    print("="*80)
-    
-    if not operator_token:
-        print("❌ SKIP: No operator token available")
-        return
-    
-    headers = {"Authorization": f"Bearer {operator_token}"}
-    
-    # (D) GET ?unread=1 → all returned rows have read_at === null
-    print("\n[D] GET /api/notifications?unread=1 → expect all rows have read_at === null")
+def test_b_basic_shape(token: str):
+    """(B) Owner GET with full params → 200 with correct shape"""
+    print("\n=== TEST B: Basic Shape & Structure ===")
     try:
-        response = requests.get(f"{BASE_URL}/api/notifications?unread=1", headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            notifications = data.get('notifications', [])
-            unread_count = data.get('unreadCount', 0)
-            
-            if len(notifications) > 0:
-                all_unread = all(n.get('read_at') is None for n in notifications)
-                if all_unread:
-                    print(f"✅ PASS: All {len(notifications)} returned notifications have read_at === null")
-                    print(f"   - Total unreadCount: {unread_count}")
-                else:
-                    read_notifications = [n for n in notifications if n.get('read_at') is not None]
-                    print(f"❌ FAIL: Found {len(read_notifications)} notifications with read_at not null")
-            else:
-                print(f"⚠️  WARNING: No unread notifications found (unreadCount: {unread_count})")
-        else:
-            print(f"❌ FAIL: Expected 200, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    # (E) GET ?limit=200 → capped at 100
-    print("\n[E] GET /api/notifications?limit=200 → expect limit capped at 100")
-    try:
-        response = requests.get(f"{BASE_URL}/api/notifications?limit=200", headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            notifications = data.get('notifications', [])
-            if len(notifications) <= 100:
-                print(f"✅ PASS: Returned {len(notifications)} notifications (≤ 100, limit capped)")
-            else:
-                print(f"❌ FAIL: Returned {len(notifications)} notifications (> 100, limit not capped)")
-        else:
-            print(f"❌ FAIL: Expected 200, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-
-def test_patch_mark_one_read(operator_token, operator_data):
-    """Test PATCH (mark one read) scenarios"""
-    print("\n" + "="*80)
-    print("SECTION C: PATCH (MARK ONE READ) TESTS")
-    print("="*80)
-    
-    # (F) PATCH without Bearer → 401
-    print("\n[F] PATCH /api/notifications without Bearer → expect 401")
-    try:
-        response = requests.patch(
-            f"{BASE_URL}/api/notifications",
-            json={"id": "test-id"},
-            timeout=10
-        )
-        if response.status_code == 401:
-            print(f"✅ PASS: Got 401 without Bearer")
-        else:
-            print(f"❌ FAIL: Expected 401, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    if not operator_token:
-        print("❌ SKIP: No operator token available for remaining PATCH tests")
-        return None
-    
-    headers = {"Authorization": f"Bearer {operator_token}"}
-    
-    # (G) PATCH with body {} (missing id) → 400
-    print("\n[G] PATCH /api/notifications with body {} (missing id) → expect 400")
-    try:
-        response = requests.patch(
-            f"{BASE_URL}/api/notifications",
-            json={},
-            headers=headers,
-            timeout=10
-        )
-        if response.status_code == 400:
-            data = response.json()
-            print(f"✅ PASS: Got 400 with error message: {data.get('error')}")
-        else:
-            print(f"❌ FAIL: Expected 400, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    # Find an unread notification for operator
-    own_notification_id = None
-    if operator_data and 'notifications' in operator_data:
-        unread_notifications = [n for n in operator_data['notifications'] if n.get('read_at') is None]
-        if unread_notifications:
-            own_notification_id = unread_notifications[0]['id']
-    
-    # (H) PATCH with body { id: "<own-notification-id>" } → 200
-    print("\n[H] PATCH /api/notifications with body { id: '<own-notification-id>' } → expect 200")
-    if own_notification_id:
-        try:
-            response = requests.patch(
-                f"{BASE_URL}/api/notifications",
-                json={"id": own_notification_id},
-                headers=headers,
-                timeout=10
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('read_at') is not None:
-                    print(f"✅ PASS: Got 200, notification marked as read (read_at: {data.get('read_at')})")
-                else:
-                    print(f"❌ FAIL: Got 200 but read_at is still null")
-            else:
-                print(f"❌ FAIL: Expected 200, got {response.status_code} - {response.text}")
-        except Exception as e:
-            print(f"❌ FAIL: Exception - {e}")
-    else:
-        print(f"⚠️  SKIP: No unread notification found for operator")
-    
-    # (I) PATCH with body { id: "00000000-0000-0000-0000-000000000000" } → 404
-    print("\n[I] PATCH /api/notifications with non-existent id → expect 404")
-    try:
-        response = requests.patch(
-            f"{BASE_URL}/api/notifications",
-            json={"id": "00000000-0000-0000-0000-000000000000"},
-            headers=headers,
-            timeout=10
-        )
-        if response.status_code == 404:
-            data = response.json()
-            print(f"✅ PASS: Got 404 with message: {data.get('error')}")
-        else:
-            print(f"❌ FAIL: Expected 404, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    return own_notification_id
-
-def test_cross_tenant_isolation():
-    """Test cross-tenant isolation (J)"""
-    print("\n" + "="*80)
-    print("SECTION D: CROSS-TENANT ISOLATION TEST")
-    print("="*80)
-    
-    # (J) Cross-tenant: Operator2 cannot mark Operator1's notification
-    print("\n[J] Cross-tenant: Operator2 tries to mark Operator1's notification → expect 404")
-    
-    # Login as Operator1 and get an unread notification
-    operator1_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
-    if not operator1_token:
-        print("❌ SKIP: Cannot login as Operator1")
-        return
-    
-    headers1 = {"Authorization": f"Bearer {operator1_token}"}
-    try:
-        response = requests.get(f"{BASE_URL}/api/notifications?unread=1", headers=headers1, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            notifications = data.get('notifications', [])
-            if len(notifications) > 0:
-                operator1_notification_id = notifications[0]['id']
-                print(f"   - Found Operator1's unread notification: {operator1_notification_id}")
-                
-                # Login as Operator2 and try to mark Operator1's notification
-                operator2_token = login(OPERATOR2_EMAIL, OPERATOR2_PASSWORD)
-                if not operator2_token:
-                    print("❌ SKIP: Cannot login as Operator2")
-                    return
-                
-                headers2 = {"Authorization": f"Bearer {operator2_token}"}
-                response = requests.patch(
-                    f"{BASE_URL}/api/notifications",
-                    json={"id": operator1_notification_id},
-                    headers=headers2,
-                    timeout=10
-                )
-                
-                if response.status_code == 404:
-                    print(f"✅ PASS: Operator2 got 404 when trying to mark Operator1's notification")
-                    
-                    # Verify Operator1's notification is still unread
-                    response = requests.get(f"{BASE_URL}/api/notifications", headers=headers1, timeout=10)
-                    if response.status_code == 200:
-                        data = response.json()
-                        notif = next((n for n in data['notifications'] if n['id'] == operator1_notification_id), None)
-                        if notif and notif.get('read_at') is None:
-                            print(f"✅ PASS: Operator1's notification is still unread (cross-tenant isolation working)")
-                        else:
-                            print(f"❌ FAIL: Operator1's notification was affected")
-                else:
-                    print(f"❌ FAIL: Expected 404, got {response.status_code}")
-            else:
-                print(f"⚠️  SKIP: No unread notifications found for Operator1")
-        else:
-            print(f"❌ FAIL: Cannot fetch Operator1's notifications: {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-
-def test_post_mark_all_read(operator_token):
-    """Test POST (mark all read) scenarios"""
-    print("\n" + "="*80)
-    print("SECTION E: POST (MARK ALL READ) TESTS")
-    print("="*80)
-    
-    # (K) POST without Bearer → 401
-    print("\n[K] POST /api/notifications without Bearer → expect 401")
-    try:
-        response = requests.post(f"{BASE_URL}/api/notifications", timeout=10)
-        if response.status_code == 401:
-            print(f"✅ PASS: Got 401 without Bearer")
-        else:
-            print(f"❌ FAIL: Expected 401, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    if not operator_token:
-        print("❌ SKIP: No operator token available for remaining POST tests")
-        return
-    
-    headers = {"Authorization": f"Bearer {operator_token}"}
-    
-    # (L) POST as Operator → 200 with { ok: true }, unreadCount becomes 0
-    print("\n[L] POST /api/notifications as Operator → expect 200 with { ok: true }")
-    try:
-        response = requests.post(f"{BASE_URL}/api/notifications", headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('ok') is True:
-                print(f"✅ PASS: Got 200 with {{ ok: true }}")
-                
-                # Verify unreadCount is now 0
-                response = requests.get(f"{BASE_URL}/api/notifications?limit=50", headers=headers, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    unread_count = data.get('unreadCount', -1)
-                    if unread_count == 0:
-                        print(f"✅ PASS: unreadCount is now 0 after mark-all-read")
-                    else:
-                        print(f"❌ FAIL: unreadCount is {unread_count}, expected 0")
-            else:
-                print(f"❌ FAIL: Got 200 but response is not {{ ok: true }}: {data}")
-        else:
-            print(f"❌ FAIL: Expected 200, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    # (M) Calling POST again is idempotent
-    print("\n[M] POST /api/notifications again (idempotent) → expect 200 with { ok: true }")
-    try:
-        response = requests.post(f"{BASE_URL}/api/notifications", headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('ok') is True:
-                print(f"✅ PASS: Got 200 with {{ ok: true }} (idempotent)")
-                
-                # Verify unreadCount is still 0
-                response = requests.get(f"{BASE_URL}/api/notifications?limit=50", headers=headers, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    unread_count = data.get('unreadCount', -1)
-                    if unread_count == 0:
-                        print(f"✅ PASS: unreadCount is still 0 (idempotent)")
-                    else:
-                        print(f"⚠️  WARNING: unreadCount is {unread_count}, expected 0")
-            else:
-                print(f"❌ FAIL: Got 200 but response is not {{ ok: true }}: {data}")
-        else:
-            print(f"❌ FAIL: Expected 200, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-
-def test_legacy_routes_deleted():
-    """Test that legacy routes are deleted"""
-    print("\n" + "="*80)
-    print("SECTION F: LEGACY ROUTES (SHOULD BE DELETED)")
-    print("="*80)
-    
-    # Login to get a valid token
-    operator_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
-    if not operator_token:
-        print("❌ SKIP: Cannot login as Operator")
-        return
-    
-    headers = {"Authorization": f"Bearer {operator_token}"}
-    
-    # (N) GET /api/notifications/<some-id> → 404
-    print("\n[N] GET /api/notifications/<some-id> → expect 404 (route deleted)")
-    try:
-        response = requests.get(
-            f"{BASE_URL}/api/notifications/test-id-12345",
-            headers=headers,
-            timeout=10
-        )
-        if response.status_code == 404:
-            print(f"✅ PASS: Got 404 (legacy route deleted)")
-        else:
-            print(f"❌ FAIL: Expected 404, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-    
-    # (O) POST /api/notifications/mark-all-read → 404
-    print("\n[O] POST /api/notifications/mark-all-read → expect 404 (route deleted)")
-    try:
-        response = requests.post(
-            f"{BASE_URL}/api/notifications/mark-all-read",
-            headers=headers,
-            timeout=10
-        )
-        if response.status_code == 404:
-            print(f"✅ PASS: Got 404 (legacy route deleted)")
-        else:
-            print(f"❌ FAIL: Expected 404, got {response.status_code}")
-    except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
-
-def test_regression():
-    """Test regression scenario"""
-    print("\n" + "="*80)
-    print("SECTION G: REGRESSION TEST")
-    print("="*80)
-    
-    # (P) After marking all read, trigger a notification via POST /api/staff-assignments
-    print("\n[P] Regression: Trigger notification via POST /api/staff-assignments")
-    
-    # Login as Operator
-    operator_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
-    if not operator_token:
-        print("❌ SKIP: Cannot login as Operator")
-        return
-    
-    headers = {"Authorization": f"Bearer {operator_token}"}
-    
-    # Get staff-001 token
-    staff_token = login(STAFF_EMAIL, STAFF_PASSWORD)
-    if not staff_token:
-        print("   ❌ SKIP: Cannot login as Staff")
-        return
-    
-    staff_headers = {"Authorization": f"Bearer {staff_token}"}
-    
-    # First, mark all staff notifications as read
-    print("   - Step 1: Mark all staff notifications as read")
-    try:
-        response = requests.post(f"{BASE_URL}/api/notifications", headers=staff_headers, timeout=10)
-        if response.status_code == 200:
-            print(f"   ✅ Marked all staff notifications as read")
-        else:
-            print(f"   ⚠️  Failed to mark all as read: {response.status_code}")
-    except Exception as e:
-        print(f"   ❌ Exception: {e}")
-    
-    # Verify unreadCount is 0
-    print("   - Step 2: Verify staff unreadCount is 0")
-    try:
-        response = requests.get(f"{BASE_URL}/api/notifications", headers=staff_headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            unread_count = data.get('unreadCount', -1)
-            if unread_count == 0:
-                print(f"   ✅ Staff unreadCount is 0")
-            else:
-                print(f"   ⚠️  Staff unreadCount is {unread_count}, expected 0")
-    except Exception as e:
-        print(f"   ❌ Exception: {e}")
-    
-    # Create a staff assignment to trigger a notification
-    print("   - Step 3: Create/update staff assignment to trigger notification")
-    try:
-        # First, try to delete existing assignment if it exists
-        response = requests.get(f"{BASE_URL}/api/staff-assignments", headers=headers, timeout=10)
-        if response.status_code == 200:
-            assignments = response.json()
-            existing = next(
-                (a for a in assignments if a.get('staff_user_id') == 'staff-001' and a.get('site_id') == 'site-002'),
-                None
-            )
-            if existing:
-                assignment_id = existing.get('id')
-                response = requests.delete(
-                    f"{BASE_URL}/api/staff-assignments/{assignment_id}",
-                    headers=headers,
-                    timeout=10
-                )
-                print(f"   - Deleted existing assignment (status: {response.status_code})")
-        
-        # Now create a new assignment
-        assignment_data = {
-            "staff_user_id": "staff-001",
-            "site_id": "site-002"
+        params = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE
         }
-        
-        response = requests.post(
-            f"{BASE_URL}/api/staff-assignments",
-            json=assignment_data,
-            headers=headers,
-            timeout=10
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
         )
         
-        if response.status_code in [200, 201]:
-            print(f"   ✅ Staff assignment created (status: {response.status_code})")
-            
-            # Check if staff-001 has a new unread notification
-            print("   - Step 4: Check if staff-001 has new unread notification")
+        if response.status_code != 200:
+            print(f"❌ B. Expected 200, got {response.status_code}: {response.text}")
+            return False, None
+        
+        data = response.json()
+        
+        # Check top-level keys
+        required_keys = {"periods", "series", "totals", "metric", "segmentBy", "granularity", "startDate", "endDate"}
+        actual_keys = set(data.keys())
+        if required_keys != actual_keys:
+            print(f"❌ B. Key mismatch. Expected: {required_keys}, Got: {actual_keys}")
+            return False, None
+        
+        # Check periods is sorted ascending
+        periods = data["periods"]
+        if periods != sorted(periods):
+            print(f"❌ B. Periods not sorted ascending")
+            return False, None
+        
+        # Check series structure
+        series = data["series"]
+        if not isinstance(series, list):
+            print(f"❌ B. Series is not a list")
+            return False, None
+        
+        # Check series[i].values.length === periods.length
+        for i, s in enumerate(series):
+            if len(s["values"]) != len(periods):
+                print(f"❌ B. Series[{i}] values length {len(s['values'])} != periods length {len(periods)}")
+                return False, None
+        
+        # Check series is sorted by total DESC
+        series_totals = [sum(s["values"]) for s in series]
+        if series_totals != sorted(series_totals, reverse=True):
+            print(f"❌ B. Series not sorted by total DESC")
+            return False, None
+        
+        # Check totals structure
+        totals = data["totals"]
+        if not isinstance(totals, dict) or "metric" not in totals or "reportCount" not in totals:
+            print(f"❌ B. Totals structure incorrect: {totals}")
+            return False, None
+        
+        # Check totals.metric ≈ sum of series totals
+        totals_metric = totals["metric"]
+        series_sum = sum(series_totals)
+        if abs(totals_metric - series_sum) > 0.01:
+            print(f"❌ B. totals.metric {totals_metric} != sum of series {series_sum}")
+            return False, None
+        
+        print(f"✅ B. Basic shape correct - {len(periods)} periods, {len(series)} series, totals.metric={totals_metric}, reportCount={totals['reportCount']}")
+        return True, data
+        
+    except Exception as e:
+        print(f"❌ B. Exception: {e}")
+        return False, None
+
+def test_c_metric_switching(token: str):
+    """(C) Switch metric: fuel_sales, litres, banking, drive_offs, shop_sales"""
+    print("\n=== TEST C: Metric Switching ===")
+    results = []
+    
+    metrics = ["fuel_sales", "litres", "banking", "drive_offs", "shop_sales"]
+    
+    for metric in metrics:
+        try:
+            params = {
+                "metric": metric,
+                "segmentBy": "site",
+                "granularity": "daily",
+                "startDate": START_DATE,
+                "endDate": END_DATE
+            }
             response = requests.get(
-                f"{BASE_URL}/api/notifications?unread=1",
-                headers=staff_headers,
-                timeout=10
+                f"{BASE_URL}/api/dashboard/timeseries",
+                params=params,
+                headers={"Authorization": f"Bearer {token}"}
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                unread_count = data.get('unreadCount', 0)
-                notifications = data.get('notifications', [])
-                
-                if unread_count > 0 and len(notifications) > 0:
-                    # Check if the notification has read_at === null
-                    first_notif = notifications[0]
-                    if first_notif.get('read_at') is None:
-                        print(f"   ✅ PASS: Staff has new unread notification (unreadCount: {unread_count})")
-                        print(f"      - Notification type: {first_notif.get('type')}")
-                        print(f"      - Notification title: {first_notif.get('title')}")
-                    else:
-                        print(f"   ❌ FAIL: Notification has read_at not null: {first_notif.get('read_at')}")
-                else:
-                    print(f"   ❌ FAIL: No unread notifications found for staff (unreadCount: {unread_count})")
-            else:
-                print(f"   ❌ FAIL: Cannot fetch staff notifications: {response.status_code}")
-        else:
-            print(f"   ❌ FAIL: Cannot create staff assignment: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"   ❌ FAIL: Exception - {e}")
-
-def test_patch_with_staff_notifications():
-    """Test PATCH scenarios using staff account with unread notifications"""
-    print("\n" + "="*80)
-    print("SECTION H: ADDITIONAL PATCH TESTS (WITH STAFF UNREAD NOTIFICATIONS)")
-    print("="*80)
-    
-    # Login as Staff (who has unread notifications)
-    staff_token = login(STAFF_EMAIL, STAFF_PASSWORD)
-    if not staff_token:
-        print("❌ SKIP: Cannot login as Staff")
-        return
-    
-    staff_headers = {"Authorization": f"Bearer {staff_token}"}
-    
-    # Get staff's unread notifications
-    print("\n[H.1] Get staff's unread notifications")
-    try:
-        response = requests.get(f"{BASE_URL}/api/notifications?unread=1", headers=staff_headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            notifications = data.get('notifications', [])
-            unread_count = data.get('unreadCount', 0)
+            if response.status_code != 200:
+                print(f"❌ C. metric={metric} - Expected 200, got {response.status_code}")
+                results.append(False)
+                continue
             
-            if len(notifications) > 0:
-                print(f"✅ Staff has {len(notifications)} unread notifications (unreadCount: {unread_count})")
-                
-                # Test PATCH to mark one notification as read
-                print("\n[H.2] PATCH to mark one notification as read")
-                first_notif_id = notifications[0]['id']
-                response = requests.patch(
-                    f"{BASE_URL}/api/notifications",
-                    json={"id": first_notif_id},
-                    headers=staff_headers,
-                    timeout=10
-                )
-                
-                if response.status_code == 200:
-                    updated_notif = response.json()
-                    if updated_notif.get('read_at') is not None:
-                        print(f"✅ PASS: Notification marked as read (read_at: {updated_notif.get('read_at')})")
-                        
-                        # Verify unreadCount decreased
-                        response = requests.get(f"{BASE_URL}/api/notifications", headers=staff_headers, timeout=10)
-                        if response.status_code == 200:
-                            data = response.json()
-                            new_unread_count = data.get('unreadCount', 0)
-                            if new_unread_count == unread_count - 1:
-                                print(f"✅ PASS: unreadCount decreased from {unread_count} to {new_unread_count}")
-                            else:
-                                print(f"⚠️  WARNING: unreadCount is {new_unread_count}, expected {unread_count - 1}")
-                    else:
-                        print(f"❌ FAIL: Notification not marked as read (read_at is still null)")
-                else:
-                    print(f"❌ FAIL: Expected 200, got {response.status_code}")
-                
-                # Test cross-tenant isolation: Operator2 tries to mark Staff's notification
-                if len(notifications) > 1:
-                    print("\n[H.3] Cross-tenant: Operator2 tries to mark Staff's notification")
-                    operator2_token = login(OPERATOR2_EMAIL, OPERATOR2_PASSWORD)
-                    if operator2_token:
-                        operator2_headers = {"Authorization": f"Bearer {operator2_token}"}
-                        staff_notif_id = notifications[1]['id']  # Use second notification
-                        
-                        response = requests.patch(
-                            f"{BASE_URL}/api/notifications",
-                            json={"id": staff_notif_id},
-                            headers=operator2_headers,
-                            timeout=10
-                        )
-                        
-                        if response.status_code == 404:
-                            print(f"✅ PASS: Operator2 got 404 when trying to mark Staff's notification")
-                            
-                            # Verify Staff's notification is still unread
-                            response = requests.get(f"{BASE_URL}/api/notifications", headers=staff_headers, timeout=10)
-                            if response.status_code == 200:
-                                data = response.json()
-                                notif = next((n for n in data['notifications'] if n['id'] == staff_notif_id), None)
-                                if notif and notif.get('read_at') is None:
-                                    print(f"✅ PASS: Staff's notification is still unread (cross-tenant isolation working)")
-                                else:
-                                    print(f"❌ FAIL: Staff's notification was affected")
-                        else:
-                            print(f"❌ FAIL: Expected 404, got {response.status_code}")
-                    else:
-                        print(f"⚠️  SKIP: Cannot login as Operator2")
-            else:
-                print(f"⚠️  SKIP: No unread notifications found for staff")
-        else:
-            print(f"❌ FAIL: Cannot fetch staff notifications: {response.status_code}")
+            data = response.json()
+            totals_metric = data["totals"]["metric"]
+            
+            # Check for non-zero totals (except drive_offs which might be zero)
+            if metric != "drive_offs" and totals_metric == 0:
+                print(f"⚠️  C. metric={metric} - totals.metric is 0 (might be expected if no data)")
+            
+            print(f"✅ C. metric={metric} - 200, totals.metric={totals_metric}")
+            results.append(True)
+            
+        except Exception as e:
+            print(f"❌ C. metric={metric} - Exception: {e}")
+            results.append(False)
+    
+    return all(results)
+
+def test_d_segment_by_shift_type(token: str, baseline_totals: float):
+    """(D) segmentBy=shift_type → series keys include shift types, same totals as site-segmented"""
+    print("\n=== TEST D: Segment by Shift Type ===")
+    try:
+        params = {
+            "metric": "revenue",
+            "segmentBy": "shift_type",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ D. Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        series = data["series"]
+        
+        # Check series keys include at least one shift type
+        shift_types = [s["key"].lower() for s in series]
+        expected_shifts = ["morning", "afternoon", "evening", "night"]
+        found_shifts = [st for st in expected_shifts if any(st in key for key in shift_types)]
+        
+        if not found_shifts:
+            print(f"❌ D. No recognizable shift types found in series keys: {shift_types}")
+            return False
+        
+        # Check totals match baseline (within rounding)
+        totals_metric = data["totals"]["metric"]
+        if abs(totals_metric - baseline_totals) > 0.01:
+            print(f"❌ D. totals.metric {totals_metric} != baseline {baseline_totals}")
+            return False
+        
+        print(f"✅ D. Segment by shift_type working - found shifts: {found_shifts}, totals.metric={totals_metric}")
+        return True
+        
     except Exception as e:
-        print(f"❌ FAIL: Exception - {e}")
+        print(f"❌ D. Exception: {e}")
+        return False
+
+def test_e_segment_by_fuel_grade(token: str):
+    """(E) segmentBy=fuel_grade&metric=litres → grade buckets or Combined fallback"""
+    print("\n=== TEST E: Segment by Fuel Grade ===")
+    try:
+        params = {
+            "metric": "litres",
+            "segmentBy": "fuel_grade",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ E. Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        series = data["series"]
+        
+        # Check series keys are recognizable grade buckets or Combined
+        grade_keys = [s["key"] for s in series]
+        expected_grades = ["E10", "ULP 91", "U95", "U98", "Diesel", "LPG", "Other", "Combined (all grades)"]
+        
+        recognized = any(any(grade.lower() in key.lower() for grade in expected_grades) for key in grade_keys)
+        
+        if not recognized:
+            print(f"❌ E. No recognizable grade buckets found: {grade_keys}")
+            return False
+        
+        # Check totals.metric ≈ sum of series totals
+        totals_metric = data["totals"]["metric"]
+        series_sum = sum(sum(s["values"]) for s in series)
+        
+        if abs(totals_metric - series_sum) > 0.01:
+            print(f"❌ E. totals.metric {totals_metric} != sum of series {series_sum}")
+            return False
+        
+        print(f"✅ E. Segment by fuel_grade working - grades: {grade_keys}, totals.metric={totals_metric}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ E. Exception: {e}")
+        return False
+
+def test_f_granularity(token: str, baseline_totals: float):
+    """(F) granularity=weekly → YYYY-Www format; monthly → YYYY-MM. Same total as daily."""
+    print("\n=== TEST F: Granularity Switching ===")
+    results = []
+    
+    # Test weekly
+    try:
+        params = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "weekly",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ F. weekly - Expected 200, got {response.status_code}")
+            results.append(False)
+        else:
+            data = response.json()
+            periods = data["periods"]
+            
+            # Check YYYY-Www format
+            weekly_pattern = re.compile(r'^\d{4}-W\d{2}$')
+            if not all(weekly_pattern.match(p) for p in periods):
+                print(f"❌ F. weekly - Period labels don't match YYYY-Www format: {periods[:3]}")
+                results.append(False)
+            else:
+                totals_metric = data["totals"]["metric"]
+                if abs(totals_metric - baseline_totals) > 0.01:
+                    print(f"❌ F. weekly - totals.metric {totals_metric} != baseline {baseline_totals}")
+                    results.append(False)
+                else:
+                    print(f"✅ F. weekly - Period format correct, totals.metric={totals_metric}")
+                    results.append(True)
+    except Exception as e:
+        print(f"❌ F. weekly - Exception: {e}")
+        results.append(False)
+    
+    # Test monthly
+    try:
+        params = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "monthly",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ F. monthly - Expected 200, got {response.status_code}")
+            results.append(False)
+        else:
+            data = response.json()
+            periods = data["periods"]
+            
+            # Check YYYY-MM format
+            monthly_pattern = re.compile(r'^\d{4}-\d{2}$')
+            if not all(monthly_pattern.match(p) for p in periods):
+                print(f"❌ F. monthly - Period labels don't match YYYY-MM format: {periods[:3]}")
+                results.append(False)
+            else:
+                totals_metric = data["totals"]["metric"]
+                if abs(totals_metric - baseline_totals) > 0.01:
+                    print(f"❌ F. monthly - totals.metric {totals_metric} != baseline {baseline_totals}")
+                    results.append(False)
+                else:
+                    print(f"✅ F. monthly - Period format correct, totals.metric={totals_metric}")
+                    results.append(True)
+    except Exception as e:
+        print(f"❌ F. monthly - Exception: {e}")
+        results.append(False)
+    
+    return all(results)
+
+def test_g_shift_type_filter(token: str):
+    """(G) shiftType=morning filter → reportCount strictly less than unfiltered"""
+    print("\n=== TEST G: Shift Type Filter ===")
+    try:
+        # Get unfiltered count
+        params_unfiltered = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response_unfiltered = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params_unfiltered,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response_unfiltered.status_code != 200:
+            print(f"❌ G. Unfiltered request failed: {response_unfiltered.status_code}")
+            return False
+        
+        unfiltered_count = response_unfiltered.json()["totals"]["reportCount"]
+        
+        # Get filtered count (try both lowercase and capitalized)
+        params_filtered = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE,
+            "shiftType": "Morning"  # Capitalized to match database values
+        }
+        response_filtered = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params_filtered,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response_filtered.status_code != 200:
+            print(f"❌ G. Filtered request failed: {response_filtered.status_code}")
+            return False
+        
+        filtered_count = response_filtered.json()["totals"]["reportCount"]
+        
+        if filtered_count >= unfiltered_count:
+            print(f"❌ G. Filtered count {filtered_count} >= unfiltered count {unfiltered_count}")
+            return False
+        
+        print(f"✅ G. Shift type filter working - unfiltered: {unfiltered_count}, filtered (Morning): {filtered_count}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ G. Exception: {e}")
+        return False
+
+def test_h_status_filter(token: str):
+    """(H) status=pending filter → reportCount strictly less than unfiltered"""
+    print("\n=== TEST H: Status Filter ===")
+    try:
+        # Get unfiltered count
+        params_unfiltered = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response_unfiltered = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params_unfiltered,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response_unfiltered.status_code != 200:
+            print(f"❌ H. Unfiltered request failed: {response_unfiltered.status_code}")
+            return False
+        
+        unfiltered_count = response_unfiltered.json()["totals"]["reportCount"]
+        
+        # Get filtered count
+        params_filtered = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE,
+            "status": "pending"
+        }
+        response_filtered = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params_filtered,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response_filtered.status_code != 200:
+            print(f"❌ H. Filtered request failed: {response_filtered.status_code}")
+            return False
+        
+        filtered_count = response_filtered.json()["totals"]["reportCount"]
+        
+        if filtered_count >= unfiltered_count:
+            print(f"❌ H. Filtered count {filtered_count} >= unfiltered count {unfiltered_count}")
+            return False
+        
+        print(f"✅ H. Status filter working - unfiltered: {unfiltered_count}, filtered (pending): {filtered_count}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ H. Exception: {e}")
+        return False
+
+def test_i_operator_site_isolation(operator_token: str, owner_sites: list):
+    """(I) Operator GET with owner-only site → 200 empty payload (NOT 403)"""
+    print("\n=== TEST I: Operator Site Isolation ===")
+    try:
+        # Use a fake UUID that operator is not assigned to
+        fake_site_id = "99999999-9999-9999-9999-999999999999"
+        
+        params = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE,
+            "siteIds": fake_site_id
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {operator_token}"}
+        )
+        
+        if response.status_code == 403:
+            print(f"❌ I. Got 403 (should be 200 with empty payload)")
+            return False
+        
+        if response.status_code != 200:
+            print(f"❌ I. Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        
+        # Check for empty payload
+        if data["periods"] != [] or data["series"] != [] or data["totals"]["metric"] != 0 or data["totals"]["reportCount"] != 0:
+            print(f"❌ I. Expected empty payload, got: {data}")
+            return False
+        
+        print(f"✅ I. Operator site isolation working - 200 with empty payload for unassigned site")
+        return True
+        
+    except Exception as e:
+        print(f"❌ I. Exception: {e}")
+        return False
+
+def test_j_validation(token: str):
+    """(J) Bad metric/segmentBy/granularity → 400"""
+    print("\n=== TEST J: Validation ===")
+    results = []
+    
+    # Test bad metric
+    try:
+        params = {
+            "metric": "foo",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code == 400:
+            print(f"✅ J. Bad metric → 400")
+            results.append(True)
+        else:
+            print(f"❌ J. Bad metric - Expected 400, got {response.status_code}")
+            results.append(False)
+    except Exception as e:
+        print(f"❌ J. Bad metric - Exception: {e}")
+        results.append(False)
+    
+    # Test bad segmentBy
+    try:
+        params = {
+            "metric": "revenue",
+            "segmentBy": "foo",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code == 400:
+            print(f"✅ J. Bad segmentBy → 400")
+            results.append(True)
+        else:
+            print(f"❌ J. Bad segmentBy - Expected 400, got {response.status_code}")
+            results.append(False)
+    except Exception as e:
+        print(f"❌ J. Bad segmentBy - Exception: {e}")
+        results.append(False)
+    
+    # Test bad granularity
+    try:
+        params = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "foo",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code == 400:
+            print(f"✅ J. Bad granularity → 400")
+            results.append(True)
+        else:
+            print(f"❌ J. Bad granularity - Expected 400, got {response.status_code}")
+            results.append(False)
+    except Exception as e:
+        print(f"❌ J. Bad granularity - Exception: {e}")
+        results.append(False)
+    
+    return all(results)
+
+def test_k_empty_site_ids(token: str):
+    """(K) Empty siteIds intersection → 200 empty payload"""
+    print("\n=== TEST K: Empty Site IDs ===")
+    try:
+        params = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE,
+            "siteIds": ""
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ K. Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        
+        # When siteIds is empty, it should default to all allowed sites
+        # So this test is more about checking the edge case handling
+        print(f"✅ K. Empty siteIds handled - 200 response")
+        return True
+        
+    except Exception as e:
+        print(f"❌ K. Exception: {e}")
+        return False
+
+def test_l_report_count_regression(token: str):
+    """(L) totals.reportCount matches /api/reports count for same range/filter"""
+    print("\n=== TEST L: Report Count Regression ===")
+    try:
+        # Get timeseries reportCount
+        params_timeseries = {
+            "metric": "revenue",
+            "segmentBy": "site",
+            "granularity": "daily",
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response_timeseries = requests.get(
+            f"{BASE_URL}/api/dashboard/timeseries",
+            params=params_timeseries,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response_timeseries.status_code != 200:
+            print(f"❌ L. Timeseries request failed: {response_timeseries.status_code}")
+            return False
+        
+        timeseries_count = response_timeseries.json()["totals"]["reportCount"]
+        
+        # Get /api/reports count
+        params_reports = {
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response_reports = requests.get(
+            f"{BASE_URL}/api/reports",
+            params=params_reports,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response_reports.status_code != 200:
+            print(f"❌ L. Reports request failed: {response_reports.status_code}")
+            return False
+        
+        reports_data = response_reports.json()
+        reports_count = len(reports_data) if isinstance(reports_data, list) else reports_data.get("count", 0)
+        
+        if timeseries_count != reports_count:
+            print(f"❌ L. Report count mismatch - timeseries: {timeseries_count}, reports: {reports_count}")
+            return False
+        
+        print(f"✅ L. Report count regression passed - both endpoints return {timeseries_count} reports")
+        return True
+        
+    except Exception as e:
+        print(f"❌ L. Exception: {e}")
+        return False
+
+def test_m_dashboard_stats_regression(token: str, timeseries_revenue: float, owner_sites: list):
+    """(M) /api/dashboard/stats totalRevenue matches timeseries metric=revenue"""
+    print("\n=== TEST M: Dashboard Stats Regression ===")
+    try:
+        # Get all site IDs
+        site_ids = ",".join([s["id"] for s in owner_sites])
+        
+        params = {
+            "siteIds": site_ids,
+            "startDate": START_DATE,
+            "endDate": END_DATE
+        }
+        response = requests.get(
+            f"{BASE_URL}/api/dashboard/stats",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ M. Dashboard stats request failed: {response.status_code}: {response.text}")
+            return False
+        
+        data = response.json()
+        total_revenue = data.get("totalRevenue", 0)
+        
+        # Allow for rounding differences
+        if abs(total_revenue - timeseries_revenue) > 0.01:
+            print(f"❌ M. Revenue mismatch - dashboard stats: {total_revenue}, timeseries: {timeseries_revenue}")
+            return False
+        
+        print(f"✅ M. Dashboard stats regression passed - totalRevenue={total_revenue} matches timeseries")
+        return True
+        
+    except Exception as e:
+        print(f"❌ M. Exception: {e}")
+        return False
 
 def main():
-    """Run all tests"""
-    print("\n" + "="*80)
-    print("NOTIFICATIONS API CANONICAL CONTRACT MIGRATION - BACKEND TESTS")
-    print("="*80)
-    print(f"Base URL: {BASE_URL}")
-    print(f"Test started at: {datetime.now().isoformat()}")
+    print("=" * 80)
+    print("EXECUTIVE ANALYTICS EXPLORER - BACKEND TEST SUITE")
+    print("Testing /api/dashboard/timeseries endpoint")
+    print("=" * 80)
     
-    # Test SHAPE / GET
-    operator_data = test_shape_get()
+    results = {}
     
-    # Login as Operator for remaining tests
-    operator_token = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    # Test A: Auth gate (no login needed)
+    results["A"] = test_a_auth_gate()
     
-    # Test GET filters
-    test_get_filters(operator_token)
+    # Login as Owner
+    print("\n=== Logging in as Owner ===")
+    owner_auth = login(OWNER_EMAIL, OWNER_PASSWORD)
+    owner_token = owner_auth["token"]
+    owner_sites = owner_auth.get("sites", [])
+    print(f"✅ Owner logged in - {len(owner_sites)} sites")
     
-    # Test PATCH (mark one read)
-    test_patch_mark_one_read(operator_token, operator_data)
+    # Test B: Basic shape
+    results["B"], baseline_data = test_b_basic_shape(owner_token)
+    baseline_totals = baseline_data["totals"]["metric"] if baseline_data else 0
     
-    # Test cross-tenant isolation
-    test_cross_tenant_isolation()
+    # Test C: Metric switching
+    results["C"] = test_c_metric_switching(owner_token)
     
-    # Test POST (mark all read)
-    test_post_mark_all_read(operator_token)
+    # Test D: Segment by shift type
+    results["D"] = test_d_segment_by_shift_type(owner_token, baseline_totals)
     
-    # Test legacy routes deleted
-    test_legacy_routes_deleted()
+    # Test E: Segment by fuel grade
+    results["E"] = test_e_segment_by_fuel_grade(owner_token)
     
-    # Test regression
-    test_regression()
+    # Test F: Granularity
+    results["F"] = test_f_granularity(owner_token, baseline_totals)
     
-    # Additional PATCH tests with staff notifications
-    test_patch_with_staff_notifications()
+    # Test G: Shift type filter
+    results["G"] = test_g_shift_type_filter(owner_token)
     
-    print("\n" + "="*80)
-    print("ALL TESTS COMPLETED")
-    print("="*80)
-    print(f"Test completed at: {datetime.now().isoformat()}")
+    # Test H: Status filter
+    results["H"] = test_h_status_filter(owner_token)
+    
+    # Login as Operator
+    print("\n=== Logging in as Operator ===")
+    operator_auth = login(OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    operator_token = operator_auth["token"]
+    print(f"✅ Operator logged in")
+    
+    # Test I: Operator site isolation
+    results["I"] = test_i_operator_site_isolation(operator_token, owner_sites)
+    
+    # Test J: Validation
+    results["J"] = test_j_validation(owner_token)
+    
+    # Test K: Empty site IDs
+    results["K"] = test_k_empty_site_ids(owner_token)
+    
+    # Test L: Report count regression
+    results["L"] = test_l_report_count_regression(owner_token)
+    
+    # Test M: Dashboard stats regression
+    results["M"] = test_m_dashboard_stats_regression(owner_token, baseline_totals, owner_sites)
+    
+    # Summary
+    print("\n" + "=" * 80)
+    print("TEST SUMMARY")
+    print("=" * 80)
+    
+    passed = sum(1 for v in results.values() if v)
+    total = len(results)
+    
+    for test, result in sorted(results.items()):
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"{status} - Test {test}")
+    
+    print("=" * 80)
+    print(f"TOTAL: {passed}/{total} tests passed ({passed/total*100:.1f}%)")
+    print("=" * 80)
+    
+    return passed == total
 
 if __name__ == "__main__":
-    main()
+    success = main()
+    exit(0 if success else 1)

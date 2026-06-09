@@ -18,6 +18,7 @@ import {
 import { authedFetch } from '@/lib/authed-fetch';
 import { formatCurrency } from '@/lib/format';
 import SiteFilter from '@/components/shared/site-filter';
+import AnalyticsExplorer from '@/components/owner/analytics-explorer';
 import {
   createFopsPdf, addKpiStrip, addSectionTitle, addTable, saveFopsPdf,
 } from '@/lib/pdf-export';
@@ -247,6 +248,9 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
           <KpiCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} from="from-rose-500" to="to-red-500" />
         </div>
       )}
+
+      {/* Analytics Explorer — RevenueCat-style metric explorer */}
+      <AnalyticsExplorer siteIds={siteIds} sites={sites} dateRange={dateRange} />
 
       {/* Variance MoM / YoY */}
       {variance?.mom && (
