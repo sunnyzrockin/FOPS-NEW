@@ -70,10 +70,11 @@ const CHART_TYPES = [
 ];
 
 const SHIFT_TYPES = [
-  { value: 'all',     label: 'All shifts' },
-  { value: 'morning', label: 'Morning' },
-  { value: 'evening', label: 'Evening' },
-  { value: 'night',   label: 'Night' },
+  { value: 'all',       label: 'All shifts' },
+  { value: 'Morning',   label: 'Morning' },
+  { value: 'Afternoon', label: 'Afternoon' },
+  { value: 'Evening',   label: 'Evening' },
+  { value: 'Night',     label: 'Night' },
 ];
 
 const STATUSES = [
