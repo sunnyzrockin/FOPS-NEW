@@ -734,6 +734,25 @@ def test_f_margin_summary():
         
         test_site_id = owner_sites[0]["id"]
         
+        # F-setup: ensure a ULP sell price exists in the test window so the
+        # margin engine has both cost (from D1) and sell legs to verify.
+        import uuid as _uuid
+        f_price_id = str(_uuid.uuid4())
+        seed_res = supabase_query(
+            "fuel_price_entries",
+            method="POST",
+            data={
+                "id": f_price_id,
+                "site_id": test_site_id,
+                "entered_by_user_id": "owner-001",
+                "date": "2026-06-05",
+                "fuel_type": "ULP",
+                "price": 197.5,
+            },
+        )
+        if seed_res["status"] in [200, 201] and seed_res["data"]:
+            created_price_entry_ids.append(seed_res["data"][0].get("id") or f_price_id)
+        
         # F1: GET as owner with siteIds → 200, valid shape
         print("\n--- F1: GET /api/margin/summary → 200 with valid shape ---")
         response = requests.get(

@@ -1835,4 +1835,7 @@ frontend:
   - agent: "main"
     message: "P2b Fuel Margin sprint shipped. lib/margin.js is the single source of truth (44/44 unit tests). Server-side subscription gating via lib/billing.js works (test owner with no sub correctly gets 403 with code=subscription_required and upgradeUrl). 3 new endpoints (/api/fuel-grades, /api/fuel-deliveries, /api/margin/summary), 2 new UI components (FuelMargin tab + RecordFuelDelivery form on Fuel Inventory), Data Integrity gained 2 new cross-checks (fuel price outliers + orphan dip deliveries). NEEDS FROM USER before backend test agent: (a) apply /app/lib/supabase-p2b-fuel-margin.sql; (b) decide between completing a real Stripe checkout for the test owner OR inserting a faked active subscription row so the gated endpoints can be tested."
 
+  - agent: "main"
+    message: "P2b operator subscription inheritance fixed in /app/lib/billing.js resolveOwnerUserId(): operators/staff with no users.owner_id column now resolve their owner via operator_site_assignments → sites.owner_id (and staff_site_assignments → sites.owner_id). Re-ran /app/backend_test_p2b_fuel_margin.py → 45/45 tests passing (100%). The previous 4 failing tests (B3, F2, H2, H3) are all green. F2 also needed a tiny test-side fix — seeded a fuel_price_entry in the F-window so the ULP grade has a sell_cpl to verify (the test had a setup gap)."
+
 
