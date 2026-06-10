@@ -37,6 +37,7 @@ const OWNER_GROUPS = [
     label: 'Fuel',
     items: [
       { id: 'fuel-inventory', label: 'Fuel Inventory', icon: Droplets },
+      { id: 'wetstock', label: 'Wet-stock', icon: Droplets },
       { id: 'live-prices', label: 'QLD Live Prices', icon: MapIcon },
       { id: 'fuel-prices', label: 'Fuel Prices', icon: Fuel },
     ],
@@ -68,6 +69,7 @@ const OPERATOR_GROUPS = [
     items: [
       { id: 'pricing', label: 'Fuel Pricing', icon: Fuel },
       { id: 'fuel-inventory', label: 'Fuel Inventory', icon: Droplets },
+      { id: 'wetstock', label: 'Wet-stock', icon: Droplets },
     ],
   },
   {

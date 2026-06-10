@@ -25,6 +25,7 @@ import FieldConfiguration from '@/components/operator/field-configuration';
 import FuelPricingManagement from '@/components/fuel-pricing/fuel-pricing-management';
 import BankingSubmissions from '@/components/shared/banking-submissions';
 import DipsManagement from '@/components/operator/dips-management';
+import WetstockReconciliation from '@/components/shared/wetstock-reconciliation';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
