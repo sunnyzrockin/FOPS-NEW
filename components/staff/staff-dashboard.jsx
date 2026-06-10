@@ -1,9 +1,9 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect, no-empty -- pre-existing pattern in dashboards */
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
 import { Loader2, Smartphone, FileSpreadsheet } from 'lucide-react';
 
 import ReportRow from '@/components/shared/report-row';
@@ -11,15 +11,23 @@ import ReportDetail from '@/components/shared/report-detail';
 import ShiftReportForm from '@/components/staff/shift-report-form';
 import ShiftReportWizard from '@/components/staff/shift-report-wizard';
 import StaffPriceChangeBanner from '@/components/staff/staff-price-change-banner';
+import TodayAtAGlance from '@/components/staff/today-at-a-glance';
+import RecentReportsPanel from '@/components/staff/recent-reports-panel';
 import { authedFetch } from '@/lib/authed-fetch';
 
 const FORM_MODE_KEY = 'fops_staff_form_mode';
 
 /**
- * StaffDashboard — Staff-facing dashboard. Shows a pinned fuel-price
- * change banner and the shift report submission form (with a Classic /
- * Wizard mode toggle), plus a paginated list of previously submitted
- * reports.
+ * StaffDashboard — Staff-facing dashboard. Sections:
+ *   1. Pinned fuel-price change banner.
+ *   2. "Today at a glance" card (auto-detected shift + status).
+ *   3. Recent reports panel (status pills, tap-to-view).
+ *   4. The shift report form (Classic or Wizard mode toggle in header).
+ *   5. My Submitted Reports tab — full history list.
+ *
+ * Mobile-first wizard is now the default when there's no saved preference;
+ * desktop visitors get Classic by default. Either way the choice is
+ * persisted to localStorage and respected on subsequent visits.
  */
 export default function StaffDashboard({ user, sites, activeTab }) {
   const [reports, setReports] = useState([]);
@@ -27,9 +35,10 @@ export default function StaffDashboard({ user, sites, activeTab }) {
   const [loading, setLoading] = useState(true);
   // Default mode is determined by:
   //   1. localStorage preference (returning users — never overridden)
-  //   2. Viewport size on first visit: <768px → 'wizard' (mobile-first),
-  //      otherwise 'classic'
-  const [formMode, setFormMode] = useState('classic');
+  //   2. New default: wizard for everyone (mobile-first). Desktop users
+  //      can switch to Classic via the header toggle, persisting their
+  //      preference.
+  const [formMode, setFormMode] = useState('wizard');
 
   useEffect(() => {
     try {
@@ -39,12 +48,8 @@ export default function StaffDashboard({ user, sites, activeTab }) {
         return;
       }
     } catch {}
-    // No saved preference — pick a default based on viewport.
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setFormMode('wizard');
-    } else {
-      setFormMode('classic');
-    }
+    // No saved preference — mobile-first wizard for everyone.
+    setFormMode('wizard');
   }, []);
 
   const switchMode = (mode) => {
@@ -62,7 +67,6 @@ export default function StaffDashboard({ user, sites, activeTab }) {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
   useEffect(() => { loadReports(); }, [loadReports]);
@@ -87,55 +91,72 @@ export default function StaffDashboard({ user, sites, activeTab }) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="container mx-auto px-4 py-6 space-y-4">
       <StaffPriceChangeBanner user={user} />
 
-      {activeTab === 'submit' && (() => {
-        // Build the Classic ↔ Wizard toggle once and render it inside the
-        // form card header (more discoverable than floating above the card).
-        const ModeToggle = (
-          <div className="inline-flex rounded-md border bg-background shadow-sm shrink-0">
-            <button
-              type="button"
-              onClick={() => switchMode('classic')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-l-md transition-colors ${
-                formMode === 'classic'
-                  ? 'bg-teal-600 text-white'
-                  : 'bg-transparent text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              <FileSpreadsheet className="h-3.5 w-3.5" /> Classic
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('wizard')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-r-md transition-colors ${
-                formMode === 'wizard'
-                  ? 'bg-teal-600 text-white'
-                  : 'bg-transparent text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              <Smartphone className="h-3.5 w-3.5" /> Wizard
-            </button>
-          </div>
-        );
-        return formMode === 'wizard' ? (
-          <ShiftReportWizard
-            user={user}
-            sites={sites}
-            onSuccess={loadReports}
-            onSwitchToClassic={() => switchMode('classic')}
-            modeToggle={ModeToggle}
-          />
-        ) : (
-          <ShiftReportForm
-            user={user}
-            sites={sites}
-            onSuccess={loadReports}
-            modeToggle={ModeToggle}
-          />
-        );
-      })()}
+      {activeTab === 'submit' && (
+        <>
+          {/* Today-at-a-glance — site, shift, today's submission status. */}
+          <TodayAtAGlance user={user} sites={sites} reports={reports} />
+
+          {/* Recent reports — only show after some history exists. */}
+          {!loading && reports.length > 0 && (
+            <RecentReportsPanel
+              reports={reports}
+              sites={sites}
+              onSelect={handleReportClick}
+              limit={3}
+            />
+          )}
+
+          {(() => {
+            // Build the Classic ↔ Wizard toggle once and render it inside the
+            // form card header (more discoverable than floating above the card).
+            const ModeToggle = (
+              <div className="inline-flex rounded-md border bg-background shadow-sm shrink-0">
+                <button
+                  type="button"
+                  onClick={() => switchMode('classic')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-l-md transition-colors ${
+                    formMode === 'classic'
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-transparent text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5" /> Classic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode('wizard')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-r-md transition-colors ${
+                    formMode === 'wizard'
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-transparent text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  <Smartphone className="h-3.5 w-3.5" /> Wizard
+                </button>
+              </div>
+            );
+            return formMode === 'wizard' ? (
+              <ShiftReportWizard
+                user={user}
+                sites={sites}
+                onSuccess={loadReports}
+                onSwitchToClassic={() => switchMode('classic')}
+                modeToggle={ModeToggle}
+              />
+            ) : (
+              <ShiftReportForm
+                user={user}
+                sites={sites}
+                onSuccess={loadReports}
+                modeToggle={ModeToggle}
+              />
+            );
+          })()}
+        </>
+      )}
 
       {activeTab === 'history' && (
         <Card className="border border-border/50 shadow-sm">

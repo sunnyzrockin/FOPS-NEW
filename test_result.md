@@ -1838,4 +1838,16 @@ frontend:
   - agent: "main"
     message: "P2b operator subscription inheritance fixed in /app/lib/billing.js resolveOwnerUserId(): operators/staff with no users.owner_id column now resolve their owner via operator_site_assignments → sites.owner_id (and staff_site_assignments → sites.owner_id). Re-ran /app/backend_test_p2b_fuel_margin.py → 45/45 tests passing (100%). The previous 4 failing tests (B3, F2, H2, H3) are all green. F2 also needed a tiny test-side fix — seeded a fuel_price_entry in the F-window so the ULP grade has a sell_cpl to verify (the test had a setup gap)."
 
+  - task: "Operator + Staff dashboard upgrades — wet-stock banner, quick actions, team panel, today-at-a-glance, recent-reports panel, wizard-default"
+    implemented: true
+    working: "NA"
+    file: "NEW /app/components/operator/wetstock-alert-banner.jsx (top-of-dashboard banner — auto-hides when no red/amber sites, fetches /api/wetstock/reconciliation over the last 7 days, CTA jumps to wet-stock tab); NEW /app/components/operator/operator-quick-actions.jsx (horizontal strip of 5 common shortcuts: Record fuel delivery, Submit dip reading, Banking submissions, Banking formulas, Staff access — each delegates to the parent's tab navigator); NEW /app/components/operator/operator-team-panel.jsx (My Team card — fetches /api/staff-assignments, aggregates by staff_user_id, joins reports for last-submitted timestamp, renders green/amber/red activity badge); NEW /app/components/staff/today-at-a-glance.jsx (top card — auto-detects current shift via detectCurrentShift, shows site/shift type/status badge for today's report); NEW /app/components/staff/recent-reports-panel.jsx (compact list of N most-recent reports with status pills + tap-to-view); MODIFIED /app/components/operator/operator-dashboard.jsx (banner + quick actions + cleaner teal KPI strip + 3-col grid with AnalyticsExplorer + OperatorTeamPanel side-by-side, uses useRouter for tab navigation); MODIFIED /app/components/staff/staff-dashboard.jsx (mobile-first wizard default for everyone — TodayAtAGlance + RecentReportsPanel above the form on Submit tab); MODIFIED /app/components/shared/stat-card.jsx (added explicit 'teal' accent token)"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Pure-frontend sprint to upgrade Operator + Staff dashboards. Backend impact: NONE — all new components hit existing endpoints (/api/wetstock/reconciliation, /api/staff-assignments, /api/reports, /api/dashboard/stats). Manual verification: operator dashboard now shows quick-action strip + cleaner teal KPI cards + AnalyticsExplorer beside the My Team panel; staff dashboard now shows Today-at-a-glance card with auto-detected Morning/Afternoon/Night shift + status pill, plus the My recent reports panel above the wizard. Wizard is now the default form mode for everyone (was: classic for desktop, wizard for mobile). Tests required: none — frontend only, P2b 45/45 backend regression still passing."
+
 

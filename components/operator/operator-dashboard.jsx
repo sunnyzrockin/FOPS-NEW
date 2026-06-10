@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- pre-existing false-positive: async click handlers / setState in click flow */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +28,9 @@ import BankingSubmissions from '@/components/shared/banking-submissions';
 import DipsManagement from '@/components/operator/dips-management';
 import WetstockReconciliation from '@/components/shared/wetstock-reconciliation';
 import FuelMargin from '@/components/shared/fuel-margin';
+import WetstockAlertBanner from '@/components/operator/wetstock-alert-banner';
+import OperatorQuickActions from '@/components/operator/operator-quick-actions';
+import OperatorTeamPanel from '@/components/operator/operator-team-panel';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -38,6 +42,7 @@ import { authedFetch } from '@/lib/authed-fetch';
  * ViewToggle is NOT shown to Owners — they're locked to Daily Summary).
  */
 export default function OperatorDashboard({ user, sites, activeTab }) {
+  const router = useRouter();
   const [reports, setReports] = useState([]);
   const [dailyRollups, setDailyRollups] = useState([]);
   const [stats, setStats] = useState(null);
@@ -59,6 +64,11 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
     ? sites.map((s) => s.id)
     : selectedSiteIds
   ).join(',');
+
+  const goToTab = useCallback(
+    (tab) => router.push(`/app?tab=${encodeURIComponent(tab)}`),
+    [router]
+  );
 
   const loadData = useCallback(async () => {
     if (!siteIds) { setLoading(false); return; }
@@ -141,6 +151,12 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
+      {/* Wet-stock alerts banner — auto-hides when no red/amber sites. */}
+      <WetstockAlertBanner
+        siteIds={siteIds}
+        onJumpToWetstock={() => goToTab('wetstock')}
+      />
+
       <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -180,23 +196,31 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
         </CardContent>
       </Card>
 
+      {/* Quick actions row — daily ops shortcuts. */}
+      <OperatorQuickActions onAction={goToTab} />
+
       {/* HealthStrip — at-a-glance ops summary above the KPI cards. */}
       {stats && <HealthStrip stats={stats} lastLoaded={lastLoaded} />}
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard title="Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} color="green" />
-          <StatCard title="Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} color="blue" />
-          <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} color="purple" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <StatCard title="Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} color="teal" />
+          <StatCard title="Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} color="teal" />
+          <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} color="teal" />
           <StatCard title="Dips" value={formatCurrency(stats.totalDips)} icon={Droplets} color="cyan" />
           <StatCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} color="red" />
         </div>
       )}
 
-      {/* Analytics Explorer — operator-scoped aggregate view of the same data.
-          /api/dashboard/timeseries already intersects siteIds with
-          getAllowedSiteIds, so the operator can never see foreign sites. */}
-      <AnalyticsExplorer siteIds={siteIds} sites={sites} dateRange={dateRange} />
+      {/* Team panel + Analytics Explorer side-by-side on lg, stacked on mobile. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <AnalyticsExplorer siteIds={siteIds} sites={sites} dateRange={dateRange} />
+        </div>
+        <div className="lg:col-span-1">
+          <OperatorTeamPanel siteIds={siteIds} reports={reports} />
+        </div>
+      </div>
 
       <Card className="border border-border/50 shadow-sm">
         <CardHeader>
