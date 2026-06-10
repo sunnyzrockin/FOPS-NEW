@@ -70,6 +70,7 @@ const OPERATOR_GROUPS = [
       { id: 'pricing', label: 'Fuel Pricing', icon: Fuel },
       { id: 'fuel-inventory', label: 'Fuel Inventory', icon: Droplets },
       { id: 'wetstock', label: 'Wet-stock', icon: Droplets },
+      { id: 'fuel-margin', label: 'Fuel Margin', icon: TrendingUp },
     ],
   },
   {

@@ -59,8 +59,10 @@ export default function DataIntegrityView({ sites }) {
     );
   }
 
-  const { summary = {}, rows = [] } = data || {};
-  const allGreen = summary.flagged === 0 && rows.length === 0;
+  const { summary = {}, rows = [], fuelPriceOutliers = [], orphanDipDeliveries = [] } = data || {};
+  const allGreen =
+    summary.flagged === 0 && rows.length === 0 &&
+    fuelPriceOutliers.length === 0 && orphanDipDeliveries.length === 0;
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
@@ -125,7 +127,67 @@ export default function DataIntegrityView({ sites }) {
         </Card>
       )}
 
-      {!allGreen && (
+      {/* P2b: orphan dip deliveries + fuel price outliers */}
+      {orphanDipDeliveries.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              Dip deliveries without a cost record
+              <Badge variant="outline" className="ml-2">{orphanDipDeliveries.length}</Badge>
+            </CardTitle>
+            <CardDescription>
+              These tank-fill events were logged in dip readings but have no matching <strong>fuel_deliveries</strong> cost
+              entry within ±2 days. Margin numbers for these grades will be incomplete until you record the cost.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y text-sm">
+              {orphanDipDeliveries.map((o, i) => (
+                <div key={`${o.dip_id}-${o.grade}-${i}`} className="p-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{o.dip_date} · {o.grade} · {Number(o.litres).toLocaleString()} L</div>
+                    <div className="text-xs text-muted-foreground">{o.site_name}</div>
+                  </div>
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">no cost</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {fuelPriceOutliers.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              Fuel price entries stored in dollars (should be cents/L)
+              <Badge variant="outline" className="ml-2">{fuelPriceOutliers.length}</Badge>
+            </CardTitle>
+            <CardDescription>
+              The Fuel Margin engine normalises these on-read (×100) but please correct them at source.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y text-sm">
+              {fuelPriceOutliers.map((p) => (
+                <div key={p.id} className="p-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{p.date} · {p.fuel_type} · stored {p.stored_price}</div>
+                    <div className="text-xs text-muted-foreground">{p.site_name} → interpreted as {p.interpreted_cpl.toFixed(2)}¢/L</div>
+                  </div>
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                    edit at source
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!allGreen && rows.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Flagged & adjusted reports</CardTitle>

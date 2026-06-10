@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 import { formatDateTime } from '@/lib/format';
+import RecordFuelDelivery from '@/components/shared/record-fuel-delivery';
 
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 /**
@@ -207,6 +208,9 @@ export default function DipsManagement({ user, sites }) {
 
   return (
     <div className="space-y-6">
+      {/* P2b — record fuel delivery (cost-of-fuel-bought-in) */}
+      <RecordFuelDelivery sites={sites} />
+
       {/* Site picker + status banner */}
       <Card className="border border-border/50 shadow-sm">
         <CardContent className="p-4">

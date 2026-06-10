@@ -26,6 +26,7 @@ import FuelPricingManagement from '@/components/fuel-pricing/fuel-pricing-manage
 import BankingSubmissions from '@/components/shared/banking-submissions';
 import DipsManagement from '@/components/operator/dips-management';
 import WetstockReconciliation from '@/components/shared/wetstock-reconciliation';
+import FuelMargin from '@/components/shared/fuel-margin';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -117,6 +118,12 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
   }
   if (activeTab === 'fuel-inventory') {
     return <div className="container mx-auto px-4 py-6"><DipsManagement user={user} sites={sites} /></div>;
+  }
+  if (activeTab === 'wetstock') {
+    return <WetstockReconciliation sites={sites} />;
+  }
+  if (activeTab === 'fuel-margin') {
+    return <FuelMargin sites={sites} user={user} />;
   }
   if (selectedReport) {
     return (
