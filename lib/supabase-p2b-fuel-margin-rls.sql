@@ -82,7 +82,7 @@ CREATE POLICY fd_operator_select ON fuel_deliveries
     site_id IN (
       SELECT osa.site_id
       FROM operator_site_assignments osa
-      JOIN users u ON u.id = osa.user_id
+      JOIN users u ON u.id = osa.operator_user_id
       WHERE u.auth_user_id = auth.uid()
     )
   );
@@ -94,7 +94,7 @@ CREATE POLICY fd_operator_insert ON fuel_deliveries
     site_id IN (
       SELECT osa.site_id
       FROM operator_site_assignments osa
-      JOIN users u ON u.id = osa.user_id
+      JOIN users u ON u.id = osa.operator_user_id
       WHERE u.auth_user_id = auth.uid()
     )
   );
