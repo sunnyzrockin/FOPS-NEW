@@ -90,7 +90,8 @@ COMMENT ON COLUMN sites.margin_amber_cpl IS
   'Per-site amber fuel-margin threshold (cents per litre). NULL = use lib/margin.js DEFAULT_AMBER_CPL (3.0).';
 
 -- ---------------------------------------------------------------------
--- 5) RLS DISABLED (matches existing app pattern; authz is in the API)
+-- 5) RLS \u2014 see supabase-p2b-fuel-margin-rls.sql for tenant-scoped policies.
+--    fuel_deliveries is a sensitive cost book and gets full RLS in that file.
+--    NOTE: the original draft DISABLED RLS here; that decision was reversed
+--    on owner review and is now handled in the companion -rls.sql file.
 -- ---------------------------------------------------------------------
-ALTER TABLE fuel_grades      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE fuel_deliveries  DISABLE ROW LEVEL SECURITY;

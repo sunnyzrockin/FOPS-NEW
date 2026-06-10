@@ -170,5 +170,37 @@ console.log('\n[19] Default constants sanity');
 truthy(DEFAULT_HEALTHY_CPL === 8.0, 'healthy = 8.0');
 truthy(DEFAULT_AMBER_CPL === 3.0, 'amber = 3.0');
 
+// ----------------------------------------------------------------------------
+console.log('\n[20] Hand-check from owner sign-off: 165c cost / 199.9c sell → ~34.9c/L');
+{
+  const m = computeGradeMargin({
+    deliveries: [{ litres: 30000, unit_cost_cpl: 165, delivered_at: '2026-06-01' }],
+    priceEntries: [{ date: '2026-06-01', price: 199.9 }], // 199.9 cpl directly (no $ heuristic)
+    litresSold: 50000,
+    startDate: '2026-06-01',
+    endDate: '2026-06-07',
+  });
+  approx(m.cost_cpl, 165, 'cost_cpl = 165');
+  approx(m.sell_cpl, 199.9, 'sell_cpl = 199.9 (NO dollar-heuristic triggered)');
+  approx(m.margin_cpl, 34.9, 'margin_cpl = 34.9 ✓ owner hand-check');
+  approx(m.gross_profit_dollars, (34.9 * 50000) / 100, 'gross profit = 34.9 × 50000 / 100 = $17,450');
+  eq(m.status, 'healthy', 'healthy at 34.9c (well above 8c threshold)');
+}
+
+console.log('\n[21] Hand-check with dollars-stored sell: 165c cost / $1.999 sell → ~34.9c/L');
+{
+  // Same numbers but the sell side was accidentally stored as dollars (1.999).
+  // The <10 heuristic should normalise it to 199.9 cpl and the margin should match the previous test.
+  const m = computeGradeMargin({
+    deliveries: [{ litres: 30000, unit_cost_cpl: 165, delivered_at: '2026-06-01' }],
+    priceEntries: [{ date: '2026-06-01', price: 1.999 }],
+    litresSold: 50000,
+    startDate: '2026-06-01',
+    endDate: '2026-06-07',
+  });
+  approx(m.sell_cpl, 199.9, 'sell normalised from 1.999 → 199.9');
+  approx(m.margin_cpl, 34.9, 'margin still 34.9 (dollar heuristic invariant)');
+}
+
 console.log(`\n=================== ${passed} passed / ${failed} failed ===================`);
 if (failed > 0) process.exit(1);
