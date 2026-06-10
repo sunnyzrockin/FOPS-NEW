@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Fuel, LogOut, BarChart3, Building2, Users, Settings,
   Calculator, ClipboardList, FileText, Droplets, Map as MapIcon,
-  TrendingUp, Menu, X, PanelLeftClose, PanelLeftOpen,
+  TrendingUp, Menu, X, PanelLeftClose, PanelLeftOpen, CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -39,6 +39,12 @@ const OWNER_GROUPS = [
       { id: 'fuel-inventory', label: 'Fuel Inventory', icon: Droplets },
       { id: 'live-prices', label: 'QLD Live Prices', icon: MapIcon },
       { id: 'fuel-prices', label: 'Fuel Prices', icon: Fuel },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [
+      { id: 'billing', label: 'Billing', icon: CreditCard },
     ],
   },
 ];
