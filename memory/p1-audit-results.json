@@ -1,0 +1,1117 @@
+{
+  "generatedAt": "2026-06-10T02:28:30.831Z",
+  "summary": {
+    "total": 38,
+    "reconciles": 35,
+    "flagged": 3,
+    "unchanged": 19,
+    "changedTotals": 11,
+    "changedRevenue": 18,
+    "changedFuel": 0,
+    "changedLitres": 0
+  },
+  "results": [
+    {
+      "id": "4eb60272-1f60-4381-b672-02b83ec5c130",
+      "site": "BNE-001",
+      "date": "2025-12-28",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 5000,
+        "shop_sales": 1200,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 5000,
+        "shop_sales": 1200,
+        "total_sales": 6200,
+        "total_revenue": 6200,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 6200,
+        "total_revenue": 6200,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "14715ff0-3934-4ecb-b4a2-8edf664ddc9d",
+      "site": "BNE-001",
+      "date": "2026-04-04",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 3920.14,
+        "shop_sales": 1181.1,
+        "total_sales": 5101.24,
+        "total_revenue": 5101.24,
+        "total_litres": 2279.15
+      },
+      "canonical": {
+        "fuel_sales": 3920.14,
+        "shop_sales": 1181.1,
+        "total_sales": 5101.24,
+        "total_revenue": 5101.24,
+        "total_litres": 2279.15,
+        "banking": 5101.24
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "09b58c11-c49a-45de-bb62-6a899cfabd8f",
+      "site": "BNE-001",
+      "date": "2026-04-04",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 6062.39,
+        "shop_sales": 1148,
+        "total_sales": 7210.39,
+        "total_revenue": 7210.39,
+        "total_litres": 3524.65
+      },
+      "canonical": {
+        "fuel_sales": 6062.39,
+        "shop_sales": 1148,
+        "total_sales": 7210.39,
+        "total_revenue": 7210.39,
+        "total_litres": 3524.65,
+        "banking": 7210.39
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "c94f1573-24c8-4a3c-a683-c7768da50975",
+      "site": "BNE-001",
+      "date": "2026-04-05",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 5786.31,
+        "shop_sales": 1327.28,
+        "total_sales": 7113.59,
+        "total_revenue": 7113.59,
+        "total_litres": 3364.13
+      },
+      "canonical": {
+        "fuel_sales": 5786.31,
+        "shop_sales": 1327.28,
+        "total_sales": 7113.59,
+        "total_revenue": 7113.59,
+        "total_litres": 3364.13,
+        "banking": 7113.6
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "84039e3a-710c-4949-aa09-442dbbec1aee",
+      "site": "BNE-001",
+      "date": "2026-04-05",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 3009.91,
+        "shop_sales": 721.14,
+        "total_sales": 3731.05,
+        "total_revenue": 3731.05,
+        "total_litres": 1749.95
+      },
+      "canonical": {
+        "fuel_sales": 3009.91,
+        "shop_sales": 721.14,
+        "total_sales": 3731.05,
+        "total_revenue": 3731.05,
+        "total_litres": 1749.95,
+        "banking": 3731.05
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "82273ad0-c76a-496e-9acd-9dadbbd5dd0e",
+      "site": "BNE-001",
+      "date": "2026-04-06",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 3886.14,
+        "shop_sales": 1224.67,
+        "total_sales": 5110.81,
+        "total_revenue": 5110.81,
+        "total_litres": 2259.38
+      },
+      "canonical": {
+        "fuel_sales": 3886.14,
+        "shop_sales": 1224.67,
+        "total_sales": 5110.81,
+        "total_revenue": 5110.81,
+        "total_litres": 2259.38,
+        "banking": 5110.81
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "379ef220-d53f-413d-a021-4114be2ef666",
+      "site": "BNE-001",
+      "date": "2026-04-06",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 3990.48,
+        "shop_sales": 743.8,
+        "total_sales": 4734.28,
+        "total_revenue": 4734.28,
+        "total_litres": 2320.05
+      },
+      "canonical": {
+        "fuel_sales": 3990.48,
+        "shop_sales": 743.8,
+        "total_sales": 4734.28,
+        "total_revenue": 4734.28,
+        "total_litres": 2320.05,
+        "banking": 4734.27
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "4a61f943-ff36-4d4d-adea-a36783f9f1c2",
+      "site": "BNE-001",
+      "date": "2026-04-07",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 4830.38,
+        "shop_sales": 954.06,
+        "total_sales": 5784.44,
+        "total_revenue": 5784.44,
+        "total_litres": 2808.36
+      },
+      "canonical": {
+        "fuel_sales": 4830.38,
+        "shop_sales": 954.06,
+        "total_sales": 5784.44,
+        "total_revenue": 5784.44,
+        "total_litres": 2808.36,
+        "banking": 5784.44
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "996a46ec-c87b-42fb-943f-c6c394d1bb4e",
+      "site": "BNE-001",
+      "date": "2026-04-07",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 3680.3,
+        "shop_sales": 1247.18,
+        "total_sales": 4927.48,
+        "total_revenue": 4927.48,
+        "total_litres": 2139.71
+      },
+      "canonical": {
+        "fuel_sales": 3680.3,
+        "shop_sales": 1247.18,
+        "total_sales": 4927.48,
+        "total_revenue": 4927.48,
+        "total_litres": 2139.71,
+        "banking": 4927.49
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "3f9d1830-5f97-4658-a02e-4b089dca04bc",
+      "site": "BNE-001",
+      "date": "2026-04-08",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 6549.56,
+        "shop_sales": 949.38,
+        "total_sales": 7498.94,
+        "total_revenue": 7498.94,
+        "total_litres": 3807.88
+      },
+      "canonical": {
+        "fuel_sales": 6549.56,
+        "shop_sales": 949.38,
+        "total_sales": 7498.94,
+        "total_revenue": 7498.94,
+        "total_litres": 3807.88,
+        "banking": 7498.94
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "38cf3d44-909b-4ec0-9331-568e4321a98b",
+      "site": "BNE-001",
+      "date": "2026-04-08",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 4875.13,
+        "shop_sales": 724.93,
+        "total_sales": 5600.06,
+        "total_revenue": 5600.06,
+        "total_litres": 2834.38
+      },
+      "canonical": {
+        "fuel_sales": 4875.13,
+        "shop_sales": 724.93,
+        "total_sales": 5600.06,
+        "total_revenue": 5600.06,
+        "total_litres": 2834.38,
+        "banking": 5600.06
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "241a1475-7333-45d1-86f7-70317332d057",
+      "site": "BNE-001",
+      "date": "2026-04-09",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 5033.12,
+        "shop_sales": 1101.63,
+        "total_sales": 6134.75,
+        "total_revenue": 6134.75,
+        "total_litres": 2926.23
+      },
+      "canonical": {
+        "fuel_sales": 5033.12,
+        "shop_sales": 1101.63,
+        "total_sales": 6134.75,
+        "total_revenue": 6134.75,
+        "total_litres": 2926.23,
+        "banking": 6134.75
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "cbf1eda1-47f9-427d-885a-54f11061eab1",
+      "site": "BNE-001",
+      "date": "2026-04-09",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 3281.93,
+        "shop_sales": 1114.69,
+        "total_sales": 4396.62,
+        "total_revenue": 4396.62,
+        "total_litres": 1908.1
+      },
+      "canonical": {
+        "fuel_sales": 3281.93,
+        "shop_sales": 1114.69,
+        "total_sales": 4396.62,
+        "total_revenue": 4396.62,
+        "total_litres": 1908.1,
+        "banking": 4396.61
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "8a5582c9-5d17-4b6f-9907-49a36ce24f60",
+      "site": "BNE-001",
+      "date": "2026-04-10",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 3621.72,
+        "shop_sales": 954.8,
+        "total_sales": 4576.52,
+        "total_revenue": 4576.52,
+        "total_litres": 2105.65
+      },
+      "canonical": {
+        "fuel_sales": 3621.72,
+        "shop_sales": 954.8,
+        "total_sales": 4576.52,
+        "total_revenue": 4576.52,
+        "total_litres": 2105.65,
+        "banking": 4576.51
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "da3453a7-a8f6-4709-b46d-d800049a16d5",
+      "site": "BNE-001",
+      "date": "2026-04-10",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 4854.07,
+        "shop_sales": 902.16,
+        "total_sales": 5756.23,
+        "total_revenue": 5756.23,
+        "total_litres": 2822.13
+      },
+      "canonical": {
+        "fuel_sales": 4854.07,
+        "shop_sales": 902.16,
+        "total_sales": 5756.23,
+        "total_revenue": 5756.23,
+        "total_litres": 2822.13,
+        "banking": 5756.23
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "a8a99405-4a08-40b8-917e-047a7a21ea99",
+      "site": "BNE-001",
+      "date": "2026-04-11",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 4338.43,
+        "shop_sales": 866.31,
+        "total_sales": 5204.74,
+        "total_revenue": 5204.74,
+        "total_litres": 2522.34
+      },
+      "canonical": {
+        "fuel_sales": 4338.43,
+        "shop_sales": 866.31,
+        "total_sales": 5204.74,
+        "total_revenue": 5204.74,
+        "total_litres": 2522.34,
+        "banking": 5204.74
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "298c61df-6b2b-4e79-8efa-3f7d1173455b",
+      "site": "BNE-001",
+      "date": "2026-04-11",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 6558.36,
+        "shop_sales": 1425.4,
+        "total_sales": 7983.76,
+        "total_revenue": 7983.76,
+        "total_litres": 3813
+      },
+      "canonical": {
+        "fuel_sales": 6558.36,
+        "shop_sales": 1425.4,
+        "total_sales": 7983.76,
+        "total_revenue": 7983.76,
+        "total_litres": 3813,
+        "banking": 7983.76
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "b45f935e-13c9-4bab-94eb-df8e432b8a4f",
+      "site": "BNE-001",
+      "date": "2026-04-12",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 3890.49,
+        "shop_sales": 738.22,
+        "total_sales": 4628.71,
+        "total_revenue": 4628.71,
+        "total_litres": 2261.91
+      },
+      "canonical": {
+        "fuel_sales": 3890.49,
+        "shop_sales": 738.22,
+        "total_sales": 4628.71,
+        "total_revenue": 4628.71,
+        "total_litres": 2261.91,
+        "banking": 4628.72
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "bce3fda4-bfd8-4f00-89e8-acdc76f0eb9b",
+      "site": "BNE-001",
+      "date": "2026-04-12",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 4185.59,
+        "shop_sales": 1016.66,
+        "total_sales": 5202.25,
+        "total_revenue": 5202.25,
+        "total_litres": 2433.48
+      },
+      "canonical": {
+        "fuel_sales": 4185.59,
+        "shop_sales": 1016.66,
+        "total_sales": 5202.25,
+        "total_revenue": 5202.25,
+        "total_litres": 2433.48,
+        "banking": 5202.26
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "e84bd6c7-5282-4e20-965c-bb353ca1ea21",
+      "site": "BNE-001",
+      "date": "2026-04-13",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 4820.38,
+        "shop_sales": 1126.69,
+        "total_sales": 5947.07,
+        "total_revenue": 5947.07,
+        "total_litres": 2802.55
+      },
+      "canonical": {
+        "fuel_sales": 4820.38,
+        "shop_sales": 1126.69,
+        "total_sales": 5947.07,
+        "total_revenue": 5947.07,
+        "total_litres": 2802.55,
+        "banking": 5947.07
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "a81c920a-219c-45eb-bd86-45e7299c812f",
+      "site": "BNE-001",
+      "date": "2026-05-14",
+      "shift": "Night",
+      "submitted": {
+        "fuel_sales": 2222,
+        "shop_sales": 111,
+        "total_sales": 2333,
+        "total_revenue": 0,
+        "total_litres": 777
+      },
+      "canonical": {
+        "fuel_sales": 2222,
+        "shop_sales": 111,
+        "total_sales": 2333,
+        "total_revenue": 2333,
+        "total_litres": 777,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 2333,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "9f19e409-b78e-4eee-8fa4-060a0f711fbe",
+      "site": "BNE-001",
+      "date": "2026-05-14",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 6000,
+        "shop_sales": 1500,
+        "total_sales": 7500,
+        "total_revenue": 0,
+        "total_litres": 3000
+      },
+      "canonical": {
+        "fuel_sales": 6000,
+        "shop_sales": 1500,
+        "total_sales": 7500,
+        "total_revenue": 7500,
+        "total_litres": 3000,
+        "banking": 7500
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 7500,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "8951ae2d-034c-45f2-8d52-888391390119",
+      "site": "BNE-001",
+      "date": "2026-05-14",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 45000,
+        "shop_sales": 6500,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 25000
+      },
+      "canonical": {
+        "fuel_sales": 45000,
+        "shop_sales": 6500,
+        "total_sales": 51500,
+        "total_revenue": 51500,
+        "total_litres": 25000,
+        "banking": 44340
+      },
+      "reconciles": false,
+      "reason": "banking_mismatch: banking $44340 vs total $51500",
+      "delta": {
+        "total_sales": 51500,
+        "total_revenue": 51500,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "84b1354a-81aa-4f43-a4a8-2af4ee4e5187",
+      "site": "BNE-001",
+      "date": "2026-05-15",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 900,
+        "shop_sales": 300,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 900,
+        "shop_sales": 300,
+        "total_sales": 1200,
+        "total_revenue": 1200,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 1200,
+        "total_revenue": 1200,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "401675c3-62b2-4a4d-b6fe-26cf1b1cf211",
+      "site": "BNE-001",
+      "date": "2026-05-15",
+      "shift": "Night",
+      "submitted": {
+        "fuel_sales": 700,
+        "shop_sales": 200,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 700,
+        "shop_sales": 200,
+        "total_sales": 900,
+        "total_revenue": 900,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 900,
+        "total_revenue": 900,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "4990c125-ff4b-4c5c-9a6b-6df2d5667b70",
+      "site": "BNE-001",
+      "date": "2026-05-16",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 100,
+        "shop_sales": 0,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 100,
+        "shop_sales": 0,
+        "total_sales": 100,
+        "total_revenue": 100,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 100,
+        "total_revenue": 100,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "69bc1cfc-9f32-4ed0-9aee-41f42fa18bba",
+      "site": "BNE-001",
+      "date": "2026-05-18",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 1,
+        "shop_sales": 0,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 1,
+        "shop_sales": 0,
+        "total_sales": 1,
+        "total_revenue": 1,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 1,
+        "total_revenue": 1,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "15014c24-dcab-4298-8b1a-1d56e7a88b3d",
+      "site": "BNE-001",
+      "date": "2026-05-18",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 1100,
+        "shop_sales": 200,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 1100,
+        "shop_sales": 200,
+        "total_sales": 1300,
+        "total_revenue": 1300,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 1300,
+        "total_revenue": 1300,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "a1774f56-c5c5-4baa-a8a9-4fca49382df9",
+      "site": "4442",
+      "date": "2026-05-23",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 0,
+        "shop_sales": 0,
+        "total_sales": 88349,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 0,
+        "shop_sales": 0,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0,
+        "banking": 84539
+      },
+      "reconciles": false,
+      "reason": "total_sales_mismatch: typed $88349 vs computed $0; total_typed_without_components",
+      "delta": {
+        "total_sales": -88349,
+        "total_revenue": 0,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "7b291f55-fdbe-4618-b6c5-9e1d4fd0e154",
+      "site": "4442",
+      "date": "2026-05-23",
+      "shift": "Night",
+      "submitted": {
+        "fuel_sales": 5000,
+        "shop_sales": 1000,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 5000,
+        "shop_sales": 1000,
+        "total_sales": 6000,
+        "total_revenue": 6000,
+        "total_litres": 0,
+        "banking": 5000
+      },
+      "reconciles": false,
+      "reason": "banking_mismatch: banking $5000 vs total $6000",
+      "delta": {
+        "total_sales": 6000,
+        "total_revenue": 6000,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "b734f6dc-85e3-49aa-bab9-c81aea811e7e",
+      "site": "BNE-001",
+      "date": "2026-05-23",
+      "shift": "Night",
+      "submitted": {
+        "fuel_sales": 1500,
+        "shop_sales": 800,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 1500,
+        "shop_sales": 800,
+        "total_sales": 2300,
+        "total_revenue": 2300,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 2300,
+        "total_revenue": 2300,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "3ef10315-2f81-4028-963e-de8bfbd661b9",
+      "site": "BNE-001",
+      "date": "2026-05-24",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 3000,
+        "shop_sales": 2000,
+        "total_sales": 5000,
+        "total_revenue": 0,
+        "total_litres": 2500
+      },
+      "canonical": {
+        "fuel_sales": 3000,
+        "shop_sales": 2000,
+        "total_sales": 5000,
+        "total_revenue": 5000,
+        "total_litres": 2500,
+        "banking": 5000
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 5000,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "dd0f85dc-845b-44e5-9294-d0d1c4ec5adf",
+      "site": "BNE-001",
+      "date": "2026-05-24",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 1200,
+        "shop_sales": 800,
+        "total_sales": 2000,
+        "total_revenue": 0,
+        "total_litres": 1000
+      },
+      "canonical": {
+        "fuel_sales": 1200,
+        "shop_sales": 800,
+        "total_sales": 2000,
+        "total_revenue": 2000,
+        "total_litres": 1000,
+        "banking": 2000
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 2000,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "607b8c35-aeb3-447e-89bd-7a3a452e1341",
+      "site": "BNE-001",
+      "date": "2026-05-25",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 1000,
+        "shop_sales": 500,
+        "total_sales": 0,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 1000,
+        "shop_sales": 500,
+        "total_sales": 1500,
+        "total_revenue": 1500,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 1500,
+        "total_revenue": 1500,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "d5726d76-03c6-41f0-bd60-b53394b4e24d",
+      "site": "BNE-001",
+      "date": "2026-05-29",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 3500,
+        "shop_sales": 1500,
+        "total_sales": 5000,
+        "total_revenue": 0,
+        "total_litres": 2500
+      },
+      "canonical": {
+        "fuel_sales": 3500,
+        "shop_sales": 1500,
+        "total_sales": 5000,
+        "total_revenue": 5000,
+        "total_litres": 2500,
+        "banking": 5000
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 5000,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "2c537bfe-6a71-49fe-9843-c1dbbd71db93",
+      "site": "BNE-001",
+      "date": "2026-06-07",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 5000,
+        "shop_sales": 1200,
+        "total_sales": 6200,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 5000,
+        "shop_sales": 1200,
+        "total_sales": 6200,
+        "total_revenue": 6200,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 6200,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "5cab58b4-f2d3-4fd7-885d-23dc227dd045",
+      "site": "4442",
+      "date": "2026-06-07",
+      "shift": "Morning",
+      "submitted": {
+        "fuel_sales": 3000,
+        "shop_sales": 2000,
+        "total_sales": 5000,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 3000,
+        "shop_sales": 2000,
+        "total_sales": 5000,
+        "total_revenue": 5000,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 5000,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    },
+    {
+      "id": "f83f1759-4e88-4a4b-88e9-31643b9215fc",
+      "site": "4442",
+      "date": "2026-06-07",
+      "shift": "Afternoon",
+      "submitted": {
+        "fuel_sales": 5000,
+        "shop_sales": 1200,
+        "total_sales": 6200,
+        "total_revenue": 0,
+        "total_litres": 0
+      },
+      "canonical": {
+        "fuel_sales": 5000,
+        "shop_sales": 1200,
+        "total_sales": 6200,
+        "total_revenue": 6200,
+        "total_litres": 0,
+        "banking": 0
+      },
+      "reconciles": true,
+      "reason": null,
+      "delta": {
+        "total_sales": 0,
+        "total_revenue": 6200,
+        "fuel_sales": 0,
+        "total_litres": 0
+      }
+    }
+  ]
+}

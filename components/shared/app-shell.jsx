@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Fuel, LogOut, BarChart3, Building2, Users, Settings,
   Calculator, ClipboardList, FileText, Droplets, Map as MapIcon,
-  TrendingUp, Menu, X, PanelLeftClose, PanelLeftOpen, CreditCard,
+  TrendingUp, Menu, X, PanelLeftClose, PanelLeftOpen, CreditCard, ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -44,6 +44,7 @@ const OWNER_GROUPS = [
   {
     label: 'Account',
     items: [
+      { id: 'data-integrity', label: 'Data Integrity', icon: ShieldCheck },
       { id: 'billing', label: 'Billing', icon: CreditCard },
     ],
   },

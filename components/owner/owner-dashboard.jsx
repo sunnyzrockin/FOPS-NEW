@@ -32,6 +32,7 @@ import FuelInventoryDashboard from '@/components/owner/fuel-inventory-dashboard'
 import LiveFuelPricesDashboard from '@/components/fuel-pricing/live-fuel-prices-dashboard';
 import OwnerExecutiveDashboard from '@/components/owner/owner-executive-dashboard';
 import Billing from '@/components/owner/billing';
+import DataIntegrityView from '@/components/owner/data-integrity';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -159,6 +160,10 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
 
   if (activeTab === 'billing') {
     return <Billing />;
+  }
+
+  if (activeTab === 'data-integrity') {
+    return <DataIntegrityView sites={sites} />;
   }
 
   if (selectedReport) {
