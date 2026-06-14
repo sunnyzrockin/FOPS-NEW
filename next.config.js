@@ -58,4 +58,28 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = require('@sentry/nextjs').withSentryConfig(
+  nextConfig,
+  {
+    // Build-time options for the Sentry CLI / Webpack plugin.
+    silent: true,
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    authToken: process.env.SENTRY_AUTH_TOKEN,
+
+    // Upload source maps but don't ship them to the browser.
+    widenClientFileUpload: true,
+    hideSourceMaps: true,
+
+    // Tunnel through /monitoring so ad-blockers don't kill Sentry requests
+    // (Sentry's recommended pattern).
+    tunnelRoute: '/monitoring',
+
+    // Tree-shake / cron monitor wiring lives under the webpack key in
+    // @sentry/nextjs >= 8 (the top-level forms are deprecated).
+    webpack: {
+      treeshake: { removeDebugLogging: true },
+      automaticVercelMonitors: false,
+    },
+  },
+);
