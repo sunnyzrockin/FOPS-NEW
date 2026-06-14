@@ -336,8 +336,11 @@ export function HelpPanel({ user }) {
             'h-12 w-12 rounded-full bg-teal-600 text-white shadow-lg',
             'flex items-center justify-center',
             'hover:bg-teal-700 transition-colors',
-            'focus:outline-none focus:ring-4 focus:ring-teal-500/30',
-            'relative'
+            'focus:outline-none focus:ring-4 focus:ring-teal-500/30'
+            // NOTE: do NOT add `relative` here — Tailwind generates `relative`
+            // after `fixed`, which would clobber the fixed positioning and
+            // dump the button at the end of the DOM. `fixed` already creates
+            // a containing block for the absolute-positioned unread badge.
           )}
         >
           <HelpCircle className="h-5 w-5" />
