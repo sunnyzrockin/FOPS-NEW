@@ -20,7 +20,7 @@
  * component so the consumer just renders `<HelpPanel user={user} />`.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -281,27 +281,74 @@ function ContactTab({ user }) {
 /* ---------------------------------------------------------------- */
 /*  ROOT COMPONENT                                                  */
 /* ---------------------------------------------------------------- */
+
+// localStorage key for "last seen What's New entry date". The unread
+// count is "entries newer than this date". We store the ISO date string
+// so the comparison stays lexicographic-safe.
+const WHATS_NEW_LAST_SEEN_KEY = 'fops_whats_new_last_seen';
+
 export function HelpPanel({ user }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState('help');
+  // `lastSeen` is the most recent CHANGELOG date the user has acknowledged.
+  // null = treated as "never seen anything" (everything is unread).
+  const [lastSeen, setLastSeen] = useState(null);
 
   const latestRelease = useMemo(() => CHANGELOG[0], []);
+
+  // Hydrate lastSeen from localStorage once on mount.
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(WHATS_NEW_LAST_SEEN_KEY);
+      if (v) setLastSeen(v);
+    } catch { /* SSR / no-storage envs */ }
+  }, []);
+
+  // Unread = changelog entries dated strictly after lastSeen. If the user
+  // has never opened the tab, everything counts as unread.
+  const unreadCount = useMemo(() => {
+    if (!lastSeen) return CHANGELOG.length;
+    return CHANGELOG.filter((e) => e.date > lastSeen).length;
+  }, [lastSeen]);
+
+  // When the user actually views the What's New tab, mark all entries
+  // up to the latest as seen. This happens either by clicking the tab
+  // trigger or via the "New:" CTA in the Help-tab footer.
+  const markWhatsNewSeen = () => {
+    if (!latestRelease) return;
+    try { localStorage.setItem(WHATS_NEW_LAST_SEEN_KEY, latestRelease.date); } catch {}
+    setLastSeen(latestRelease.date);
+  };
+
+  const onTabChange = (next) => {
+    setTab(next);
+    if (next === 'new') markWhatsNewSeen();
+  };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button
           type="button"
-          aria-label="Open help"
+          aria-label={unreadCount > 0 ? `Open help — ${unreadCount} unread updates` : 'Open help'}
           className={cn(
             'fixed bottom-5 right-5 z-40',
             'h-12 w-12 rounded-full bg-teal-600 text-white shadow-lg',
             'flex items-center justify-center',
             'hover:bg-teal-700 transition-colors',
-            'focus:outline-none focus:ring-4 focus:ring-teal-500/30'
+            'focus:outline-none focus:ring-4 focus:ring-teal-500/30',
+            'relative'
           )}
         >
           <HelpCircle className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span
+              aria-hidden
+              className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white"
+            >
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
         </button>
       </SheetTrigger>
 
@@ -316,13 +363,21 @@ export function HelpPanel({ user }) {
           </SheetDescription>
         </SheetHeader>
 
-        <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col min-h-0">
+        <Tabs value={tab} onValueChange={onTabChange} className="flex-1 flex flex-col min-h-0">
           <TabsList className="mx-4 mt-3 grid grid-cols-3">
             <TabsTrigger value="help" className="text-xs gap-1">
               <HelpCircle className="h-3.5 w-3.5" /> Help
             </TabsTrigger>
-            <TabsTrigger value="new" className="text-xs gap-1">
+            <TabsTrigger value="new" className="text-xs gap-1 relative">
               <Sparkles className="h-3.5 w-3.5" /> What&apos;s new
+              {unreadCount > 0 && (
+                <span
+                  aria-hidden
+                  className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center"
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger value="contact" className="text-xs gap-1">
               <Mail className="h-3.5 w-3.5" /> Contact
@@ -344,12 +399,16 @@ export function HelpPanel({ user }) {
           {latestRelease && tab === 'help' && (
             <button
               type="button"
-              onClick={() => setTab('new')}
+              onClick={() => { setTab('new'); markWhatsNewSeen(); }}
               className="border-t px-4 py-2.5 text-left hover:bg-muted/40 transition-colors"
             >
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Sparkles className="h-3.5 w-3.5 text-teal-600" />
-                <span>New: {latestRelease.title}</span>
+                <span>
+                  {unreadCount > 0
+                    ? `${unreadCount} new update${unreadCount === 1 ? '' : 's'} — ${latestRelease.title}`
+                    : `New: ${latestRelease.title}`}
+                </span>
               </div>
             </button>
           )}
