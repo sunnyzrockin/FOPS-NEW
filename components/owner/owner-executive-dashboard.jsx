@@ -19,6 +19,7 @@ import { authedFetch } from '@/lib/authed-fetch';
 import { formatCurrency } from '@/lib/format';
 import SiteFilter from '@/components/shared/site-filter';
 import AnalyticsExplorer from '@/components/shared/analytics-explorer';
+import StatCard from '@/components/shared/stat-card';
 import {
   createFopsPdf, addKpiStrip, addSectionTitle, addTable, saveFopsPdf,
 } from '@/lib/pdf-export';
@@ -237,15 +238,15 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
         </CardContent>
       </Card>
 
-      {/* KPI strip */}
+      {/* KPI strip — flat StatCard (Teal-aligned, no gradients) */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KpiCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} sub={`${stats.totalReports} reports`} from="from-purple-500" to="to-pink-500" />
-          <KpiCard title="Fuel Sales" value={formatCurrency(stats.totalFuelSales)} icon={Fuel} from="from-teal-500" to="to-cyan-500" />
-          <KpiCard title="Shop Sales" value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} from="from-emerald-500" to="to-teal-500" />
-          <KpiCard title="Volume Sold" value={`${fmt0(stats.totalLitres)} L`} icon={Droplets} from="from-cyan-500" to="to-teal-500" />
-          <KpiCard title="Banking" value={formatCurrency(stats.totalBanking)} icon={DollarSign} from="from-amber-500" to="to-orange-500" />
-          <KpiCard title="Drive Offs" value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} from="from-rose-500" to="to-red-500" />
+          <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} subValue={`${stats.totalReports} reports`} icon={DollarSign} color="teal" />
+          <StatCard title="Fuel Sales"    value={formatCurrency(stats.totalFuelSales)} icon={Fuel} color="teal" />
+          <StatCard title="Shop Sales"    value={formatCurrency(stats.totalShopSales)} icon={ShoppingCart} color="green" />
+          <StatCard title="Volume Sold"   value={`${fmt0(stats.totalLitres)} L`} icon={Droplets} color="cyan" />
+          <StatCard title="Banking"       value={formatCurrency(stats.totalBanking)} icon={DollarSign} color="amber" />
+          <StatCard title="Drive Offs"    value={formatCurrency(stats.totalDriveOffs)} icon={AlertTriangle} color="red" />
         </div>
       )}
 
@@ -405,23 +406,6 @@ export default function OwnerExecutiveDashboard({ user, sites }) {
 }
 
 // =============== Helpers ===============
-
-function KpiCard({ title, value, icon: Icon, sub, from, to }) {
-  return (
-    <Card className={`border-0 shadow-md bg-gradient-to-br ${from} ${to} text-white`}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-medium opacity-90">{title}</p>
-            <p className="text-xl font-bold mt-1">{value}</p>
-            {sub && <p className="text-[10px] opacity-80 mt-1">{sub}</p>}
-          </div>
-          <Icon className="h-6 w-6 opacity-90" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 function VarianceCard({ title, data, icon: Icon }) {
   const Up = data.variancePct.revenue >= 0;

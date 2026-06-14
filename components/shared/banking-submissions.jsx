@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity -- pre-existing patterns: derived useMemo + async callbacks */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -57,7 +58,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
     try {
       const siteFilterIds = siteFilter === 'all' ? siteIds : siteFilter;
       const res = await authedFetch(
-        `/api/form-submissions?siteIds=${siteFilterIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`
+        `/api/reports?siteIds=${siteFilterIds}&startDate=${dateRange.start}&endDate=${dateRange.end}`
       );
       if (!res.ok) {
         // DO NOT hard-redirect on 401 here — authedFetch already retried
@@ -127,7 +128,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
     if (!expandedDetail[reportId]) {
       setLoadingDetail(reportId);
       try {
-        const res = await authedFetch(`/api/form-submissions/${reportId}`);
+        const res = await authedFetch(`/api/reports/${reportId}`);
         const data = await res.json();
         setExpandedDetail((prev) => ({ ...prev, [reportId]: data }));
       } catch (e) {
@@ -142,7 +143,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
     e.stopPropagation();
     if (!(await confirmDialog('Delete submission?', 'This action is irreversible.', { destructive: true, confirmLabel: 'Delete' }))) return;
     try {
-      const res = await authedFetch(`/api/form-submissions/${reportId}`, { method: 'DELETE' });
+      const res = await authedFetch(`/api/reports/${reportId}`, { method: 'DELETE' });
       if (res.ok) {
         loadSubmissions();
       } else {
