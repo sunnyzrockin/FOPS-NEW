@@ -61,7 +61,7 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center px-6">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-12 pb-12">
             <CheckCircle2 className="h-16 w-16 text-green-600 mx-auto mb-4" />
@@ -77,7 +77,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center px-6 py-12">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6 py-12">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold">Reset your password</CardTitle>

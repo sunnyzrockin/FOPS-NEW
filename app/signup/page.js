@@ -78,7 +78,7 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center px-6">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-12 pb-12">
             <CheckCircle2 className="h-16 w-16 text-green-600 mx-auto mb-4" />
@@ -94,7 +94,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
@@ -109,7 +109,7 @@ export default function SignupPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1 text-center">
-            <div className="w-12 h-12 bg-gradient-to-br from-teal-600 to-indigo-600 rounded-xl mx-auto mb-4"></div>
+            <div className="w-12 h-12 bg-teal-600 rounded-xl mx-auto mb-4"></div>
             <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
             <CardDescription>Sign up to get started with FOPS</CardDescription>
           </CardHeader>

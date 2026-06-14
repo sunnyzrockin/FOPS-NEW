@@ -233,7 +233,7 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
       </div>
 
       {/* Formula Display */}
-      <div className="min-h-[80px] p-4 bg-gradient-to-r from-slate-100 to-slate-50 rounded-2xl border-2 border-dashed border-slate-300">
+      <div className="min-h-[80px] p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300">
         {operations.length === 0 ? (
           <p className="text-slate-400 text-center py-4">Click fields below to build your formula</p>
         ) : (
@@ -268,9 +268,9 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
       </div>
 
       {/* Live Result */}
-      <div className="p-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white">
-        <p className="text-sm opacity-90">Live Preview (with sample data)</p>
-        <p className="text-3xl font-bold">{formatCurrency(testResult)}</p>
+      <div className="p-4 bg-teal-50 border border-teal-200 rounded-xl">
+        <p className="text-sm text-teal-700">Live Preview (with sample data)</p>
+        <p className="text-3xl font-bold text-teal-900">{formatCurrency(testResult)}</p>
       </div>
 
       {/* Operators */}
@@ -349,7 +349,7 @@ export default function BankingFormulaBuilder({ siteId, userId, onClose, existin
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500"
+          className="flex-1 bg-teal-600 hover:bg-teal-700 text-white"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
           Save Formula

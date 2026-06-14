@@ -231,10 +231,10 @@ export default function FounderDashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-lg">
+      <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-lg">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-red-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center">
               <ShieldAlert className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -252,12 +252,12 @@ export default function FounderDashboardPage() {
         {/* System overview cards */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <SystemCard icon={Database} label="Tenants (Owners)" value={stats.roleBreakdown?.owner ?? 0} color="from-teal-500 to-indigo-600" />
-            <SystemCard icon={Users} label="Operators" value={stats.roleBreakdown?.operator ?? 0} color="from-emerald-500 to-teal-600" />
-            <SystemCard icon={Users} label="Staff" value={stats.roleBreakdown?.staff ?? 0} color="from-purple-500 to-pink-600" />
-            <SystemCard icon={Building2} label="Sites" value={stats.counts?.sites ?? 0} color="from-cyan-500 to-teal-600" />
-            <SystemCard icon={FileText} label="Reports" value={stats.counts?.shift_reports ?? 0} color="from-amber-500 to-orange-600" />
-            <SystemCard icon={Activity} label="Audit Events 7d" value={stats.auditActivity?.last7d ?? 0} color="from-rose-500 to-red-600" />
+            <SystemCard icon={Database} label="Tenants (Owners)" value={stats.roleBreakdown?.owner ?? 0} color="bg-teal-600" />
+            <SystemCard icon={Users} label="Operators" value={stats.roleBreakdown?.operator ?? 0} color="bg-emerald-600" />
+            <SystemCard icon={Users} label="Staff" value={stats.roleBreakdown?.staff ?? 0} color="bg-violet-600" />
+            <SystemCard icon={Building2} label="Sites" value={stats.counts?.sites ?? 0} color="bg-cyan-600" />
+            <SystemCard icon={FileText} label="Reports" value={stats.counts?.shift_reports ?? 0} color="bg-amber-600" />
+            <SystemCard icon={Activity} label="Audit Events 7d" value={stats.auditActivity?.last7d ?? 0} color="bg-rose-600" />
           </div>
         )}
 
@@ -343,7 +343,7 @@ export default function FounderDashboardPage() {
               <Button onClick={exportCsv} variant="outline" size="sm" className="gap-1.5 h-8">
                 <Download className="h-3.5 w-3.5" /> CSV
               </Button>
-              <Button onClick={exportPdf} size="sm" className="gap-1.5 h-8 bg-gradient-to-r from-amber-500 to-red-600 text-white hover:opacity-90">
+              <Button onClick={exportPdf} size="sm" className="gap-1.5 h-8 bg-amber-600 text-white hover:opacity-90">
                 <FileDown className="h-3.5 w-3.5" /> PDF
               </Button>
             </div>
@@ -376,7 +376,7 @@ export default function FounderDashboardPage() {
 
 function SystemCard({ icon: Icon, label, value, color }) {
   return (
-    <Card className={`border-0 shadow bg-gradient-to-br ${color} text-white`}>
+    <Card className={`border-0 shadow ${color} text-white`}>
       <CardContent className="p-3">
         <div className="flex items-start justify-between">
           <div>

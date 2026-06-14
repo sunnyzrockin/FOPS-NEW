@@ -18,7 +18,7 @@ export default function DailyRollupRow({ rollup, onClick, expanded, onToggle }) 
         onClick={onToggle}
       >
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-teal-100 to-indigo-100 rounded-xl flex items-center justify-center">
+          <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded-xl flex items-center justify-center">
             <Calendar className="h-6 w-6 text-teal-600" />
           </div>
           <div>
@@ -89,7 +89,7 @@ export default function DailyRollupRow({ rollup, onClick, expanded, onToggle }) 
                 {(rollup.formula_results || []).map((result, idx) => (
                   <div
                     key={idx}
-                    className="bg-gradient-to-br from-teal-50 to-indigo-50 border border-teal-200 p-3 rounded-lg"
+                    className="bg-teal-50 border border-teal-200 p-3 rounded-lg"
                   >
                     <p className="text-xs text-teal-600 mb-1">{result.formula_name}</p>
                     <p className="text-lg font-bold text-teal-700">{formatCurrency(result.result_value)}</p>

@@ -251,22 +251,23 @@ export default function DipsManagement({ user, sites }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {['ulp', 'diesel', 'premium'].map((fuel) => {
           const colorMap = {
-            ulp: 'from-teal-500 to-indigo-500',
-            diesel: 'from-amber-500 to-orange-600',
-            premium: 'from-purple-500 to-fuchsia-600',
+            ulp:     { bg: 'bg-teal-50',    text: 'text-teal-800',    label: 'text-teal-700',    icon: 'text-teal-600',    accent: 'border-l-4 border-teal-500' },
+            diesel:  { bg: 'bg-amber-50',   text: 'text-amber-800',   label: 'text-amber-700',   icon: 'text-amber-600',   accent: 'border-l-4 border-amber-500' },
+            premium: { bg: 'bg-violet-50',  text: 'text-violet-800',  label: 'text-violet-700',  icon: 'text-violet-600',  accent: 'border-l-4 border-violet-500' },
           };
           const labelMap = { ulp: 'ULP', diesel: 'Diesel', premium: 'Premium' };
           const lvl = currentForSite?.current?.[`${fuel}_litres`];
           const consumed = currentForSite?.consumption_since_previous?.[fuel];
+          const c = colorMap[fuel];
           return (
-            <Card key={fuel} className="overflow-hidden border border-border/50 shadow-sm">
-              <div className={`bg-gradient-to-br ${colorMap[fuel]} p-5 text-white`}>
+            <Card key={fuel} className={`overflow-hidden border border-border/50 shadow-sm ${c.accent}`}>
+              <div className={`${c.bg} p-5`}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm opacity-90">{labelMap[fuel]} tank level</p>
-                    <p className="text-3xl font-bold mt-1">{fmtLitres(lvl)}</p>
+                    <p className={`text-sm ${c.label}`}>{labelMap[fuel]} tank level</p>
+                    <p className={`text-3xl font-bold mt-1 ${c.text}`}>{fmtLitres(lvl)}</p>
                   </div>
-                  <Droplets className="h-7 w-7 opacity-90" />
+                  <Droplets className={`h-7 w-7 ${c.icon}`} />
                 </div>
               </div>
               <CardContent className="p-3 text-sm text-muted-foreground">

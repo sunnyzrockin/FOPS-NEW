@@ -329,7 +329,7 @@ export default function FieldConfiguration({ user, sites }) {
           <Button onClick={openCopyDialog} variant="outline" disabled={otherSites.length === 0} title={otherSites.length === 0 ? 'No other sites to copy from' : 'Copy fields from another site'}>
             <Copy className="h-4 w-4 mr-2" /> Copy from site
           </Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-gradient-to-r from-teal-500 to-indigo-600">
+          <Button onClick={handleSave} disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Save Changes
           </Button>
         </div>
@@ -632,7 +632,7 @@ export default function FieldConfiguration({ user, sites }) {
             <Button
               onClick={applyCopy}
               disabled={!copySourceSiteId || copySelectedKeys.size === 0 || copyApplying}
-              className="bg-gradient-to-r from-teal-600 to-indigo-600"
+              className="bg-teal-600 hover:bg-teal-700 text-white"
             >
               {copyApplying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
               Copy {copySelectedKeys.size > 0 ? `${copySelectedKeys.size} field${copySelectedKeys.size === 1 ? '' : 's'}` : 'fields'}

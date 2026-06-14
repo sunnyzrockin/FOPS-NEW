@@ -447,8 +447,7 @@ function VarianceRow({ label, cur, prev, pct, fmt }) {
 
 function PerformerList({ rows, accent = 'emerald', metricKey = 'revenue' }) {
   const max = Math.max(...rows.map((r) => r[metricKey] || 0), 1);
-  const fillFrom = accent === 'emerald' ? 'from-emerald-400' : 'from-rose-400';
-  const fillTo = accent === 'emerald' ? 'to-teal-500' : 'to-orange-500';
+  const fillColor = accent === 'emerald' ? 'bg-emerald-500' : 'bg-rose-500';
   const textColor = accent === 'emerald' ? 'text-emerald-700' : 'text-rose-700';
   return (
     <div className="space-y-2">
@@ -469,7 +468,7 @@ function PerformerList({ rows, accent = 'emerald', metricKey = 'revenue' }) {
               </span>
             </div>
             <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-              <div className={`h-full bg-gradient-to-r ${fillFrom} ${fillTo}`} style={{ width: `${pct}%` }} />
+              <div className={`h-full ${fillColor}`} style={{ width: `${pct}%` }} />
             </div>
           </div>
         );

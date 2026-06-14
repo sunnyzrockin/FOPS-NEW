@@ -238,7 +238,7 @@ export default function MonthlyReportsPivot({ user, sites }) {
         <Button onClick={exportCsv} disabled={!data?.columns?.length} variant="outline" className="gap-2">
           <Download className="h-4 w-4" /> Export CSV
         </Button>
-        <Button onClick={exportPdf} disabled={!data?.columns?.length} className="gap-2 bg-gradient-to-r from-teal-600 to-indigo-600 text-white hover:opacity-90">
+        <Button onClick={exportPdf} disabled={!data?.columns?.length} className="gap-2 bg-teal-600 hover:bg-teal-700 text-white">
           <FileDown className="h-4 w-4" /> Export PDF
         </Button>
       </div>

@@ -174,7 +174,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
         </div>
         <Dialog open={showAddOperator} onOpenChange={setShowAddOperator}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-teal-500 to-indigo-600">
+            <Button className="bg-teal-600 hover:bg-teal-700 text-white">
               <UserPlus className="h-4 w-4 mr-2" /> Add Operator
             </Button>
           </DialogTrigger>
@@ -260,7 +260,7 @@ export default function OperatorManagement({ user, sites, onRefresh }) {
               {operators.map((operator) => (
                 <div
                   key={operator.id}
-                  className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-teal-50 rounded-xl border border-slate-100"
+                  className="flex items-center justify-between p-4 bg-teal-50/40 rounded-xl border border-slate-100"
                 >
                   <div className="flex items-center gap-3 flex-1">
                     <div className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center">

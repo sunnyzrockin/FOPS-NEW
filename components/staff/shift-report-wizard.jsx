@@ -240,7 +240,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-teal-500 to-indigo-500 transition-all duration-300"
+              className="h-full bg-teal-500 transition-all duration-300"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -293,11 +293,11 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
         {step < STEPS.length - 1 ? (
-          <Button onClick={goNext} className="gap-2 flex-1 sm:flex-none bg-gradient-to-r from-teal-600 to-indigo-600">
+          <Button onClick={goNext} className="gap-2 flex-1 sm:flex-none bg-teal-600 hover:bg-teal-700 text-white">
             Next <ArrowRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={submit} disabled={loading} className="gap-2 flex-1 sm:flex-none bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button onClick={submit} disabled={loading} className="gap-2 flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             Submit Report
           </Button>

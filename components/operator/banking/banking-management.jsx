@@ -84,7 +84,7 @@ export default function BankingManagement({ user, sites }) {
               {sites.map((site) => <SelectItem key={site.id} value={site.id}>{site.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button onClick={() => setShowBuilder(true)} className="bg-gradient-to-r from-purple-500 to-pink-500">
+          <Button onClick={() => setShowBuilder(true)} className="bg-teal-600 hover:bg-teal-700 text-white">
             <Plus className="h-4 w-4 mr-2" /> New Formula
           </Button>
         </div>
@@ -92,9 +92,9 @@ export default function BankingManagement({ user, sites }) {
 
       {showBuilder && (
         <Card className="border border-border/50 shadow-sm">
-          <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+          <CardHeader className="bg-teal-50/60">
             <CardTitle className="flex items-center gap-2">
-              <Calculator className="h-5 w-5" /> {editingFormula ? 'Edit Formula' : 'Create Banking Formula'}
+              <Calculator className="h-5 w-5 text-teal-600" /> {editingFormula ? 'Edit Formula' : 'Create Banking Formula'}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
@@ -115,7 +115,7 @@ export default function BankingManagement({ user, sites }) {
             </Card>
           ) : loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
             </div>
           ) : formulas.length === 0 ? (
             <Card className="border-dashed border-2">
@@ -132,7 +132,7 @@ export default function BankingManagement({ user, sites }) {
               return (
                 <Card key={formula.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <CardContent className="p-0">
-                    <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 flex items-center justify-between">
+                    <div className="p-4 bg-teal-50/60 flex items-center justify-between">
                       <div>
                         <h3 className="font-semibold text-lg">{formula.name}</h3>
                         <p className="text-sm text-muted-foreground">Result: {formula.result_label}</p>

@@ -264,7 +264,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
               {(stats.topPerformingSite || stats.lowestPerformingSite) && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {stats.topPerformingSite && (
-                    <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
+                    <Card className="border border-border/50 shadow-sm bg-emerald-50/60">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div>
@@ -280,7 +280,7 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
                     </Card>
                   )}
                   {stats.lowestPerformingSite && (
-                    <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-orange-50 to-amber-50">
+                    <Card className="border border-border/50 shadow-sm bg-orange-50/60">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div>

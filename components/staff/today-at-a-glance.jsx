@@ -61,7 +61,7 @@ export default function TodayAtAGlance({ user, sites = [], reports = [] }) {
     : `${sites.length} sites assigned`;
 
   return (
-    <Card className="border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 shadow-sm">
+    <Card className="border border-teal-200 bg-teal-50 shadow-sm">
       <CardContent className="p-4 flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-3 flex-1 min-w-[260px]">
           <div className="h-12 w-12 rounded-xl bg-white text-teal-700 grid place-items-center shadow-sm ring-1 ring-teal-200 shrink-0">

@@ -12,9 +12,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Banknote, Calendar, Building2, User, ChevronDown, ChevronUp,
   Loader2, Calculator, RefreshCw, CheckCircle, Clock, AlertCircle, Trash2,
+  DollarSign, CheckCircle2,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
+import StatCard from '@/components/shared/stat-card';
 
 import { toast } from 'sonner';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
@@ -217,29 +219,29 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
         </CardContent>
       </Card>
 
-      {/* Summary KPI strip */}
+      {/* Summary KPI strip — flat StatCard (no gradients) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-          <CardContent className="p-4">
-            <p className="text-sm opacity-90">Total Banking</p>
-            <p className="text-3xl font-bold mt-1">{formatCurrency(summary.totalBanking)}</p>
-            <p className="text-xs opacity-75 mt-1">across {filteredSubmissions.length} submissions</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-teal-500 to-indigo-500 text-white">
-          <CardContent className="p-4">
-            <p className="text-sm opacity-90">Submitted Today</p>
-            <p className="text-3xl font-bold mt-1">{summary.submittedToday}</p>
-            <p className="text-xs opacity-75 mt-1">{formatDate(new Date().toISOString())}</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-border/50 shadow-sm bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-          <CardContent className="p-4">
-            <p className="text-sm opacity-90">Pending Review</p>
-            <p className="text-3xl font-bold mt-1">{summary.pendingReview}</p>
-            <p className="text-xs opacity-75 mt-1">awaiting operator sign-off</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Banking"
+          value={formatCurrency(summary.totalBanking)}
+          subValue={`across ${filteredSubmissions.length} submissions`}
+          icon={DollarSign}
+          color="teal"
+        />
+        <StatCard
+          title="Submitted Today"
+          value={summary.submittedToday}
+          subValue={formatDate(new Date().toISOString())}
+          icon={CheckCircle2}
+          color="green"
+        />
+        <StatCard
+          title="Pending Review"
+          value={summary.pendingReview}
+          subValue="awaiting operator sign-off"
+          icon={Clock}
+          color="amber"
+        />
       </div>
 
       {/* Submissions list */}

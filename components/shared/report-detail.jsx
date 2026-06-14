@@ -32,7 +32,7 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
 
   return (
     <Card className="border border-border/50 shadow-sm">
-      <CardHeader className="pb-4 bg-gradient-to-r from-teal-50 to-indigo-50 rounded-t-xl">
+      <CardHeader className="pb-4 bg-teal-50/60 rounded-t-xl">
         <div className="flex items-start justify-between">
           <div>
             <CardTitle className="text-xl">{report.site_name}</CardTitle>
@@ -69,15 +69,15 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
           </div>
         </div>
 
-        <div className="p-5 bg-gradient-to-r from-teal-500 to-indigo-600 rounded-xl text-white">
-          <p className="text-sm opacity-90 mb-1">Total Revenue</p>
-          <p className="text-3xl font-bold">{formatCurrency(report.total_revenue)}</p>
+        <div className="p-5 bg-teal-50 border border-teal-200 rounded-xl">
+          <p className="text-sm text-teal-700 mb-1">Total Revenue</p>
+          <p className="text-3xl font-bold text-teal-900">{formatCurrency(report.total_revenue)}</p>
         </div>
 
         {report.banking_value !== undefined && report.banking_value !== 0 && (
-          <div className="p-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white">
-            <p className="text-sm opacity-90 mb-1">Banking Total</p>
-            <p className="text-3xl font-bold">{formatCurrency(report.banking_value)}</p>
+          <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <p className="text-sm text-emerald-700 mb-1">Banking Total</p>
+            <p className="text-3xl font-bold text-emerald-900">{formatCurrency(report.banking_value)}</p>
           </div>
         )}
 
@@ -118,7 +118,7 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
           {canChangeStatus && report.status === 'pending' && (
             <Button
               onClick={() => onStatusChange(report.id, 'reviewed', user.id)}
-              className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500"
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               <CheckCircle className="h-4 w-4 mr-2" /> Mark as Reviewed
             </Button>

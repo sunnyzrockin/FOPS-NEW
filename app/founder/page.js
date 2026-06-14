@@ -55,11 +55,11 @@ export default function FounderLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
       <Card className="w-full max-w-md border-0 shadow-2xl bg-slate-900/80 backdrop-blur ring-1 ring-slate-700">
         <CardContent className="p-8 space-y-6">
           <div className="text-center space-y-2">
-            <div className="mx-auto w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-red-600 flex items-center justify-center shadow-lg">
+            <div className="mx-auto w-14 h-14 rounded-xl bg-amber-600 flex items-center justify-center shadow-lg">
               <ShieldAlert className="h-7 w-7 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-white">FOPS Founder</h1>
@@ -113,7 +113,7 @@ export default function FounderLoginPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-amber-500 to-red-600 hover:opacity-90 text-white gap-2"
+              className="w-full bg-amber-600 hover:opacity-90 text-white gap-2"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
               Sign in

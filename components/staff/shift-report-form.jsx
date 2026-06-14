@@ -489,7 +489,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
                   {formulas.map((formula) => (
                     <div
                       key={formula.id}
-                      className="bg-gradient-to-br from-teal-50 to-indigo-50 p-4 rounded-xl border border-teal-200"
+                      className="bg-teal-50 p-4 rounded-xl border border-teal-200"
                     >
                       <p className="text-xs text-muted-foreground mb-1">{formula.name}</p>
                       <p className="text-2xl font-bold text-teal-700">
@@ -653,7 +653,7 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
 
           <Button
             type="submit"
-            className="w-full sm:w-auto bg-gradient-to-r from-teal-500 to-indigo-600"
+            className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white"
             disabled={loading}
           >
             {loading

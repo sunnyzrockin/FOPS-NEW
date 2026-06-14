@@ -154,19 +154,19 @@ export default function FuelInventoryDashboard({ user, sites }) {
           {/* Portfolio KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { f: 'ulp', label: 'ULP across portfolio', grad: 'from-teal-500 to-indigo-500' },
-              { f: 'diesel', label: 'Diesel across portfolio', grad: 'from-amber-500 to-orange-600' },
-              { f: 'premium', label: 'Premium across portfolio', grad: 'from-purple-500 to-fuchsia-600' },
+              { f: 'ulp',     label: 'ULP across portfolio',     bg: 'bg-teal-50',   text: 'text-teal-800',   sub: 'text-teal-700',   icon: 'text-teal-600',   accent: 'border-l-4 border-teal-500' },
+              { f: 'diesel',  label: 'Diesel across portfolio',  bg: 'bg-amber-50',  text: 'text-amber-800',  sub: 'text-amber-700',  icon: 'text-amber-600',  accent: 'border-l-4 border-amber-500' },
+              { f: 'premium', label: 'Premium across portfolio', bg: 'bg-violet-50', text: 'text-violet-800', sub: 'text-violet-700', icon: 'text-violet-600', accent: 'border-l-4 border-violet-500' },
             ].map((it) => (
-              <Card key={it.f} className="overflow-hidden border border-border/50 shadow-sm">
-                <div className={`bg-gradient-to-br ${it.grad} p-5 text-white`}>
+              <Card key={it.f} className={`overflow-hidden border border-border/50 shadow-sm ${it.accent}`}>
+                <div className={`${it.bg} p-5`}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm opacity-90">{it.label}</p>
-                      <p className="text-3xl font-bold mt-1">{fmtL(portfolio.levels[it.f])}</p>
-                      <p className="text-xs opacity-80 mt-1">{portfolio.sitesWithData} site(s) reporting</p>
+                      <p className={`text-sm ${it.sub}`}>{it.label}</p>
+                      <p className={`text-3xl font-bold mt-1 ${it.text}`}>{fmtL(portfolio.levels[it.f])}</p>
+                      <p className={`text-xs ${it.sub} mt-1 opacity-80`}>{portfolio.sitesWithData} site(s) reporting</p>
                     </div>
-                    <Fuel className="h-7 w-7 opacity-90" />
+                    <Fuel className={`h-7 w-7 ${it.icon}`} />
                   </div>
                 </div>
               </Card>

@@ -96,11 +96,11 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
       {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-12 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-1/2 bg-slate-900 p-12 flex-col justify-between">
         <div>
           {/* Logo */}
           <div className="flex items-center gap-3 mb-16">
-            <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-teal-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">F</span>
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-teal-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">F</span>
             </div>
             <div>
