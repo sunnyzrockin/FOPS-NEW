@@ -34,18 +34,20 @@ const nextConfig = {
       {
         source: '/(.*)',
         headers: [
-          // Prevent clickjacking — only the app's own origin can frame it.
-          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          // Prevent clickjacking — disallow framing entirely.
+          // Both headers below say the same thing; CSP supersedes X-Frame-Options
+          // in modern browsers, so they're kept in lockstep.
+          { key: 'X-Frame-Options', value: 'DENY' },
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self';",
+            value: "frame-ancestors 'none';",
           },
           // Standard security headers
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self)',
+            value: 'camera=(), microphone=(), geolocation=()',
           },
           // HSTS — only on HTTPS, harmless on HTTP locally
           {
