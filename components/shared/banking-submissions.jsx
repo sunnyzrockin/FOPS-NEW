@@ -45,11 +45,12 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
   const [expandedId, setExpandedId] = useState(null);
   const [expandedDetail, setExpandedDetail] = useState({}); // {reportId: detailPayload}
   const [loadingDetail, setLoadingDetail] = useState(null);
-  // Cache of per-site label maps (FIX 1). Shape: { [siteId]: { [columnKey]: label } }
-  // Populated lazily on first expand of a row belonging to that site so
-  // the "Raw Field Values" section shows the operator's configured labels
-  // instead of hardcoded English strings.
-  const [siteLabelMaps, setSiteLabelMaps] = useState({});
+  // Cache of per-site field-config rows (FIX 1 v2). Shape:
+  //   { [siteId]: Array<{ key, label, is_enabled, show_in_banking, sort_order, category }> }
+  // Used to render Raw Field Values from the operator's actual config,
+  // in the configured order, with no hardcoded fallbacks. Lazy-populated
+  // on first row expand for the relevant site.
+  const [siteFieldConfigs, setSiteFieldConfigs] = useState({});
   const [siteFilter, setSiteFilter] = useState('all');
   const [staffFilter, setStaffFilter] = useState('all');
   const [dateRange, setDateRange] = useState({
@@ -116,8 +117,14 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
   // Aggregated summary cards
   const summary = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
+    // BUG 1b: sum the per-report banking-formula totals (server-attached
+    // as `formula_total` by the list handler) so the Total Banking KPI
+    // matches the per-row banking number. Falls back to the legacy
+    // banking_value/total_revenue for pre-formula reports.
     const totalBanking = filteredSubmissions.reduce(
-      (acc, s) => acc + (parseFloat(s.banking_value || s.total_revenue) || 0), 0,
+      (acc, s) => acc + (parseFloat(
+        s.formula_total != null ? s.formula_total : (s.banking_value || s.total_revenue),
+      ) || 0), 0,
     );
     const submittedToday = filteredSubmissions.filter(
       (s) => (s.date || s.shift_date || '').slice(0, 10) === today,
@@ -139,23 +146,23 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
         const data = await res.json();
         setExpandedDetail((prev) => ({ ...prev, [reportId]: data }));
 
-        // FIX 1: lazy-fetch site_field_configs once per site so the
-        // "Raw Field Values" labels are operator-configured, not hardcoded.
+        // FIX 1 v2: cache the FULL site_field_configs payload (in
+        // configured order) so the Raw Field Values grid can be driven
+        // by what the operator actually configured — not by a hardcoded
+        // column list. We deliberately keep ALL fields here; the panel
+        // filters to `is_enabled && show_in_banking` at render time so
+        // the operator dashboard's full-detail view can reuse the cache.
         const sId = data?.site_id;
-        if (sId && !siteLabelMaps[sId]) {
+        if (sId && !siteFieldConfigs[sId]) {
           try {
             const cfgRes = await authedFetch(`/api/field-configs?siteId=${sId}`);
             if (cfgRes.ok) {
               const cfg = await cfgRes.json();
               const rows = Array.isArray(cfg) ? cfg : (cfg?.fields || cfg?.data || []);
-              const map = {};
-              for (const r of rows) {
-                if (r?.key && r?.label) map[r.key] = r.label;
-              }
-              setSiteLabelMaps((prev) => ({ ...prev, [sId]: map }));
+              setSiteFieldConfigs((prev) => ({ ...prev, [sId]: rows }));
             }
           } catch (e) {
-            // Non-fatal — fall back to hardcoded labels.
+            // Non-fatal — we'll show the empty-state message instead.
             console.warn('site_field_configs fetch failed:', e?.message);
           }
         }
@@ -324,7 +331,19 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
-                            <p className="text-lg font-bold text-teal-600">{formatCurrency(s.banking_value || s.total_revenue || 0)}</p>
+                            {/* BUG 1b: show the sum of stored banking-formula
+                                results (server-attached as `formula_total`)
+                                so the collapsed row matches the expanded
+                                Banking Total card. Falls back to legacy
+                                banking_value/total_revenue ONLY if the
+                                report predates the formula engine. */}
+                            <p className="text-lg font-bold text-teal-600">
+                              {formatCurrency(
+                                s.formula_total != null
+                                  ? s.formula_total
+                                  : (s.banking_value ?? s.total_revenue ?? 0),
+                              )}
+                            </p>
                             <p className="text-xs text-muted-foreground">Banking</p>
                           </div>
                           <Badge
@@ -416,36 +435,58 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                                 </div>
                               )}
 
-                              {/* Raw field values — labels come from site_field_configs
-                                  (FIX 1) so each operator sees their own configured
-                                  names. Falls back to hardcoded labels if the config
-                                  fetch hasn't populated for this site yet. */}
+                              {/* Raw field values — driven ENTIRELY by the
+                                  operator's site_field_configs (FIX 1 v2).
+                                  Per user spec: filter strictly to
+                                  category === 'sales' && show_in_banking
+                                  === true, in display_order. Value lookup
+                                  reads flat columns first then falls back
+                                  to custom_values so operator-defined
+                                  fields (e.g. TOTAL SALES, FUEL CARDS,
+                                  BANKING) render correctly. No hardcoded
+                                  fallback list — empty state if config
+                                  is empty. */}
                               <div>
                                 <h4 className="text-sm font-semibold mb-2">Raw Field Values</h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                  {(() => {
-                                    const labelMap = siteLabelMaps[detail.site_id] || {};
-                                    const labelFor = (key, fallback) => labelMap[key] || fallback;
-                                    const FIELDS = [
-                                      ['fuel_sales', 'Fuel Sales'],
-                                      ['shop_sales', 'Shop Sales'],
-                                      ['eftpos',     'EFTPOS'],
-                                      ['motorpass',  'Motorpass'],
-                                      ['cash',       'Cash'],
-                                      ['accounts',   'Accounts'],
-                                      ['beverages',  'Beverages'],
-                                      ['hot_food',   'Hot Food'],
-                                      ['drive_offs', 'Drive Offs'],
-                                      ['dips',       'Dips'],
-                                    ];
-                                    return FIELDS.map(([key, fallback]) => (
-                                      <div key={key} className="bg-white border rounded-lg p-2">
-                                        <p className="text-[10px] text-muted-foreground">{labelFor(key, fallback)}</p>
-                                        <p className="text-sm font-medium">{formatCurrency(detail[key] || 0)}</p>
+                                {(() => {
+                                  const configs = siteFieldConfigs[detail.site_id];
+                                  if (!Array.isArray(configs)) {
+                                    return (
+                                      <div className="text-xs text-muted-foreground py-3">
+                                        Loading configured fields…
                                       </div>
-                                    ));
-                                  })()}
-                                </div>
+                                    );
+                                  }
+                                  const fields = configs
+                                    .filter((c) => c?.category === 'sales' && c?.show_in_banking === true)
+                                    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+                                  if (fields.length === 0) {
+                                    return (
+                                      <div className="text-xs text-muted-foreground bg-white border border-dashed rounded-md py-3 px-3">
+                                        This site has no banking-visible sales fields configured. Add them under
+                                        <span className="font-medium"> Operator → Form Fields</span> and tick
+                                        &ldquo;Show in banking&rdquo;.
+                                      </div>
+                                    );
+                                  }
+                                  const cv = (detail.custom_values && typeof detail.custom_values === 'object')
+                                    ? detail.custom_values : {};
+                                  const valueOf = (key) => {
+                                    if (detail[key] !== undefined && detail[key] !== null) return detail[key];
+                                    if (cv[key] !== undefined && cv[key] !== null) return cv[key];
+                                    return 0;
+                                  };
+                                  return (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                      {fields.map((f) => (
+                                        <div key={f.id ?? f.key} className="bg-white border rounded-lg p-2">
+                                          <p className="text-[10px] text-muted-foreground">{f.label}</p>
+                                          <p className="text-sm font-medium">{formatCurrency(valueOf(f.key))}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
                               </div>
 
                               {/* Admin-only delete */}

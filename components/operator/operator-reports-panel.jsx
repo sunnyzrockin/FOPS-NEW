@@ -55,7 +55,10 @@ export default function OperatorReportsPanel({
   // Per-row UI state
   const [expandedId, setExpandedId] = useState(null);
   const [expandedDetail, setExpandedDetail] = useState({}); // {reportId: detailPayload}
-  const [labelMaps, setLabelMaps] = useState({}); // {siteId: { key: label }}
+  // FIX 1 v2: cache full site_field_configs payload (in sort order). The
+  // Raw Field Values grid is driven by these rows, filtered to enabled +
+  // show_in_banking. No hardcoded field list any more.
+  const [siteFieldConfigs, setSiteFieldConfigs] = useState({});
   const [busyAction, setBusyAction] = useState(null);  // reportId currently approving/rejecting
   const [rejectingId, setRejectingId] = useState(null); // reportId showing reject reason input
   const [rejectReason, setRejectReason] = useState('');
@@ -96,17 +99,15 @@ export default function OperatorReportsPanel({
         setExpandedDetail((prev) => ({ ...prev, [reportId]: data }));
       } catch (e) { console.error(e); }
     }
-    if (siteId && !labelMaps[siteId]) {
+    if (siteId && !siteFieldConfigs[siteId]) {
       try {
         const cfgRes = await authedFetch(`/api/field-configs?siteId=${siteId}`);
         if (cfgRes.ok) {
           const cfg = await cfgRes.json();
           const rows = Array.isArray(cfg) ? cfg : (cfg?.fields || cfg?.data || []);
-          const map = {};
-          for (const r of rows) if (r?.key && r?.label) map[r.key] = r.label;
-          setLabelMaps((prev) => ({ ...prev, [siteId]: map }));
+          setSiteFieldConfigs((prev) => ({ ...prev, [siteId]: rows }));
         }
-      } catch { /* fallback to defaults */ }
+      } catch { /* fallback to empty-state message */ }
     }
   };
 
@@ -217,7 +218,11 @@ export default function OperatorReportsPanel({
                         <span className="truncate">{r.shift_type} · {siteName}</span>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {r.date} · Total {formatCurrency(r.total_revenue ?? r.total_sales ?? 0)}
+                        {r.date} · Banking {formatCurrency(
+                          r.formula_total != null
+                            ? r.formula_total
+                            : (r.banking_value ?? r.total_revenue ?? r.total_sales ?? 0),
+                        )}
                       </div>
                     </div>
                     <StatusPill status={status} />
@@ -232,7 +237,7 @@ export default function OperatorReportsPanel({
                         </div>
                       ) : (
                         <>
-                          <RawFieldGrid detail={detail} labelMap={labelMaps[r.site_id] || {}} />
+                          <RawFieldGrid detail={detail} configs={siteFieldConfigs[r.site_id]} />
 
                           {/* Approve / Reject actions */}
                           {canChangeStatus && status !== 'approved' && status !== 'rejected' && (
@@ -326,31 +331,48 @@ function StatusPill({ status }) {
   );
 }
 
-function RawFieldGrid({ detail, labelMap }) {
-  const FIELDS = [
-    ['fuel_sales', 'Fuel Sales'],
-    ['shop_sales', 'Shop Sales'],
-    ['eftpos',     'EFTPOS'],
-    ['motorpass',  'Motorpass'],
-    ['cash',       'Cash'],
-    ['accounts',   'Accounts'],
-    ['beverages',  'Beverages'],
-    ['hot_food',   'Hot Food'],
-    ['drive_offs', 'Drive Offs'],
-    ['dips',       'Dips'],
-  ];
-  const labelFor = (key, fallback) => labelMap[key] || fallback;
+function RawFieldGrid({ detail, configs }) {
+  // Driven entirely by site_field_configs (BUG 1 fix): filter strictly to
+  // category === 'sales' && show_in_banking === true, in display_order.
+  // No hardcoded field list, no phantom rows. Value lookup reads flat
+  // columns first then falls back to custom_values so operator-defined
+  // fields (e.g. TOTAL SALES, FUEL CARDS, BANKING) render correctly.
+  if (!Array.isArray(configs)) {
+    return (
+      <div>
+        <h4 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Raw Field Values</h4>
+        <p className="text-xs text-muted-foreground">Loading configured fields…</p>
+      </div>
+    );
+  }
+  const fields = configs
+    .filter((c) => c?.category === 'sales' && c?.show_in_banking === true)
+    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+  const cv = (detail?.custom_values && typeof detail.custom_values === 'object')
+    ? detail.custom_values : {};
+  const valueOf = (key) => {
+    if (detail?.[key] !== undefined && detail?.[key] !== null) return detail[key];
+    if (cv[key] !== undefined && cv[key] !== null) return cv[key];
+    return 0;
+  };
   return (
     <div>
       <h4 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Raw Field Values</h4>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {FIELDS.map(([key, fallback]) => (
-          <div key={key} className="bg-white border rounded-md p-2">
-            <p className="text-[10px] text-muted-foreground">{labelFor(key, fallback)}</p>
-            <p className="text-sm font-medium">{formatCurrency(detail[key] || 0)}</p>
-          </div>
-        ))}
-      </div>
+      {fields.length === 0 ? (
+        <div className="text-xs text-muted-foreground bg-white border border-dashed rounded-md py-3 px-3">
+          This site has no banking-visible sales fields configured. Add them under
+          <span className="font-medium"> Operator → Form Fields</span> and tick &ldquo;Show in banking&rdquo;.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          {fields.map((f) => (
+            <div key={f.id ?? f.key} className="bg-white border rounded-md p-2">
+              <p className="text-[10px] text-muted-foreground">{f.label}</p>
+              <p className="text-sm font-medium">{formatCurrency(valueOf(f.key))}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

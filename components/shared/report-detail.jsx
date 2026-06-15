@@ -1,34 +1,93 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock } from 'lucide-react';
+import { CheckCircle, Clock, Calculator, Loader2 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
+import { authedFetch } from '@/lib/authed-fetch';
 
 /**
  * ReportDetail — Full-detail card for a single shift report shown to the
- * operator/owner when reviewing. Includes top-line revenue, banking, and
- * grid of all field values plus an optional "Mark as Reviewed" CTA.
- * Extracted from /app/app/app/page.js.
+ * operator/owner when reviewing.
+ *
+ * BUG 1 fix: the Raw Field Values grid is driven ENTIRELY by the
+ *   /api/field-configs?siteId=… payload, filtered to
+ *   `category === 'sales' && show_in_banking === true` and rendered in
+ *   the returned order. NO hardcoded field list anywhere — if a site has
+ *   no banking-visible sales config we show an explicit empty state.
+ *
+ * BUG 1b fix: the Banking Total card reads the SUM of
+ *   `formula_results[*].result_value` (i.e. `shift_formula_results`) so
+ *   the number matches the per-row banking total elsewhere in the app.
+ *   Legacy `banking_value` is only used as a final fallback for very old
+ *   reports that predate the formula engine.
+ *
+ * Values for each rendered field are read in this order:
+ *   1. flat column on the report (e.g. `report.total_sales`)
+ *   2. `report.custom_values[key]` (operator-defined fields)
+ *   3. 0
  */
 export default function ReportDetail({ report, onClose, onStatusChange, canChangeStatus, user }) {
+  const [configs, setConfigs] = useState(null);     // null = loading; [] = no fields
+  const [configError, setConfigError] = useState(null);
+
+  // Load site_field_configs for THIS report's site. Driven by API only —
+  // no hardcoded fallback list.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!report?.site_id) { setConfigs([]); return; }
+      try {
+        const res = await authedFetch(`/api/field-configs?siteId=${report.site_id}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const rows = Array.isArray(data) ? data : (data?.fields || data?.data || []);
+        if (!cancelled) setConfigs(rows);
+      } catch (e) {
+        if (!cancelled) { setConfigError(e?.message || 'fetch failed'); setConfigs([]); }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [report?.site_id]);
+
   if (!report) return null;
 
-  const fields = [
-    { label: 'Total Sales', value: formatCurrency(report.total_sales) },
-    { label: 'Fuel Sales', value: formatCurrency(report.fuel_sales) },
-    { label: 'Shop Sales', value: formatCurrency(report.shop_sales) },
-    { label: 'Total Litres', value: `${(report.total_litres || 0).toLocaleString()} L` },
-    { label: 'EFTPOS', value: formatCurrency(report.eftpos) },
-    { label: 'Motorpass', value: formatCurrency(report.motorpass) },
-    { label: 'Cash', value: formatCurrency(report.cash) },
-    { label: 'Accounts', value: formatCurrency(report.accounts) },
-    { label: 'Beverages', value: formatCurrency(report.beverages) },
-    { label: 'Hot Food', value: formatCurrency(report.hot_food) },
-    { label: 'Drive Offs', value: formatCurrency(report.drive_offs) },
-    { label: 'Dips', value: formatCurrency(report.dips) },
-  ];
+  // Compute the canonical banking total: sum of stored formula results.
+  // Falls back to legacy banking_value/total_revenue ONLY for pre-formula
+  // reports that have no formula_results array attached.
+  const formulaResults = Array.isArray(report.formula_results) ? report.formula_results : [];
+  const formulaTotal = formulaResults.reduce(
+    (acc, fr) => acc + Number(fr?.result_value || 0),
+    0,
+  );
+  const hasFormulaTotal = formulaResults.length > 0;
+  const bankingTotal = hasFormulaTotal
+    ? formulaTotal
+    : (report.formula_total ?? report.banking_value ?? 0);
+
+  // Resolve a field's display value: flat column first, then custom_values.
+  const resolveValue = (key) => {
+    if (!key) return 0;
+    if (report[key] !== undefined && report[key] !== null) return report[key];
+    const cv = report.custom_values && typeof report.custom_values === 'object'
+      ? report.custom_values
+      : {};
+    if (cv[key] !== undefined && cv[key] !== null) return cv[key];
+    return 0;
+  };
+
+  // BUG 1: dynamic Raw Field Values — no hardcoded list, no fallback list.
+  // Filter to sales + show_in_banking, in the API's display_order.
+  const bankingFields = Array.isArray(configs)
+    ? configs
+        .filter((c) => c?.category === 'sales' && c?.show_in_banking === true)
+        // configs already sorted by display_order ASC server-side, but
+        // re-sort defensively in case ordering is lost over the wire.
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    : null;
 
   return (
     <Card className="border border-border/50 shadow-sm">
@@ -69,33 +128,73 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
           </div>
         </div>
 
-        <div className="p-5 bg-teal-50 border border-teal-200 rounded-xl">
-          <p className="text-sm text-teal-700 mb-1">Total Revenue</p>
-          <p className="text-3xl font-bold text-teal-900">{formatCurrency(report.total_revenue)}</p>
+        {/* BUG 1b: Banking Total now reads the sum of shift_formula_results,
+            making it consistent with the Banking Submissions list, the
+            operator review panel, and the daily-rollup totals. */}
+        <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+          <div>
+            <p className="text-sm text-emerald-700 mb-1 uppercase tracking-wider font-medium">Banking Total</p>
+            <p className="text-3xl font-bold text-emerald-900">{formatCurrency(bankingTotal)}</p>
+            <p className="text-[11px] text-emerald-700/70 mt-1">
+              {hasFormulaTotal
+                ? `sum of ${formulaResults.length} formula${formulaResults.length === 1 ? '' : 's'}`
+                : 'no formula results — showing legacy banking value'}
+            </p>
+          </div>
+          <Calculator className="h-8 w-8 text-emerald-600/40" />
         </div>
 
-        {report.banking_value !== undefined && report.banking_value !== 0 && (
-          <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <p className="text-sm text-emerald-700 mb-1">Banking Total</p>
-            <p className="text-3xl font-bold text-emerald-900">{formatCurrency(report.banking_value)}</p>
+        {/* Per-formula audit trail — surfaces every shift_formula_results row */}
+        {hasFormulaTotal && (
+          <div>
+            <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+              <Calculator className="h-4 w-4 text-teal-600" />
+              Formula Results
+              <Badge variant="outline" className="text-xs">audit trail</Badge>
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {formulaResults.map((fr) => (
+                <div key={fr.id} className="bg-white border border-teal-200 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground">{fr.formula_name}</p>
+                  <p className="text-xl font-bold text-teal-700">{formatCurrency(fr.result_value)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    calc {formatDateTime(fr.calculated_at)}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
-          <p className="text-sm font-medium text-orange-700 mb-1">Difference / Variance</p>
-          <p className="text-lg font-medium text-orange-600">
-            {report.difference_value !== null ? formatCurrency(report.difference_value) : 'Formula pending'}
-          </p>
-          <p className="text-xs text-orange-500 mt-1">This field will be calculated once formula is provided</p>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {fields.map((field, i) => (
-            <div key={i} className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-xs text-muted-foreground">{field.label}</p>
-              <p className="font-semibold">{field.value}</p>
+        {/* BUG 1: Raw Field Values — driven entirely by /api/field-configs.
+            No hardcoded fallback list; show an empty state if the site has
+            no banking-visible sales fields configured. */}
+        <div>
+          <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Raw Field Values</h4>
+          {configs === null ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-3">
+              <Loader2 className="h-3 w-3 animate-spin" /> Loading configured fields…
             </div>
-          ))}
+          ) : configError ? (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md py-2 px-3">
+              Couldn’t load field configuration: {configError}
+            </div>
+          ) : bankingFields.length === 0 ? (
+            <div className="text-xs text-muted-foreground bg-white border border-dashed rounded-md py-3 px-3">
+              This site has no banking-visible sales fields configured. Add them under{' '}
+              <span className="font-medium">Operator → Form Fields</span> and tick
+              <span className="font-medium"> &ldquo;Show in banking&rdquo;</span>.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {bankingFields.map((f) => (
+                <div key={f.id ?? f.key} className="p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs text-muted-foreground">{f.label}</p>
+                  <p className="font-semibold">{formatCurrency(resolveValue(f.key))}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {report.notes && (
