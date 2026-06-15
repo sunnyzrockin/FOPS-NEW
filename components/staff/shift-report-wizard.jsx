@@ -310,6 +310,29 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
 // ============= Steps =============
 
 function StepBasics({ sites, form, handle, errors }) {
+  // FEAT 1: derive shift type options from the selected site's shifts_per_day.
+  //   1 → Day (single)
+  //   2 → Morning | Afternoon
+  //   3 → Morning | Afternoon | Night
+  // Defaults to 2 when the column is missing (pre-migration) or unset.
+  const selectedSite = sites.find((s) => s.id === form.site_id) || null;
+  const rawSpd = Number(selectedSite?.shifts_per_day);
+  const shiftsPerDay = Number.isInteger(rawSpd) && rawSpd >= 1 && rawSpd <= 3 ? rawSpd : 2;
+  const shiftOptions =
+    shiftsPerDay === 1 ? ['Day']
+    : shiftsPerDay === 2 ? ['Morning', 'Afternoon']
+    : ['Morning', 'Afternoon', 'Night'];
+
+  // If the current shift_type isn't valid for this site (e.g. user switched
+  // sites), snap to the first valid option so the next-button validation
+  // doesn't trip on a stale value.
+  useEffect(() => {
+    if (!shiftOptions.includes(form.shift_type)) {
+      handle('shift_type', shiftOptions[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.site_id, shiftsPerDay]);
+
   return (
     <div className="space-y-4">
       <FieldBlock label="Site" required error={errors.site_id} icon={Building2}>
@@ -324,8 +347,12 @@ function StepBasics({ sites, form, handle, errors }) {
         <Input type="date" value={form.date} onChange={(e) => handle('date', e.target.value)} className="h-12 text-base" />
       </FieldBlock>
       <FieldBlock label="Shift Type" required error={errors.shift_type}>
-        <div className="grid grid-cols-3 gap-2">
-          {['Morning', 'Afternoon', 'Night'].map((s) => (
+        <div className={`grid gap-2 ${
+          shiftOptions.length === 1 ? 'grid-cols-1' :
+          shiftOptions.length === 2 ? 'grid-cols-2' :
+          'grid-cols-3'
+        }`}>
+          {shiftOptions.map((s) => (
             <button
               key={s}
               type="button"
@@ -382,28 +409,40 @@ function StepSales({ fields, form, handle, errors, onBlur }) {
 }
 
 function StepDips({ dipFields, form, handle, onBlur }) {
-  const builtIn = [
-    { key: 'ulp', label: 'ULP 91 — Litres' },
-    { key: 'diesel', label: 'Diesel — Litres' },
-    { key: 'premium', label: 'Premium — Litres' },
-  ];
+  // FIX 3: render ONE list of dip fields.
+  //   - If the site has custom dip fields configured in site_field_configs
+  //     (passed in as dipFields), show only those — they ARE the grades.
+  //   - If the site has none, fall back to the standard ULP / Diesel / Premium
+  //     trio so existing sites keep working without any config.
+  //   - No section labels — just the fields with their configured names.
+  const hasCustom = Array.isArray(dipFields) && dipFields.length > 0;
+  const rows = hasCustom
+    ? dipFields.map((f) => ({
+        key: f.key,
+        label: f.label,
+        levelField: `custom_dip__${f.key}__level`,
+        deliveryField: `custom_dip__${f.key}__delivery`,
+      }))
+    : [
+        { key: 'ulp',     label: 'ULP 91',  levelField: 'dip_ulp_litres',     deliveryField: 'delivery_ulp_litres' },
+        { key: 'diesel',  label: 'Diesel',  levelField: 'dip_diesel_litres',  deliveryField: 'delivery_diesel_litres' },
+        { key: 'premium', label: 'Premium', levelField: 'dip_premium_litres', deliveryField: 'delivery_premium_litres' },
+      ];
+
   return (
     <div className="space-y-5">
       <section>
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-          <Droplets className="h-4 w-4 text-teal-600" /> Tank Levels
-        </h3>
         <div className="space-y-3">
-          {builtIn.map((g) => (
-            <div key={g.key} className="grid grid-cols-2 gap-2">
-              <FieldBlock label={`${g.label} (level)`}>
+          {rows.map((r) => (
+            <div key={r.key} className="grid grid-cols-2 gap-2">
+              <FieldBlock label={`${r.label} — Litres (level)`}>
                 <Input
                   type="text"
                   inputMode="decimal"
                   placeholder="0"
-                  value={form[`dip_${g.key}_litres`] || ''}
-                  onChange={(e) => handle(`dip_${g.key}_litres`, e.target.value)}
-                  onBlur={() => onBlur(`dip_${g.key}_litres`)}
+                  value={form[r.levelField] || ''}
+                  onChange={(e) => handle(r.levelField, e.target.value)}
+                  onBlur={() => onBlur(r.levelField)}
                   className="h-11"
                 />
               </FieldBlock>
@@ -412,9 +451,9 @@ function StepDips({ dipFields, form, handle, onBlur }) {
                   type="text"
                   inputMode="decimal"
                   placeholder="0"
-                  value={form[`delivery_${g.key}_litres`] || ''}
-                  onChange={(e) => handle(`delivery_${g.key}_litres`, e.target.value)}
-                  onBlur={() => onBlur(`delivery_${g.key}_litres`)}
+                  value={form[r.deliveryField] || ''}
+                  onChange={(e) => handle(r.deliveryField, e.target.value)}
+                  onBlur={() => onBlur(r.deliveryField)}
                   className="h-11"
                 />
               </FieldBlock>
@@ -422,42 +461,6 @@ function StepDips({ dipFields, form, handle, onBlur }) {
           ))}
         </div>
       </section>
-
-      {dipFields.length > 0 && (
-        <section>
-          <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-            <Truck className="h-4 w-4 text-purple-600" /> Custom Grades
-          </h3>
-          <div className="space-y-3">
-            {dipFields.map((f) => (
-              <div key={f.id} className="grid grid-cols-2 gap-2">
-                <FieldBlock label={`${f.label} (level)`}>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={form[`custom_dip__${f.key}__level`] || ''}
-                    onChange={(e) => handle(`custom_dip__${f.key}__level`, e.target.value)}
-                    onBlur={() => onBlur(`custom_dip__${f.key}__level`)}
-                    className="h-11"
-                  />
-                </FieldBlock>
-                <FieldBlock label="Delivery">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={form[`custom_dip__${f.key}__delivery`] || ''}
-                    onChange={(e) => handle(`custom_dip__${f.key}__delivery`, e.target.value)}
-                    onBlur={() => onBlur(`custom_dip__${f.key}__delivery`)}
-                    className="h-11"
-                  />
-                </FieldBlock>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       <p className="text-xs text-muted-foreground">All dip fields are optional — leave blank if nothing to record.</p>
     </div>

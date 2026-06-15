@@ -27,17 +27,20 @@ import { cn } from '@/lib/utils';
  */
 export default function HealthStrip({ stats, lastLoaded = null }) {
   const submittedToday = Number(stats?.submittedToday ?? 0);
-  const totalSites = Number(stats?.totalSites ?? 0);
+  // FEAT 1: prefer the shifts_per_day-aware totalExpectedToday from the
+  // stats endpoint. Falls back to totalSites (one-shift-per-site math)
+  // for older deployments / pre-migration installs.
+  const totalExpected = Number(stats?.totalExpectedToday ?? stats?.totalSites ?? 0);
   const pendingReview = Number(stats?.pendingReview ?? stats?.pendingReports ?? 0);
   const varianceAlerts = Number(stats?.varianceAlerts ?? 0);
 
   /* Submission completeness colour --------------------------------- */
   const submissionTone = useMemo(() => {
-    if (totalSites === 0) return 'muted';
-    if (submittedToday >= totalSites) return 'green';
+    if (totalExpected === 0) return 'muted';
+    if (submittedToday >= totalExpected) return 'green';
     if (submittedToday > 0) return 'amber';
     return 'red';
-  }, [submittedToday, totalSites]);
+  }, [submittedToday, totalExpected]);
 
   const toneClasses = {
     green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -67,7 +70,7 @@ export default function HealthStrip({ stats, lastLoaded = null }) {
           ) : (
             <ClipboardList className="h-3.5 w-3.5" />
           )}
-          {submittedToday}/{totalSites} sites submitted today
+          {submittedToday}/{totalExpected} shifts submitted today
         </div>
 
         {/* Pending review chip ------------------------------------- */}

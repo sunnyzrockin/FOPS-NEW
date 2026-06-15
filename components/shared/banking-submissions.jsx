@@ -45,6 +45,11 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
   const [expandedId, setExpandedId] = useState(null);
   const [expandedDetail, setExpandedDetail] = useState({}); // {reportId: detailPayload}
   const [loadingDetail, setLoadingDetail] = useState(null);
+  // Cache of per-site label maps (FIX 1). Shape: { [siteId]: { [columnKey]: label } }
+  // Populated lazily on first expand of a row belonging to that site so
+  // the "Raw Field Values" section shows the operator's configured labels
+  // instead of hardcoded English strings.
+  const [siteLabelMaps, setSiteLabelMaps] = useState({});
   const [siteFilter, setSiteFilter] = useState('all');
   const [staffFilter, setStaffFilter] = useState('all');
   const [dateRange, setDateRange] = useState({
@@ -133,6 +138,27 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
         const res = await authedFetch(`/api/reports/${reportId}`);
         const data = await res.json();
         setExpandedDetail((prev) => ({ ...prev, [reportId]: data }));
+
+        // FIX 1: lazy-fetch site_field_configs once per site so the
+        // "Raw Field Values" labels are operator-configured, not hardcoded.
+        const sId = data?.site_id;
+        if (sId && !siteLabelMaps[sId]) {
+          try {
+            const cfgRes = await authedFetch(`/api/field-configs?siteId=${sId}`);
+            if (cfgRes.ok) {
+              const cfg = await cfgRes.json();
+              const rows = Array.isArray(cfg) ? cfg : (cfg?.fields || cfg?.data || []);
+              const map = {};
+              for (const r of rows) {
+                if (r?.key && r?.label) map[r.key] = r.label;
+              }
+              setSiteLabelMaps((prev) => ({ ...prev, [sId]: map }));
+            }
+          } catch (e) {
+            // Non-fatal — fall back to hardcoded labels.
+            console.warn('site_field_configs fetch failed:', e?.message);
+          }
+        }
       } catch (e) {
         console.error('detail fetch failed:', e);
       } finally {
@@ -341,26 +367,48 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                                 </div>
                               </div>
 
-                              {/* Per-formula audit trail */}
+                              {/* Per-formula audit trail (FIX 2: also surface a
+                                  prominent "Banking Total" stat above) */}
                               {Array.isArray(detail.formula_results) && detail.formula_results.length > 0 ? (
-                                <div>
-                                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                                    <Calculator className="h-4 w-4 text-teal-600" />
-                                    Formula Results
-                                    <Badge variant="outline" className="text-xs">audit trail</Badge>
-                                  </h4>
-                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                    {detail.formula_results.map((fr) => (
-                                      <div key={fr.id} className="bg-white border border-teal-200 rounded-lg p-3">
-                                        <p className="text-xs text-muted-foreground">{fr.formula_name}</p>
-                                        <p className="text-xl font-bold text-teal-700">{formatCurrency(fr.result_value)}</p>
-                                        <p className="text-[10px] text-muted-foreground mt-1">
-                                          calc {formatDateTime(fr.calculated_at)}
-                                        </p>
+                                <>
+                                  {/* Prominent banking total — sum of all formula results.
+                                      For sites with a single banking formula this is "the"
+                                      banking number; multi-formula sites get all of them
+                                      shown below in the audit trail. */}
+                                  {(() => {
+                                    const total = detail.formula_results.reduce(
+                                      (acc, fr) => acc + Number(fr.result_value || 0), 0,
+                                    );
+                                    return (
+                                      <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 flex items-center justify-between">
+                                        <div>
+                                          <p className="text-xs text-teal-700 font-medium uppercase tracking-wider">Banking Total</p>
+                                          <p className="text-3xl font-bold text-teal-900 mt-1">{formatCurrency(total)}</p>
+                                        </div>
+                                        <Calculator className="h-8 w-8 text-teal-600/40" />
                                       </div>
-                                    ))}
+                                    );
+                                  })()}
+
+                                  <div>
+                                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                      <Calculator className="h-4 w-4 text-teal-600" />
+                                      Formula Results
+                                      <Badge variant="outline" className="text-xs">audit trail</Badge>
+                                    </h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                      {detail.formula_results.map((fr) => (
+                                        <div key={fr.id} className="bg-white border border-teal-200 rounded-lg p-3">
+                                          <p className="text-xs text-muted-foreground">{fr.formula_name}</p>
+                                          <p className="text-xl font-bold text-teal-700">{formatCurrency(fr.result_value)}</p>
+                                          <p className="text-[10px] text-muted-foreground mt-1">
+                                            calc {formatDateTime(fr.calculated_at)}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
+                                </>
                               ) : (
                                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm flex items-center gap-2 text-amber-700">
                                   <AlertCircle className="h-4 w-4" />
@@ -368,27 +416,35 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                                 </div>
                               )}
 
-                              {/* Raw field values */}
+                              {/* Raw field values — labels come from site_field_configs
+                                  (FIX 1) so each operator sees their own configured
+                                  names. Falls back to hardcoded labels if the config
+                                  fetch hasn't populated for this site yet. */}
                               <div>
                                 <h4 className="text-sm font-semibold mb-2">Raw Field Values</h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                  {[
-                                    ['Fuel Sales', detail.fuel_sales],
-                                    ['Shop Sales', detail.shop_sales],
-                                    ['EFTPOS', detail.eftpos],
-                                    ['Motorpass', detail.motorpass],
-                                    ['Cash', detail.cash],
-                                    ['Accounts', detail.accounts],
-                                    ['Beverages', detail.beverages],
-                                    ['Hot Food', detail.hot_food],
-                                    ['Drive Offs', detail.drive_offs],
-                                    ['Dips', detail.dips],
-                                  ].map(([label, value]) => (
-                                    <div key={label} className="bg-white border rounded-lg p-2">
-                                      <p className="text-[10px] text-muted-foreground">{label}</p>
-                                      <p className="text-sm font-medium">{formatCurrency(value || 0)}</p>
-                                    </div>
-                                  ))}
+                                  {(() => {
+                                    const labelMap = siteLabelMaps[detail.site_id] || {};
+                                    const labelFor = (key, fallback) => labelMap[key] || fallback;
+                                    const FIELDS = [
+                                      ['fuel_sales', 'Fuel Sales'],
+                                      ['shop_sales', 'Shop Sales'],
+                                      ['eftpos',     'EFTPOS'],
+                                      ['motorpass',  'Motorpass'],
+                                      ['cash',       'Cash'],
+                                      ['accounts',   'Accounts'],
+                                      ['beverages',  'Beverages'],
+                                      ['hot_food',   'Hot Food'],
+                                      ['drive_offs', 'Drive Offs'],
+                                      ['dips',       'Dips'],
+                                    ];
+                                    return FIELDS.map(([key, fallback]) => (
+                                      <div key={key} className="bg-white border rounded-lg p-2">
+                                        <p className="text-[10px] text-muted-foreground">{labelFor(key, fallback)}</p>
+                                        <p className="text-sm font-medium">{formatCurrency(detail[key] || 0)}</p>
+                                      </div>
+                                    ));
+                                  })()}
                                 </div>
                               </div>
 

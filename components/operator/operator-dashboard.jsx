@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Fuel, ShoppingCart, DollarSign, Droplets, Loader2, AlertTriangle,
 } from 'lucide-react';
@@ -17,7 +16,6 @@ import ViewToggle from '@/components/shared/view-toggle';
 import SiteFilter from '@/components/shared/site-filter';
 import AnalyticsExplorer from '@/components/shared/analytics-explorer';
 import DailyRollupRow from '@/components/shared/daily-rollup-row';
-import ReportRow from '@/components/shared/report-row';
 import ReportDetail from '@/components/shared/report-detail';
 import ExportDialog from '@/components/shared/export-dialog';
 import StaffAccessManagement from '@/components/operator/staff-access-management';
@@ -31,6 +29,7 @@ import FuelMargin from '@/components/shared/fuel-margin';
 import WetstockAlertBanner from '@/components/operator/wetstock-alert-banner';
 import OperatorQuickActions from '@/components/operator/operator-quick-actions';
 import OperatorTeamPanel from '@/components/operator/operator-team-panel';
+import OperatorReportsPanel from '@/components/operator/operator-reports-panel';
 import { formatCurrency } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -255,13 +254,13 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
               )}
             </div>
           ) : (
-            <ScrollArea className="h-[400px]">
-              <div className="space-y-2">
-                {reports.map((report) => (
-                  <ReportRow key={report.id} report={report} onClick={() => handleReportClick(report.id)} />
-                ))}
-              </div>
-            </ScrollArea>
+            // FEAT 2: scrollable shift list with inline approve / reject lives
+            // in its own panel (filter bar + max-h scroll + per-row expand).
+            <OperatorReportsPanel
+              sites={sites}
+              user={user}
+              initialDate={dateRange.end}
+            />
           )}
         </CardContent>
       </Card>

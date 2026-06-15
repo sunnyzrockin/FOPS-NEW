@@ -1,4 +1,4 @@
-import { handleGetSiteById, handleUpdateSite, handleDeleteSite } from '@/lib/api/handlers/sites';
+import { handleGetSiteById, handleUpdateSite, handleDeleteSite, handlePatchSite } from '@/lib/api/handlers/sites';
 import { optionsHandler } from '@/lib/api/cors';
 
 export const runtime = 'nodejs';
@@ -11,6 +11,11 @@ export const GET = async (request, { params }) => {
 export const PUT = async (request, { params }) => {
   const { id } = await params;
   return handleUpdateSite(request, id);
+};
+// PATCH = operator-allowed, field-whitelisted updates (shifts_per_day, etc.)
+export const PATCH = async (request, { params }) => {
+  const { id } = await params;
+  return handlePatchSite(request, id);
 };
 export const DELETE = async (request, { params }) => {
   const { id } = await params;

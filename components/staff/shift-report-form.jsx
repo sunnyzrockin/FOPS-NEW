@@ -518,124 +518,125 @@ export default function ShiftReportForm({ user, sites, onSuccess, modeToggle }) 
             <p className="text-xs text-muted-foreground mb-4">
               Record current tank levels in litres. These automatically appear on the Fuel Inventory dashboard so your operator and owner can plan deliveries. Leave blank if you didn't take a dip this shift.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[
-                { key: 'dip_ulp_litres',    label: 'ULP level (L)',     placeholder: 'e.g. 18500' },
-                { key: 'dip_diesel_litres', label: 'Diesel level (L)',  placeholder: 'e.g. 12300' },
-                { key: 'dip_premium_litres',label: 'Premium level (L)', placeholder: '(if sold)' },
-              ].map(({ key, label, placeholder }) => {
-                const raw = form[key] || '';
-                const preview = looksLikeFormula(raw) ? evalFormula(raw) : null;
-                return (
-                  <div key={key} className="space-y-1">
-                    <Label className="text-sm">{label}</Label>
-                    <Input
-                      type="text" inputMode="decimal" placeholder={placeholder}
-                      value={raw}
-                      onChange={(e) => handleChange(key, e.target.value)}
-                      onBlur={() => handleNumericBlur(key)}
-                    />
-                    {preview != null && (
-                      <p className="text-xs text-teal-600 font-medium">
-                        = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <h4 className="text-sm font-medium mt-5 mb-2 flex items-center gap-2 text-muted-foreground">
-              <Truck className="h-4 w-4" />
-              Deliveries received this shift (L) — leave 0 if none
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[
-                { key: 'delivery_ulp_litres',    label: 'ULP delivery' },
-                { key: 'delivery_diesel_litres', label: 'Diesel delivery' },
-                { key: 'delivery_premium_litres',label: 'Premium delivery' },
-              ].map(({ key, label }) => {
-                const raw = form[key] || '';
-                const preview = looksLikeFormula(raw) ? evalFormula(raw) : null;
-                return (
-                  <div key={key} className="space-y-1">
-                    <Label className="text-sm">{label}</Label>
-                    <Input
-                      type="text" inputMode="decimal" placeholder="0"
-                      value={raw}
-                      onChange={(e) => handleChange(key, e.target.value)}
-                      onBlur={() => handleNumericBlur(key)}
-                    />
-                    {preview != null && (
-                      <p className="text-xs text-teal-600 font-medium">
-                        = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Custom fuel-grade fields configured per-site by the operator
-                (Form Fields → Fuel Tank Dips). Rendered below the built-in
-                ULP / Diesel / Premium grades so the visual ordering is
-                "core grades first, custom ones after". */}
-            {dipFieldConfigs.length > 0 && (
+            {/* FIX 3: dip section now shows EITHER custom-configured grades
+                OR the built-in ULP/Diesel/Premium trio — never both. Sites
+                with custom dip fields configured in Form Fields → Fuel Tank
+                Dips get those exclusively; the built-in trio is only the
+                fallback for sites with no custom config. */}
+            {dipFieldConfigs.length === 0 && (
               <>
-                <h4 className="text-sm font-medium mt-6 mb-2 flex items-center gap-2 text-muted-foreground">
-                  <Droplets className="h-4 w-4" />
-                  Additional fuel grades — configured for this site
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {dipFieldConfigs.map((f) => {
-                    const levelKey = `custom_dip__${f.key}__level`;
-                    const deliveryKey = `custom_dip__${f.key}__delivery`;
-                    const lvlRaw = form[levelKey] || '';
-                    const delRaw = form[deliveryKey] || '';
-                    const lvlPreview = looksLikeFormula(lvlRaw) ? evalFormula(lvlRaw) : null;
-                    const delPreview = looksLikeFormula(delRaw) ? evalFormula(delRaw) : null;
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { key: 'dip_ulp_litres',    label: 'ULP level (L)',     placeholder: 'e.g. 18500' },
+                    { key: 'dip_diesel_litres', label: 'Diesel level (L)',  placeholder: 'e.g. 12300' },
+                    { key: 'dip_premium_litres',label: 'Premium level (L)', placeholder: '(if sold)' },
+                  ].map(({ key, label, placeholder }) => {
+                    const raw = form[key] || '';
+                    const preview = looksLikeFormula(raw) ? evalFormula(raw) : null;
                     return (
-                      <div
-                        key={f.id}
-                        className="rounded-lg border border-sky-200 bg-sky-50/40 p-3 space-y-2"
-                      >
-                        <div className="text-sm font-medium flex items-center gap-1.5">
-                          <Droplets className="h-3.5 w-3.5 text-sky-600" />
-                          {f.label}
-                          {f.is_mandatory && <span className="text-red-500">*</span>}
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-muted-foreground">Tank level (L)</Label>
-                          <Input
-                            type="text" inputMode="decimal" placeholder="e.g. 4500"
-                            value={lvlRaw}
-                            onChange={(e) => handleChange(levelKey, e.target.value)}
-                            onBlur={() => handleNumericBlur(levelKey)}
-                          />
-                          {lvlPreview != null && (
-                            <p className="text-xs text-teal-600 font-medium">
-                              = {lvlPreview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
-                            </p>
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-muted-foreground">Delivery (L) — leave 0 if none</Label>
-                          <Input
-                            type="text" inputMode="decimal" placeholder="0"
-                            value={delRaw}
-                            onChange={(e) => handleChange(deliveryKey, e.target.value)}
-                            onBlur={() => handleNumericBlur(deliveryKey)}
-                          />
-                          {delPreview != null && (
-                            <p className="text-xs text-teal-600 font-medium">
-                              = {delPreview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
-                            </p>
-                          )}
-                        </div>
+                      <div key={key} className="space-y-1">
+                        <Label className="text-sm">{label}</Label>
+                        <Input
+                          type="text" inputMode="decimal" placeholder={placeholder}
+                          value={raw}
+                          onChange={(e) => handleChange(key, e.target.value)}
+                          onBlur={() => handleNumericBlur(key)}
+                        />
+                        {preview != null && (
+                          <p className="text-xs text-teal-600 font-medium">
+                            = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <h4 className="text-sm font-medium mt-5 mb-2 flex items-center gap-2 text-muted-foreground">
+                  <Truck className="h-4 w-4" />
+                  Deliveries received this shift (L) — leave 0 if none
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { key: 'delivery_ulp_litres',    label: 'ULP delivery' },
+                    { key: 'delivery_diesel_litres', label: 'Diesel delivery' },
+                    { key: 'delivery_premium_litres',label: 'Premium delivery' },
+                  ].map(({ key, label }) => {
+                    const raw = form[key] || '';
+                    const preview = looksLikeFormula(raw) ? evalFormula(raw) : null;
+                    return (
+                      <div key={key} className="space-y-1">
+                        <Label className="text-sm">{label}</Label>
+                        <Input
+                          type="text" inputMode="decimal" placeholder="0"
+                          value={raw}
+                          onChange={(e) => handleChange(key, e.target.value)}
+                          onBlur={() => handleNumericBlur(key)}
+                        />
+                        {preview != null && (
+                          <p className="text-xs text-teal-600 font-medium">
+                            = {preview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                          </p>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </>
+            )}
+
+            {/* Custom-configured grades — the canonical list when present.
+                No subheading; each grade card carries its own label. */}
+            {dipFieldConfigs.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {dipFieldConfigs.map((f) => {
+                  const levelKey = `custom_dip__${f.key}__level`;
+                  const deliveryKey = `custom_dip__${f.key}__delivery`;
+                  const lvlRaw = form[levelKey] || '';
+                  const delRaw = form[deliveryKey] || '';
+                  const lvlPreview = looksLikeFormula(lvlRaw) ? evalFormula(lvlRaw) : null;
+                  const delPreview = looksLikeFormula(delRaw) ? evalFormula(delRaw) : null;
+                  return (
+                    <div
+                      key={f.id}
+                      className="rounded-lg border border-sky-200 bg-sky-50/40 p-3 space-y-2"
+                    >
+                      <div className="text-sm font-medium flex items-center gap-1.5">
+                        <Droplets className="h-3.5 w-3.5 text-sky-600" />
+                        {f.label}
+                        {f.is_mandatory && <span className="text-red-500">*</span>}
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Tank level (L)</Label>
+                        <Input
+                          type="text" inputMode="decimal" placeholder="e.g. 4500"
+                          value={lvlRaw}
+                          onChange={(e) => handleChange(levelKey, e.target.value)}
+                          onBlur={() => handleNumericBlur(levelKey)}
+                        />
+                        {lvlPreview != null && (
+                          <p className="text-xs text-teal-600 font-medium">
+                            = {lvlPreview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Delivery (L) — leave 0 if none</Label>
+                        <Input
+                          type="text" inputMode="decimal" placeholder="0"
+                          value={delRaw}
+                          onChange={(e) => handleChange(deliveryKey, e.target.value)}
+                          onBlur={() => handleNumericBlur(deliveryKey)}
+                        />
+                        {delPreview != null && (
+                          <p className="text-xs text-teal-600 font-medium">
+                            = {delPreview.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 

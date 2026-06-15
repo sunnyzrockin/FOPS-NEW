@@ -34,6 +34,11 @@ export default function FieldConfiguration({ user, sites }) {
   const [selectedSite, setSelectedSite] = useState(sites[0]?.id || '');
   const [category, setCategory] = useState('sales'); // 'sales' | 'dip'
   const [fields, setFields] = useState([]);
+  // shifts_per_day for the currently-selected site (1, 2 or 3). Read from
+  // sites.shifts_per_day; saved via PATCH /api/sites/:id. Falls back to 2
+  // (matches the column default) when the row hasn't migrated yet.
+  const [shiftsPerDay, setShiftsPerDay] = useState(2);
+  const [savingShifts, setSavingShifts] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
@@ -81,6 +86,46 @@ export default function FieldConfiguration({ user, sites }) {
   useEffect(() => {
     loadFields();
   }, [loadFields]);
+
+  // Load shifts_per_day whenever the site selection changes. Defaults to 2
+  // when the column is missing (pre-migration) or the site has null.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedSite) return;
+    (async () => {
+      try {
+        const res = await authedFetch(`/api/sites/${selectedSite}`);
+        if (!res.ok) return;
+        const site = await res.json();
+        if (cancelled) return;
+        const n = Number(site?.shifts_per_day);
+        setShiftsPerDay(Number.isInteger(n) && n >= 1 && n <= 3 ? n : 2);
+      } catch { /* defaults stand */ }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedSite]);
+
+  const handleShiftsPerDayChange = async (next) => {
+    if (next === shiftsPerDay) return;
+    // Optimistic update for snappy UX; revert on failure.
+    const prev = shiftsPerDay;
+    setShiftsPerDay(next);
+    setSavingShifts(true);
+    try {
+      const res = await authedFetch(`/api/sites/${selectedSite}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shifts_per_day: next }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Save failed');
+      toast.success(`Shifts per day set to ${next}`);
+    } catch (err) {
+      setShiftsPerDay(prev);
+      toast.error(err?.message || 'Failed to save shifts per day');
+    } finally {
+      setSavingShifts(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -334,6 +379,41 @@ export default function FieldConfiguration({ user, sites }) {
           </Button>
         </div>
       </div>
+
+      {/* Shifts per day — segmented control above the field list. Per-site
+          operational setting that drives Step 1 of the staff wizard (which
+          shift types to show) and the health-strip completion math (how
+          many submissions per site count as "done" for today). */}
+      <Card className="border border-border/50 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-col gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">How many shift reports does this site submit daily?</h3>
+              <p className="text-xs text-muted-foreground">
+                Drives the shift selector your staff see and the "X/Y sites submitted today" stat.
+              </p>
+            </div>
+            <div className="inline-flex rounded-md border bg-background shadow-sm shrink-0 w-fit">
+              {[1, 2, 3].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={savingShifts}
+                  onClick={() => handleShiftsPerDayChange(n)}
+                  className={`px-4 py-1.5 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md border-r last:border-r-0 ${
+                    shiftsPerDay === n
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-transparent text-muted-foreground hover:bg-muted'
+                  } ${savingShifts ? 'opacity-50 cursor-wait' : ''}`}
+                >
+                  {n} shift{n === 1 ? '' : 's'}
+                </button>
+              ))}
+              {savingShifts && <Loader2 className="h-3.5 w-3.5 animate-spin self-center ml-2 text-muted-foreground" />}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs value={category} onValueChange={(v) => { setCategory(v); setShowAddField(false); }}>
         <TabsList>
