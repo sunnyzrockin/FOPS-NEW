@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { authedFetch } from '@/lib/authed-fetch';
 import { formatCurrency, formatDateTime } from '@/lib/format';
+import { resolveFieldValue, bankingSalesFields } from '@/lib/field-resolver';
 
 /**
  * OperatorReportsPanel — scrollable shift-report review panel for operators.
@@ -334,9 +335,9 @@ function StatusPill({ status }) {
 function RawFieldGrid({ detail, configs }) {
   // Driven entirely by site_field_configs (BUG 1 fix): filter strictly to
   // category === 'sales' && show_in_banking === true, in display_order.
-  // No hardcoded field list, no phantom rows. Value lookup reads flat
-  // columns first then falls back to custom_values so operator-defined
-  // fields (e.g. TOTAL SALES, FUEL CARDS, BANKING) render correctly.
+  // Value lookup uses lib/field-resolver.js so config keys that don't
+  // exactly match a flat column (e.g. cash_drop ↔ cash, account ↔
+  // accounts, drive_off_iou ↔ drive_offs) still find their stored value.
   if (!Array.isArray(configs)) {
     return (
       <div>
@@ -345,16 +346,7 @@ function RawFieldGrid({ detail, configs }) {
       </div>
     );
   }
-  const fields = configs
-    .filter((c) => c?.category === 'sales' && c?.show_in_banking === true)
-    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
-  const cv = (detail?.custom_values && typeof detail.custom_values === 'object')
-    ? detail.custom_values : {};
-  const valueOf = (key) => {
-    if (detail?.[key] !== undefined && detail?.[key] !== null) return detail[key];
-    if (cv[key] !== undefined && cv[key] !== null) return cv[key];
-    return 0;
-  };
+  const fields = bankingSalesFields(configs);
   return (
     <div>
       <h4 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Raw Field Values</h4>
@@ -368,7 +360,7 @@ function RawFieldGrid({ detail, configs }) {
           {fields.map((f) => (
             <div key={f.id ?? f.key} className="bg-white border rounded-md p-2">
               <p className="text-[10px] text-muted-foreground">{f.label}</p>
-              <p className="text-sm font-medium">{formatCurrency(valueOf(f.key))}</p>
+              <p className="text-sm font-medium">{formatCurrency(resolveFieldValue(detail, f.key))}</p>
             </div>
           ))}
         </div>

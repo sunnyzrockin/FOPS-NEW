@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Clock, Calculator, Loader2 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
+import { resolveFieldValue, bankingSalesFields } from '@/lib/field-resolver';
 
 /**
  * ReportDetail — Full-detail card for a single shift report shown to the
@@ -68,26 +69,15 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
     ? formulaTotal
     : (report.formula_total ?? report.banking_value ?? 0);
 
-  // Resolve a field's display value: flat column first, then custom_values.
-  const resolveValue = (key) => {
-    if (!key) return 0;
-    if (report[key] !== undefined && report[key] !== null) return report[key];
-    const cv = report.custom_values && typeof report.custom_values === 'object'
-      ? report.custom_values
-      : {};
-    if (cv[key] !== undefined && cv[key] !== null) return cv[key];
-    return 0;
-  };
+  // Resolve a field's display value: tries the config key plus known
+  // aliases against flat columns first, then custom_values. Centralised
+  // in lib/field-resolver.js so dashboards, operator panel, and detail
+  // view all agree.
+  const resolveValue = (key) => resolveFieldValue(report, key);
 
   // BUG 1: dynamic Raw Field Values — no hardcoded list, no fallback list.
   // Filter to sales + show_in_banking, in the API's display_order.
-  const bankingFields = Array.isArray(configs)
-    ? configs
-        .filter((c) => c?.category === 'sales' && c?.show_in_banking === true)
-        // configs already sorted by display_order ASC server-side, but
-        // re-sort defensively in case ordering is lost over the wire.
-        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
-    : null;
+  const bankingFields = configs === null ? null : bankingSalesFields(configs);
 
   return (
     <Card className="border border-border/50 shadow-sm">
@@ -179,7 +169,7 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
             <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md py-2 px-3">
               Couldn’t load field configuration: {configError}
             </div>
-          ) : bankingFields.length === 0 ? (
+          ) : bankingFields === null || bankingFields.length === 0 ? (
             <div className="text-xs text-muted-foreground bg-white border border-dashed rounded-md py-3 px-3">
               This site has no banking-visible sales fields configured. Add them under{' '}
               <span className="font-medium">Operator → Form Fields</span> and tick

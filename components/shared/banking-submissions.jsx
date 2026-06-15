@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
+import { resolveFieldValue, bankingSalesFields } from '@/lib/field-resolver';
 import StatCard from '@/components/shared/stat-card';
 
 import { toast } from 'sonner';
