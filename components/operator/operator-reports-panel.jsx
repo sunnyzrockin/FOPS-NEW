@@ -238,7 +238,7 @@ export default function OperatorReportsPanel({
                         </div>
                       ) : (
                         <>
-                          <RawFieldGrid detail={detail} configs={siteFieldConfigs[r.site_id]} />
+                          <RawFieldGrid detail={detail} configs={siteFieldConfigs[r.site_id]} role={user?.role} />
 
                           {/* Approve / Reject actions */}
                           {canChangeStatus && status !== 'approved' && status !== 'rejected' && (
@@ -332,12 +332,13 @@ function StatusPill({ status }) {
   );
 }
 
-function RawFieldGrid({ detail, configs }) {
+function RawFieldGrid({ detail, configs, role }) {
   // Driven entirely by site_field_configs (BUG 1 fix): filter strictly to
   // category === 'sales' && show_in_banking === true, in display_order.
-  // Value lookup uses lib/field-resolver.js so config keys that don't
-  // exactly match a flat column (e.g. cash_drop ↔ cash, account ↔
-  // accounts, drive_off_iou ↔ drive_offs) still find their stored value.
+  // Field-level visibility ('owner_only' etc.) is also enforced via
+  // bankingSalesFields(configs, role). Value lookup uses
+  // lib/field-resolver.js so config keys that don't exactly match a flat
+  // column (e.g. cash_drop ↔ cash) still find their stored value.
   if (!Array.isArray(configs)) {
     return (
       <div>
@@ -346,7 +347,7 @@ function RawFieldGrid({ detail, configs }) {
       </div>
     );
   }
-  const fields = bankingSalesFields(configs);
+  const fields = bankingSalesFields(configs, role);
   return (
     <div>
       <h4 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Raw Field Values</h4>

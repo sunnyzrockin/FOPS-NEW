@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Clock, Calculator, Loader2 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
-import { resolveFieldValue, bankingSalesFields } from '@/lib/field-resolver';
+import { resolveFieldValue, bankingSalesFields, roleCanSeeBanking } from '@/lib/field-resolver';
 
 /**
  * ReportDetail — Full-detail card for a single shift report shown to the
@@ -75,9 +75,19 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
   // view all agree.
   const resolveValue = (key) => resolveFieldValue(report, key);
 
+  // Role-aware visibility gates. The viewer's role drives BOTH:
+  //   (a) section-level: should the Banking Total card + Formula
+  //       Results audit trail be rendered at all? Reconciliation
+  //       surfaces are restricted to operator/owner.
+  //   (b) field-level: which configured fields appear in the Raw
+  //       Field Values grid (e.g. visibility:'owner_only' must hide
+  //       for staff).
+  const viewerRole = user?.role;
+  const showBankingSection = roleCanSeeBanking(viewerRole);
+
   // BUG 1: dynamic Raw Field Values — no hardcoded list, no fallback list.
-  // Filter to sales + show_in_banking, in the API's display_order.
-  const bankingFields = configs === null ? null : bankingSalesFields(configs);
+  // Filter to sales + show_in_banking + role-visibility, in display_order.
+  const bankingFields = configs === null ? null : bankingSalesFields(configs, viewerRole);
 
   return (
     <Card className="border border-border/50 shadow-sm">
@@ -120,22 +130,28 @@ export default function ReportDetail({ report, onClose, onStatusChange, canChang
 
         {/* BUG 1b: Banking Total now reads the sum of shift_formula_results,
             making it consistent with the Banking Submissions list, the
-            operator review panel, and the daily-rollup totals. */}
-        <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-          <div>
-            <p className="text-sm text-emerald-700 mb-1 uppercase tracking-wider font-medium">Banking Total</p>
-            <p className="text-3xl font-bold text-emerald-900">{formatCurrency(bankingTotal)}</p>
-            <p className="text-[11px] text-emerald-700/70 mt-1">
-              {hasFormulaTotal
-                ? `sum of ${formulaResults.length} formula${formulaResults.length === 1 ? '' : 's'}`
-                : 'no formula results — showing legacy banking value'}
-            </p>
+            operator review panel, and the daily-rollup totals.
+            ACCESS CONTROL: reconciliation surfaces (Banking Total +
+            Formula Results audit trail) are hidden from staff and only
+            shown to operator/owner. */}
+        {showBankingSection && (
+          <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-sm text-emerald-700 mb-1 uppercase tracking-wider font-medium">Banking Total</p>
+              <p className="text-3xl font-bold text-emerald-900">{formatCurrency(bankingTotal)}</p>
+              <p className="text-[11px] text-emerald-700/70 mt-1">
+                {hasFormulaTotal
+                  ? `sum of ${formulaResults.length} formula${formulaResults.length === 1 ? '' : 's'}`
+                  : 'no formula results — showing legacy banking value'}
+              </p>
+            </div>
+            <Calculator className="h-8 w-8 text-emerald-600/40" />
           </div>
-          <Calculator className="h-8 w-8 text-emerald-600/40" />
-        </div>
+        )}
 
-        {/* Per-formula audit trail — surfaces every shift_formula_results row */}
-        {hasFormulaTotal && (
+        {/* Per-formula audit trail — surfaces every shift_formula_results row.
+            Same access control as the Banking Total card above. */}
+        {showBankingSection && hasFormulaTotal && (
           <div>
             <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
               <Calculator className="h-4 w-4 text-teal-600" />

@@ -458,9 +458,7 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                                       </div>
                                     );
                                   }
-                                  const fields = configs
-                                    .filter((c) => c?.category === 'sales' && c?.show_in_banking === true)
-                                    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+                                  const fields = bankingSalesFields(configs, role);
                                   if (fields.length === 0) {
                                     return (
                                       <div className="text-xs text-muted-foreground bg-white border border-dashed rounded-md py-3 px-3">
@@ -470,19 +468,12 @@ export default function BankingSubmissions({ user, sites, currentUserRole }) {
                                       </div>
                                     );
                                   }
-                                  const cv = (detail.custom_values && typeof detail.custom_values === 'object')
-                                    ? detail.custom_values : {};
-                                  const valueOf = (key) => {
-                                    if (detail[key] !== undefined && detail[key] !== null) return detail[key];
-                                    if (cv[key] !== undefined && cv[key] !== null) return cv[key];
-                                    return 0;
-                                  };
                                   return (
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                       {fields.map((f) => (
                                         <div key={f.id ?? f.key} className="bg-white border rounded-lg p-2">
                                           <p className="text-[10px] text-muted-foreground">{f.label}</p>
-                                          <p className="text-sm font-medium">{formatCurrency(valueOf(f.key))}</p>
+                                          <p className="text-sm font-medium">{formatCurrency(resolveFieldValue(detail, f.key))}</p>
                                         </div>
                                       ))}
                                     </div>
