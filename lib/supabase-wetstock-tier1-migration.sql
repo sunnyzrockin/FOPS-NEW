@@ -2,24 +2,34 @@
 -- Wet-stock Tier 1 — Daily Tank Reconciliation
 --
 -- Adds two new tables to enable per-tank, per-day fuel-loss detection:
+--   1. `tanks`                 — tank registry per site (grade, capacity,
+--                                 tolerance). Operator-managed.
+--   2. `tank_reconciliation`   — one snapshot row per tank per day produced
+--                                 by the reconciliation engine on shift submit.
 --
---   1. `tanks`                — tank registry per site (grade, capacity,
---                                tolerance). Operator-managed.
---   2. `tank_reconciliation`  — one snapshot row per tank per day produced
---                                by the reconciliation engine on shift submit.
+-- IMPORTANT: site_id is TEXT (not UUID) to match this schema's existing
+-- foreign keys to public.sites(id) — see lib/supabase-phase3-dips.sql,
+-- shift_reports.site_id, site_field_configs.site_id, etc.
 --
--- This migration is PURELY ADDITIVE. Nothing existing is dropped, renamed,
--- or altered. Apply it in Supabase SQL editor.
+-- This migration is PURELY ADDITIVE to other tables. Within its own scope
+-- it drops any half-created tanks/tank_reconciliation from a prior failed
+-- attempt so it can be re-run safely.
 --
--- After applying, verify with the queries at the bottom.
+-- RLS: explicitly DISABLED at the bottom to match the rest of the schema
+-- (sites, shift_reports, etc.). Schema-wide re-enablement is tracked as
+-- SEC1 in memory/upcoming_prompts/SEC1_rls_hardening.md.
 -- ============================================================================
+
+-- Clean up anything left over from a previous failed attempt.
+DROP TABLE IF EXISTS public.tank_reconciliation CASCADE;
+DROP TABLE IF EXISTS public.tanks               CASCADE;
 
 -- ----------------------------------------------------------------------------
 -- 1. Tanks table
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.tanks (
+CREATE TABLE public.tanks (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  site_id         UUID NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
+  site_id         TEXT NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
   grade           TEXT NOT NULL,                    -- e.g. "ULP", "DIESEL", "PRE98"
   capacity_litres NUMERIC(10,2) NOT NULL CHECK (capacity_litres > 0),
   tolerance_pct   NUMERIC(5,3)  NOT NULL DEFAULT 0.5
@@ -50,11 +60,11 @@ CREATE TRIGGER trg_tanks_updated_at
 -- ----------------------------------------------------------------------------
 -- 2. Tank reconciliation snapshots
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.tank_reconciliation (
+CREATE TABLE public.tank_reconciliation (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   date               DATE NOT NULL,
   tank_id            UUID NOT NULL REFERENCES public.tanks(id) ON DELETE CASCADE,
-  site_id            UUID NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
+  site_id            TEXT NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
 
   -- Inputs (litres)
   opening_litres     NUMERIC(10,2) NOT NULL DEFAULT 0,
@@ -91,9 +101,16 @@ CREATE TRIGGER trg_tank_reconciliation_updated_at
   FOR EACH ROW EXECUTE FUNCTION public.tanks_set_updated_at();
 
 -- ----------------------------------------------------------------------------
--- 3. Verification
+-- 3. RLS — Option A (OFF), matching the rest of the schema.
+--    See memory/upcoming_prompts/SEC1_rls_hardening.md for the planned
+--    schema-wide re-enablement.
 -- ----------------------------------------------------------------------------
--- Expect: 2 rows. tanks + tank_reconciliation.
+ALTER TABLE public.tanks                DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tank_reconciliation  DISABLE ROW LEVEL SECURITY;
+
+-- ----------------------------------------------------------------------------
+-- 4. Verification — expect 2 rows. tanks + tank_reconciliation.
+-- ----------------------------------------------------------------------------
 SELECT table_name,
        (SELECT COUNT(*) FROM information_schema.columns c
          WHERE c.table_name = t.table_name AND c.table_schema = 'public') AS col_count
