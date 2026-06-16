@@ -925,3 +925,5 @@ credentials.json
 .next/cache/webpack/server-production/4.pack
 .next/cache/webpack/server-production/3.pack
 .next/cache/webpack/server-production/7.pack
+.next/cache/webpack/client-production/15.pack
+.next/cache/webpack/server-production/8.pack

@@ -35,6 +35,7 @@ import Billing from '@/components/owner/billing';
 import DataIntegrityView from '@/components/owner/data-integrity';
 import WetstockReconciliation from '@/components/shared/wetstock-reconciliation';
 import FuelMargin from '@/components/shared/fuel-margin';
+import TankSetup from '@/components/operator/tank-setup';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { authedFetch } from '@/lib/authed-fetch';
 
@@ -170,6 +171,10 @@ export default function OwnerDashboard({ user, sites, activeTab, onRefreshSites 
 
   if (activeTab === 'wetstock') {
     return <WetstockReconciliation sites={sites} />;
+  }
+
+  if (activeTab === 'tank-setup') {
+    return <TankSetup sites={sites} />;
   }
 
   if (activeTab === 'fuel-margin') {

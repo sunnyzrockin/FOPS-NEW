@@ -7,11 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Loader2, Droplets, RefreshCw, AlertTriangle, CheckCircle2, Eye, Info,
 } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 import { toast } from 'sonner';
+import WetstockTier1Daily from '@/components/shared/wetstock-tier1-daily';
 
 /**
  * Wet-stock reconciliation tab — owner & operator.
@@ -84,10 +86,25 @@ export default function WetstockReconciliation({ sites }) {
             tolerance flags potential leak, theft, or meter drift.
           </p>
         </div>
-        <Button variant="outline" onClick={load} className="gap-2">
-          <RefreshCw className="h-4 w-4" /> Refresh
-        </Button>
       </div>
+
+      {/* Tier 1 Daily vs existing 30-day Period summary */}
+      <Tabs defaultValue="daily">
+        <TabsList>
+          <TabsTrigger value="daily">Daily reconciliation</TabsTrigger>
+          <TabsTrigger value="period">Period summary</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="daily" className="mt-4">
+          <WetstockTier1Daily sites={sites} />
+        </TabsContent>
+
+        <TabsContent value="period" className="mt-4 space-y-6">
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={load} className="gap-2">
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+          </div>
 
       {/* Date range */}
       <Card>
@@ -197,6 +214,8 @@ export default function WetstockReconciliation({ sites }) {
           </CardContent>
         </Card>
       ))}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

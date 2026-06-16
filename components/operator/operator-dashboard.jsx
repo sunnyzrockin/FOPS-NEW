@@ -27,6 +27,7 @@ import DipsManagement from '@/components/operator/dips-management';
 import WetstockReconciliation from '@/components/shared/wetstock-reconciliation';
 import FuelMargin from '@/components/shared/fuel-margin';
 import WetstockAlertBanner from '@/components/operator/wetstock-alert-banner';
+import TankSetup from '@/components/operator/tank-setup';
 import OperatorQuickActions from '@/components/operator/operator-quick-actions';
 import OperatorTeamPanel from '@/components/operator/operator-team-panel';
 import OperatorReportsPanel from '@/components/operator/operator-reports-panel';
@@ -130,6 +131,9 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
   }
   if (activeTab === 'wetstock') {
     return <WetstockReconciliation sites={sites} />;
+  }
+  if (activeTab === 'tank-setup') {
+    return <TankSetup sites={sites} />;
   }
   if (activeTab === 'fuel-margin') {
     return <FuelMargin sites={sites} user={user} />;

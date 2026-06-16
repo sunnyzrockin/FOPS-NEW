@@ -142,10 +142,15 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
       for (const f of dipFields) {
         const lvl = coerced[`custom_dip__${f.key}__level`];
         const del = coerced[`custom_dip__${f.key}__delivery`];
+        const sales = coerced[`custom_dip__${f.key}__sales`];
         const cleanLvl = lvl == null || lvl === '' ? null : Number(lvl);
         const cleanDel = del == null || del === '' ? 0 : Number(del);
-        if (cleanLvl == null && cleanDel === 0) continue;
-        customDipValues[f.key] = { level: cleanLvl, delivery: cleanDel };
+        const cleanSales = sales == null || sales === '' ? null : Number(sales);
+        // Skip blank rows entirely (no level + no delivery + no sales).
+        if (cleanLvl == null && cleanDel === 0 && (cleanSales == null || cleanSales === 0)) continue;
+        const entry = { level: cleanLvl, delivery: cleanDel };
+        if (cleanSales != null) entry.sales_litres = cleanSales;
+        customDipValues[f.key] = entry;
       }
       coerced.custom_dip_values = customDipValues;
 
@@ -415,6 +420,11 @@ function StepDips({ dipFields, form, handle, onBlur }) {
   //   - If the site has none, fall back to the standard ULP / Diesel / Premium
   //     trio so existing sites keep working without any config.
   //   - No section labels — just the fields with their configured names.
+  //
+  // WET-STOCK TIER 1: each row now also captures `Litres sold (POS)` so
+  // the reconciliation engine has the sales side of the equation. Sales
+  // is stored in custom_dip_values[<key>].sales_litres (via the form key
+  // `custom_dip__<key>__sales`).
   const hasCustom = Array.isArray(dipFields) && dipFields.length > 0;
   const rows = hasCustom
     ? dipFields.map((f) => ({
@@ -422,11 +432,12 @@ function StepDips({ dipFields, form, handle, onBlur }) {
         label: f.label,
         levelField: `custom_dip__${f.key}__level`,
         deliveryField: `custom_dip__${f.key}__delivery`,
+        salesField: `custom_dip__${f.key}__sales`,
       }))
     : [
-        { key: 'ulp',     label: 'ULP 91',  levelField: 'dip_ulp_litres',     deliveryField: 'delivery_ulp_litres' },
-        { key: 'diesel',  label: 'Diesel',  levelField: 'dip_diesel_litres',  deliveryField: 'delivery_diesel_litres' },
-        { key: 'premium', label: 'Premium', levelField: 'dip_premium_litres', deliveryField: 'delivery_premium_litres' },
+        { key: 'ulp',     label: 'ULP 91',  levelField: 'dip_ulp_litres',     deliveryField: 'delivery_ulp_litres',     salesField: 'sales_litres_ulp' },
+        { key: 'diesel',  label: 'Diesel',  levelField: 'dip_diesel_litres',  deliveryField: 'delivery_diesel_litres',  salesField: 'sales_litres_diesel' },
+        { key: 'premium', label: 'Premium', levelField: 'dip_premium_litres', deliveryField: 'delivery_premium_litres', salesField: 'sales_litres_premium' },
       ];
 
   return (
@@ -434,7 +445,7 @@ function StepDips({ dipFields, form, handle, onBlur }) {
       <section>
         <div className="space-y-3">
           {rows.map((r) => (
-            <div key={r.key} className="grid grid-cols-2 gap-2">
+            <div key={r.key} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <FieldBlock label={`${r.label} — Litres (level)`}>
                 <Input
                   type="text"
@@ -454,6 +465,17 @@ function StepDips({ dipFields, form, handle, onBlur }) {
                   value={form[r.deliveryField] || ''}
                   onChange={(e) => handle(r.deliveryField, e.target.value)}
                   onBlur={() => onBlur(r.deliveryField)}
+                  className="h-11"
+                />
+              </FieldBlock>
+              <FieldBlock label="Litres sold (POS)">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={form[r.salesField] || ''}
+                  onChange={(e) => handle(r.salesField, e.target.value)}
+                  onBlur={() => onBlur(r.salesField)}
                   className="h-11"
                 />
               </FieldBlock>
