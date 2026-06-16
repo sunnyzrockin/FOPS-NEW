@@ -36,9 +36,9 @@ export const maxDuration = 60;
  */
 
 const NEVER_DELETE_EMAILS = new Set([
-  'owner@workflowlite.com',
-  'operator@workflowlite.com',
-  'staff@workflowlite.com',
+  'owner@fopsapp.com',
+  'operator@fopsapp.com',
+  'staff@fopsapp.com',
 ]);
 
 async function _requireOwner(request) {

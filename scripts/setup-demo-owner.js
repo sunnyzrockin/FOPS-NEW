@@ -9,7 +9,7 @@
  * after this one with the demo user's id.)
  *
  * Env-driven:
- *   BILLING_DEMO_OWNER_EMAIL     (default demo@workflowlite.com)
+ *   BILLING_DEMO_OWNER_EMAIL     (default demo@fopsapp.com)
  *   BILLING_DEMO_OWNER_PASSWORD  (default DemoReadOnly2026!)
  */
 const path = require('path');

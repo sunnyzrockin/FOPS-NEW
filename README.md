@@ -58,9 +58,9 @@ Visit [fopsapp.com](https://fopsapp.com) and log in with any demo account below.
 
 | Role | Email | What you'll see |
 |------|-------|-----------------|
-| 👑 Owner | `owner@workflowlite.com` | All 5 sites, all operators, all staff |
-| 👤 Operator | `operator@workflowlite.com` | 3 assigned sites, manage staff |
-| 👷 Staff | `staff@workflowlite.com` | 1 site, submit shift reports |
+| 👑 Owner | `owner@fopsapp.com` | All 5 sites, all operators, all staff |
+| 👤 Operator | `operator@fopsapp.com` | 3 assigned sites, manage staff |
+| 👷 Staff | `staff@fopsapp.com` | 1 site, submit shift reports |
 
 ### 3. Run locally
 ```bash

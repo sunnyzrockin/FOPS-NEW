@@ -42,8 +42,8 @@ export default function FounderLoginPage() {
       }
       // Persist the same way the rest of the app does, plus a marker so
       // /founder/dashboard knows this is a support session.
-      localStorage.setItem('workflowlite_user', JSON.stringify(data.user));
-      localStorage.setItem('workflowlite_sites', JSON.stringify(data.sites || []));
+      localStorage.setItem('fopsapp_user', JSON.stringify(data.user));
+      localStorage.setItem('fopsapp_sites', JSON.stringify(data.sites || []));
       localStorage.setItem('supabase-session', JSON.stringify(data.session));
       localStorage.setItem('fops_support_session', '1');
       router.replace('/founder/dashboard');

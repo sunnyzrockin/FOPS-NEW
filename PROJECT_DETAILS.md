@@ -27,7 +27,7 @@
 
 ## 1. Project Overview
 
-**FOPS (Field Operations System)** — formerly WorkflowLite — is a lightweight multi-site shift-reporting and fuel-price-intelligence platform built for fuel-station owners and operators.
+**FOPS (Field Operations System)** — formerly FOPS — is a lightweight multi-site shift-reporting and fuel-price-intelligence platform built for fuel-station owners and operators.
 
 ### Problem Solved
 - **Owners** with multiple fuel stations need visibility into each site's daily performance without micromanaging every shift.
@@ -198,23 +198,23 @@
 ### Owner (1)
 | Email | Name | Access |
 |-------|------|--------|
-| `owner@workflowlite.com` | Michael Roberts | All 5 sites |
+| `owner@fopsapp.com` | Michael Roberts | All 5 sites |
 
 ### Operators (2)
 | Email | Name | Assigned Sites |
 |-------|------|----------------|
-| `operator@workflowlite.com` | Sarah Johnson | Brisbane Central, Gold Coast, Sunshine Coast |
-| `operator2@workflowlite.com` | David Chen | Toowoomba, Cairns |
+| `operator@fopsapp.com` | Sarah Johnson | Brisbane Central, Gold Coast, Sunshine Coast |
+| `operator2@fopsapp.com` | David Chen | Toowoomba, Cairns |
 
 ### Staff (6)
 | Email | Name | Assigned Sites |
 |-------|------|----------------|
-| `staff@workflowlite.com` | Emma Wilson | Brisbane Central |
-| `staff2@workflowlite.com` | James Taylor | Brisbane, Gold Coast |
-| `staff3@workflowlite.com` | Lisa Brown | Gold Coast, Sunshine Coast |
-| `staff4@workflowlite.com` | Mark Davis | Sunshine Coast, Toowoomba |
-| `staff5@workflowlite.com` | Anna Martinez | Toowoomba, Cairns |
-| `staff6@workflowlite.com` | Tom Anderson | Cairns |
+| `staff@fopsapp.com` | Emma Wilson | Brisbane Central |
+| `staff2@fopsapp.com` | James Taylor | Brisbane, Gold Coast |
+| `staff3@fopsapp.com` | Lisa Brown | Gold Coast, Sunshine Coast |
+| `staff4@fopsapp.com` | Mark Davis | Sunshine Coast, Toowoomba |
+| `staff5@fopsapp.com` | Anna Martinez | Toowoomba, Cairns |
+| `staff6@fopsapp.com` | Tom Anderson | Cairns |
 
 ### Real User
 - `vinamaytraders@gmail.com` — Sumanth (Operator role, user-managed password)

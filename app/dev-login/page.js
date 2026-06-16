@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { createBrowserClient } from '@/lib/supabase';
 
 export default function DevLoginPage() {
-  const [email, setEmail] = useState('owner@workflowlite.com');
+  const [email, setEmail] = useState('owner@fopsapp.com');
   const [password, setPassword] = useState('WorkflowDemo2026!');
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);

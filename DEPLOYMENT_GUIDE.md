@@ -1,4 +1,4 @@
-# WorkflowLite - Deployment Guide for fopsapp.com
+# FOPS - Deployment Guide for fopsapp.com
 
 ## 🚀 Vercel Deployment Steps
 
@@ -6,7 +6,7 @@
 ```bash
 git init
 git add .
-git commit -m "WorkflowLite - Production ready with Supabase"
+git commit -m "FOPS - Production ready with Supabase"
 git remote add origin <your-github-repo-url>
 git push -u origin main
 ```
@@ -134,9 +134,9 @@ After deployment:
 - **Vercel Preview**: https://your-project.vercel.app
 
 **Login Credentials:**
-- Owner: `owner@workflowlite.com` / `WorkflowDemo2026!`
-- Operator: `operator@workflowlite.com` / `WorkflowDemo2026!`
-- Staff: `staff@workflowlite.com` / `WorkflowDemo2026!`
+- Owner: `owner@fopsapp.com` / `WorkflowDemo2026!`
+- Operator: `operator@fopsapp.com` / `WorkflowDemo2026!`
+- Staff: `staff@fopsapp.com` / `WorkflowDemo2026!`
 
 ---
 

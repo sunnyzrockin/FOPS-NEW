@@ -49,8 +49,8 @@ export default function LoginPage() {
       }
 
       // Store user data and session (use correct keys that App component expects)
-      localStorage.setItem('workflowlite_user', JSON.stringify(userData.user));
-      localStorage.setItem('workflowlite_sites', JSON.stringify(userData.sites || []));
+      localStorage.setItem('fopsapp_user', JSON.stringify(userData.user));
+      localStorage.setItem('fopsapp_sites', JSON.stringify(userData.sites || []));
       if (userData.session) {
         localStorage.setItem('supabase-session', JSON.stringify(userData.session));
 

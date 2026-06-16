@@ -52,7 +52,7 @@ export default function FounderDashboardPage() {
   // Auth guard
   useEffect(() => {
     try {
-      const u = JSON.parse(localStorage.getItem('workflowlite_user') || 'null');
+      const u = JSON.parse(localStorage.getItem('fopsapp_user') || 'null');
       const support = localStorage.getItem('fops_support_session');
       if (!u || u.role !== 'support' || !support) {
         router.replace('/founder');
@@ -102,8 +102,8 @@ export default function FounderDashboardPage() {
   useEffect(() => { if (authReady) { loadStats(); loadAudit(); } }, [authReady, loadStats, loadAudit]);
 
   const logout = () => {
-    localStorage.removeItem('workflowlite_user');
-    localStorage.removeItem('workflowlite_sites');
+    localStorage.removeItem('fopsapp_user');
+    localStorage.removeItem('fopsapp_sites');
     localStorage.removeItem('supabase-session');
     localStorage.removeItem('fops_support_session');
     router.replace('/founder');

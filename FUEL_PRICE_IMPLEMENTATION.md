@@ -70,7 +70,7 @@ Run the SQL in Supabase SQL Editor:
 ```
 
 ### 2. Test Owner Flow
-1. Login as owner@workflowlite.com
+1. Login as owner@fopsapp.com
 2. Navigate to "Fuel Prices" tab
 3. Create a price change
 4. Verify operators are notified (check fuel_price_notifications table)

@@ -110,9 +110,9 @@ Once DNS propagates, test at **https://fopsapp.com**:
 
 **Login Credentials:**
 ```
-Owner:    owner@workflowlite.com / WorkflowDemo2026!
-Operator: operator@workflowlite.com / WorkflowDemo2026!
-Staff:    staff@workflowlite.com / WorkflowDemo2026!
+Owner:    owner@fopsapp.com / WorkflowDemo2026!
+Operator: operator@fopsapp.com / WorkflowDemo2026!
+Staff:    staff@fopsapp.com / WorkflowDemo2026!
 ```
 
 **Test Flow:**

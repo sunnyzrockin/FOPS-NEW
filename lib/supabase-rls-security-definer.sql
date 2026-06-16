@@ -283,7 +283,7 @@ BEGIN
   RAISE NOTICE '==========================================';
   RAISE NOTICE 'Smoke test: as the anon role, try';
   RAISE NOTICE '  SELECT * FROM sites;  -- should be empty';
-  RAISE NOTICE 'Then log in as owner@workflowlite.com via the';
+  RAISE NOTICE 'Then log in as owner@fopsapp.com via the';
   RAISE NOTICE 'UI; you should see ALL FIVE owned sites.';
   RAISE NOTICE '==========================================';
 END $$;

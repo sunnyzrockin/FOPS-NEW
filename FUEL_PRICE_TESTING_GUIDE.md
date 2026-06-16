@@ -52,7 +52,7 @@ You should see:
 ### Test Scenario 1: Owner Creates Price Change
 
 1. **Login as Owner**
-   - Email: `owner@workflowlite.com`
+   - Email: `owner@fopsapp.com`
    - Password: `WorkflowDemo2026!`
 
 2. **Navigate to Fuel Prices Tab**

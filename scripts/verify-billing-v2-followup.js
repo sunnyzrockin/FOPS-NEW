@@ -170,8 +170,8 @@ async function main() {
     });
     // Log in as owner via Supabase Admin → mint a session.
     const tokenRow = await sb.auth.admin.generateLink({ type: 'magiclink', email: ownerUser.email });
-    // Use anon password flow if a known password exists. For owner@workflowlite.com we know it.
-    const tok = await loginAndGetToken('owner@workflowlite.com', 'WorkflowDemo2026!');
+    // Use anon password flow if a known password exists. For owner@fopsapp.com we know it.
+    const tok = await loginAndGetToken('owner@fopsapp.com', 'WorkflowDemo2026!');
     if (tok) {
       const statusRes = await fetch(`${APP}/api/billing/status`, { headers: { Authorization: `Bearer ${tok}` } });
       const statusJson = await statusRes.json();
@@ -181,7 +181,7 @@ async function main() {
       r('  .phase', statusJson.phase);
       r('  .status', statusJson.status);
       // Operator/staff under the same owner
-      const opTok = await loginAndGetToken('operator@workflowlite.com', 'WorkflowDemo2026!');
+      const opTok = await loginAndGetToken('operator@fopsapp.com', 'WorkflowDemo2026!');
       const opRes = await fetch(`${APP}/api/billing/status`, { headers: { Authorization: `Bearer ${opTok}` } });
       const opJson = await opRes.json();
       r('operator /api/billing/status', `HTTP ${opRes.status}`);
@@ -233,9 +233,9 @@ async function main() {
   // Existing seed accounts cover this — owner / operator / staff are
   // already provisioned. We just verify the API endpoints respond with
   // the correct gating for each role.
-  const ownerTok = await loginAndGetToken('owner@workflowlite.com', 'WorkflowDemo2026!');
-  const opTok    = await loginAndGetToken('operator@workflowlite.com', 'WorkflowDemo2026!');
-  const stfTok   = await loginAndGetToken('staff@workflowlite.com', 'WorkflowDemo2026!');
+  const ownerTok = await loginAndGetToken('owner@fopsapp.com', 'WorkflowDemo2026!');
+  const opTok    = await loginAndGetToken('operator@fopsapp.com', 'WorkflowDemo2026!');
+  const stfTok   = await loginAndGetToken('staff@fopsapp.com', 'WorkflowDemo2026!');
 
   async function checkInviteApi(role, tok) {
     const res = await fetch(`${APP}/api/invites`, { headers: { Authorization: `Bearer ${tok}` } });

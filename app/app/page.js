@@ -36,8 +36,8 @@ function AppInner() {
 
   // Initialize from localStorage only on client side (runs once on mount)
   useEffect(() => {
-    const savedUser = localStorage.getItem('workflowlite_user');
-    const savedSites = localStorage.getItem('workflowlite_sites');
+    const savedUser = localStorage.getItem('fopsapp_user');
+    const savedSites = localStorage.getItem('fopsapp_sites');
 
     if (savedUser && savedSites) {
       try {
@@ -47,8 +47,8 @@ function AppInner() {
         setMounted(true);
       } catch (e) {
         console.error('Failed to parse user data:', e);
-        localStorage.removeItem('workflowlite_user');
-        localStorage.removeItem('workflowlite_sites');
+        localStorage.removeItem('fopsapp_user');
+        localStorage.removeItem('fopsapp_sites');
         if (!hasRedirected) {
           setHasRedirected(true);
           router.replace('/login');
@@ -77,8 +77,8 @@ function AppInner() {
     try {
       setUser(null);
       setSites([]);
-      localStorage.removeItem('workflowlite_user');
-      localStorage.removeItem('workflowlite_sites');
+      localStorage.removeItem('fopsapp_user');
+      localStorage.removeItem('fopsapp_sites');
     } catch {}
 
     // 2) Best-effort: sign out of Supabase + clear server session. Don't
@@ -113,7 +113,7 @@ function AppInner() {
       const data = await res.json();
       setSites(Array.isArray(data) ? data : []);
       if (Array.isArray(data)) {
-        localStorage.setItem('workflowlite_sites', JSON.stringify(data));
+        localStorage.setItem('fopsapp_sites', JSON.stringify(data));
       }
     } catch (err) {
       console.error('Failed to refresh sites:', err);
@@ -130,7 +130,7 @@ function AppInner() {
     const updated = { ...user, first_login: false };
     setUser(updated);
     try {
-      localStorage.setItem('workflowlite_user', JSON.stringify(updated));
+      localStorage.setItem('fopsapp_user', JSON.stringify(updated));
     } catch (_) { /* localStorage unavailable in some private-mode contexts */ }
   }, [user]);
 

@@ -192,8 +192,8 @@ function Hero() {
                     alert(data.error || 'Demo unavailable right now.');
                     return;
                   }
-                  localStorage.setItem('workflowlite_user', JSON.stringify(data.user));
-                  localStorage.setItem('workflowlite_sites', JSON.stringify(data.sites || []));
+                  localStorage.setItem('fopsapp_user', JSON.stringify(data.user));
+                  localStorage.setItem('fopsapp_sites', JSON.stringify(data.sites || []));
                   localStorage.setItem('supabase-session', JSON.stringify(data.session));
                   try {
                     const { createBrowserClient } = await import('@/lib/supabase');
