@@ -176,17 +176,44 @@ function Hero() {
           </p>
 
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <a href={CALENDLY_URL} target="_blank" rel="noreferrer" className={`${PRIMARY_CTA_CLASS} text-base px-6 py-3`}>
-              Book a 20-min demo <ArrowRight className="h-4 w-4" />
-            </a>
-            <a href="#demo-video" className={`${SECONDARY_CTA_CLASS} text-base px-6 py-3`}>
-              <PlayCircle className="h-4 w-4" /> Watch the 2-min tour
-            </a>
+            <Link href="/signup" className={`${PRIMARY_CTA_CLASS} text-base px-6 py-3`}>
+              Start 14-day trial <ArrowRight className="h-4 w-4" />
+            </Link>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/auth/demo-login', { method: 'POST' });
+                  const data = await res.json();
+                  if (!res.ok || !data.session) {
+                    alert(data.error || 'Demo unavailable right now.');
+                    return;
+                  }
+                  localStorage.setItem('workflowlite_user', JSON.stringify(data.user));
+                  localStorage.setItem('workflowlite_sites', JSON.stringify(data.sites || []));
+                  localStorage.setItem('supabase-session', JSON.stringify(data.session));
+                  try {
+                    const { createBrowserClient } = await import('@/lib/supabase');
+                    const sb = createBrowserClient();
+                    await sb.auth.setSession({
+                      access_token: data.session.access_token,
+                      refresh_token: data.session.refresh_token,
+                    });
+                  } catch (_) {}
+                  window.location.href = '/app';
+                } catch (e) {
+                  alert('Demo unavailable: ' + (e?.message || 'unknown'));
+                }
+              }}
+              className={`${SECONDARY_CTA_CLASS} text-base px-6 py-3`}
+            >
+              <PlayCircle className="h-4 w-4" /> Explore the demo
+            </button>
           </div>
 
           <div className="mt-6 flex items-center gap-5 text-xs text-[#0E1B2A]/60">
-            <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-teal-600" /> No credit card</span>
-            <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-teal-600" /> 14-day free trial</span>
+            <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-teal-600" /> Card on file, charged after day 14</span>
+            <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-teal-600" /> No lock-in, cancel any time</span>
             <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-teal-600" /> Live in 48 hours</span>
           </div>
         </div>

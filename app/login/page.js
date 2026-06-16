@@ -255,9 +255,6 @@ export default function LoginPage() {
               <p className="text-sm text-slate-600 text-center">
                 Role-based access for owners, operators, and staff
               </p>
-              <p className="text-sm text-slate-500 text-center">
-                Need access? <span className="font-medium text-slate-700">Contact your administrator.</span>
-              </p>
               
               {/* Signup Link - Subtle but accessible */}
               <div className="pt-3 border-t border-slate-100">

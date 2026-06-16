@@ -87,6 +87,23 @@ async function upsertSubscription(sub) {
     tierForPriceId(priceId) ||
     null;
 
+  // Billing v2: the per-site item's quantity drives our local count.
+  // Find it explicitly because line items aren't sorted.
+  const perSitePriceId = process.env.STRIPE_PRICE_PER_SITE;
+  const perSiteItem = perSitePriceId
+    ? sub?.items?.data?.find((it) => it?.price?.id === perSitePriceId)
+    : null;
+  const quantity = perSiteItem?.quantity ?? item?.quantity ?? 1;
+
+  // Compute grace_ends_at when transitioning into past_due / unpaid.
+  // Grace counts from the failed attempt's most recent webhook time;
+  // we just snap it to NOW + graceDays for simplicity.
+  let graceEndsAt = null;
+  if (sub.status === 'past_due' || sub.status === 'unpaid') {
+    const graceDays = Number(process.env.BILLING_GRACE_DAYS || 7);
+    graceEndsAt = new Date(Date.now() + graceDays * 86_400_000).toISOString();
+  }
+
   const row = {
     id: sub.id,
     user_id: userId,
@@ -95,7 +112,7 @@ async function upsertSubscription(sub) {
     price_id: priceId,
     product_id: productId,
     plan_tier: planTier,
-    quantity: item?.quantity ?? 1,
+    quantity,
     cancel_at_period_end: !!sub.cancel_at_period_end,
     current_period_start: sub.current_period_start
       ? new Date(sub.current_period_start * 1000).toISOString()
@@ -112,6 +129,11 @@ async function upsertSubscription(sub) {
     raw: sub,
     updated_at: new Date().toISOString(),
   };
+  if (graceEndsAt) row.grace_ends_at = graceEndsAt;
+  if (sub.status === 'active' || sub.status === 'trialing') {
+    // Clear any prior grace window once recovered.
+    row.grace_ends_at = null;
+  }
 
   await supabaseAdmin.from('subscriptions').upsert(row, { onConflict: 'id' });
 }

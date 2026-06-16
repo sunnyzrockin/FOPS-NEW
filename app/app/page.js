@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 
 // All UI lives in /app/components/* now. This file is the slim role-router.
 import AppShell from '@/components/shared/app-shell';
+import BillingGate from '@/components/shared/billing-gate';
 import OwnerDashboard from '@/components/owner/owner-dashboard';
 import OperatorDashboard from '@/components/operator/operator-dashboard';
 import StaffDashboard from '@/components/staff/staff-dashboard';
@@ -150,30 +151,32 @@ function AppInner() {
   // into local state + localStorage so the modal doesn't re-trigger on the
   // next render or reload before a full re-login fetches the row again.
   return (
-    <AppShell
-      user={user}
-      onLogout={handleLogout}
-      onboardingComplete={handleOnboardingComplete}
-    >
-      {({ activeTab }) => (
-        <>
-          {user.role === 'staff' && (
-            <StaffDashboard user={user} sites={sites} activeTab={activeTab} />
-          )}
-          {user.role === 'operator' && (
-            <OperatorDashboard user={user} sites={sites} activeTab={activeTab} />
-          )}
-          {user.role === 'owner' && (
-            <OwnerDashboard
-              user={user}
-              sites={sites}
-              activeTab={activeTab}
-              onRefreshSites={refreshSites}
-            />
-          )}
-        </>
-      )}
-    </AppShell>
+    <BillingGate user={user}>
+      <AppShell
+        user={user}
+        onLogout={handleLogout}
+        onboardingComplete={handleOnboardingComplete}
+      >
+        {({ activeTab }) => (
+          <>
+            {user.role === 'staff' && (
+              <StaffDashboard user={user} sites={sites} activeTab={activeTab} />
+            )}
+            {user.role === 'operator' && (
+              <OperatorDashboard user={user} sites={sites} activeTab={activeTab} />
+            )}
+            {user.role === 'owner' && (
+              <OwnerDashboard
+                user={user}
+                sites={sites}
+                activeTab={activeTab}
+                onRefreshSites={refreshSites}
+              />
+            )}
+          </>
+        )}
+      </AppShell>
+    </BillingGate>
   );
 }
 

@@ -41,16 +41,12 @@ export default function SignupPage() {
     }
 
     try {
-      // Call signup API endpoint (creates both auth user and database record)
+      // Call signup API endpoint. Role is HARD-CODED to 'owner' server-side;
+      // we no longer send a role from the client (anti-privilege-escalation).
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-          role: 'staff',
-        }),
+        body: JSON.stringify({ name, email, password }),
       });
 
       const data = await res.json();
@@ -61,13 +57,19 @@ export default function SignupPage() {
         return;
       }
 
-      setSuccess(true);
-      setLoading(false);
+      // Atomic gate: signup is only complete once the user captures a card
+      // in Stripe Checkout (test mode). Redirect immediately. They cannot
+      // operate the tenant until the trialing subscription lands via
+      // webhook — the BillingGate enforces that.
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
 
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        router.push('/login');
-      }, 2000);
+      // Fallback: if billing is mis-configured, surface a clear error.
+      setError('Account created but billing checkout failed to start. Please contact support.');
+      setLoading(false);
+      return;
 
     } catch (err) {
       console.error('Signup error:', err);
