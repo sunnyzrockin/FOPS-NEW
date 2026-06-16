@@ -29,7 +29,7 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-const EMAIL    = process.env.BILLING_DEMO_OWNER_EMAIL    || 'demo@workflowlite.com';
+const EMAIL    = process.env.BILLING_DEMO_OWNER_EMAIL    || 'demo@fopsapp.com';
 const PASSWORD = process.env.BILLING_DEMO_OWNER_PASSWORD || 'DemoReadOnly2026!';
 
 async function main() {
