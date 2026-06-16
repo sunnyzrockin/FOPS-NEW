@@ -5,17 +5,18 @@
  *
  * Conversion-focused marketing page for Australian fuel operators.
  *
- *  Above the fold:  pain-point headline + demo video placeholder + Book-a-Demo CTA
+ *  Above the fold:  pain-point headline + Start-Trial / Explore-Demo CTAs
  *  Trust strip:     Queensland-built badge + key stats
  *  Problem:         the daily pain (WhatsApp, paper, spreadsheets)
  *  Solution:        6 feature blocks tied to the pain
  *  Hierarchy:       Owner → Operator → Staff role story
  *  Social proof:    placeholder testimonial quotes (swap for real ones)
  *  FAQ:             pure-CSS accordion using <details>
- *  Final CTA:       Book-a-Demo banner
+ *  Final CTA:       Start-trial banner + Talk-to-sales mailto
  *
  * Implementation notes:
- *   - CALENDLY_URL is a placeholder — user will swap the real one later.
+ *   - Sales contact uses mailto only ("Talk to sales"). Avoid using the
+ *     word "demo" for sales — it collides with the self-serve sandbox.
  *   - Pricing table intentionally omitted; Stripe wiring exists in-app
  *     but the public site is contact-led for now.
  *   - Design palette: warm off-white #FAFAF6, deep navy #0E1B2A, teal CTAs.
@@ -30,8 +31,10 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
-// 🔁 Swap this when the real Calendly URL is provisioned.
-const CALENDLY_URL = 'https://calendly.com';
+// (CALENDLY_URL removed — sales contact via mailto only, see header note above.)
+// Sales contact is via mailto only (label: "Talk to sales") — avoid using
+// the word "demo" for sales calls so it doesn't collide with the
+// self-serve "Explore the demo" sandbox CTA.
 
 const PRIMARY_CTA_CLASS =
   'inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition ' +
@@ -109,9 +112,9 @@ function Header() {
 
         <div className="hidden items-center gap-2 md:flex">
           <Link href="/login" className={SECONDARY_CTA_CLASS}>Log in</Link>
-          <a href={CALENDLY_URL} target="_blank" rel="noreferrer" className={PRIMARY_CTA_CLASS}>
-            Book a demo <ArrowRight className="h-4 w-4" />
-          </a>
+          <Link href="/signup" className={PRIMARY_CTA_CLASS}>
+            Start 14-day trial <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
 
         <button
@@ -139,7 +142,7 @@ function Header() {
             ))}
             <div className="flex gap-2 pt-2">
               <Link href="/login" className={`${SECONDARY_CTA_CLASS} flex-1`}>Log in</Link>
-              <a href={CALENDLY_URL} target="_blank" rel="noreferrer" className={`${PRIMARY_CTA_CLASS} flex-1`}>Book a demo</a>
+              <Link href="/signup" className={`${PRIMARY_CTA_CLASS} flex-1`}>Start 14-day trial</Link>
             </div>
           </div>
         </div>
@@ -550,7 +553,7 @@ function DemoVideo() {
               <PlayCircle className="h-12 w-12" />
             </button>
             <p className="mt-2 text-sm font-medium text-white">FOPS in 2 minutes</p>
-            <p className="text-xs text-white/70">Video coming soon — book a demo for now</p>
+            <p className="text-xs text-white/70">Video coming soon — start a trial or explore the demo for now</p>
           </div>
         </div>
       </div>
@@ -637,7 +640,7 @@ function FAQ() {
     },
     {
       q: 'How much does it cost?',
-      a: 'Pricing depends on site count. We do a free 14-day trial and a 20-minute scoping call to quote you accurately. Book a demo above and we\'ll work it out.',
+      a: 'Pricing is a flat platform fee plus a small per-site fee, billed monthly in AUD. The 14-day trial lets you try it on your own sites before any charge — start the trial above and the in-app billing page shows your exact total. No lock-in, cancel any time.',
     },
     {
       q: 'Is this just for fuel? What about car wash, café, or shop-only sites?',
@@ -650,7 +653,7 @@ function FAQ() {
         <div className="text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-teal-700">FAQ</span>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0E1B2A] sm:text-4xl">
-            Common questions before you book a demo.
+            Common questions before you start a trial.
           </h2>
         </div>
         <div className="mt-10 space-y-3">
@@ -683,23 +686,20 @@ function FinalCTA() {
           Ready to stop running your servos on WhatsApp?
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-base text-white/75">
-          Book a 20-minute demo. We&apos;ll show you FOPS on your own sites with your own data,
-          and have you live within 48 hours if it&apos;s a fit.
+          Start a 14-day trial on your own sites with your own data. Card on file, charged on day 14 — cancel any time before then with one click.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <a
-            href={CALENDLY_URL}
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href="/signup"
             className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-500 px-6 py-3 text-base font-semibold text-white shadow-lg transition hover:bg-teal-400"
           >
-            Book a demo <ArrowRight className="h-4 w-4" />
-          </a>
+            Start 14-day trial <ArrowRight className="h-4 w-4" />
+          </Link>
           <a
             href="mailto:hello@fopsapp.com"
             className="inline-flex items-center justify-center gap-2 rounded-md border border-white/30 px-6 py-3 text-base font-semibold text-white transition hover:bg-white/10"
           >
-            <Mail className="h-4 w-4" /> Or email us
+            <Mail className="h-4 w-4" /> Talk to sales
           </a>
         </div>
         <p className="mt-6 text-xs text-white/50">
@@ -729,7 +729,7 @@ function Footer() {
           <a href="#how" className="hover:text-[#0E1B2A]">How it works</a>
           <a href="#faq" className="hover:text-[#0E1B2A]">FAQ</a>
           <Link href="/login" className="hover:text-[#0E1B2A]">Log in</Link>
-          <a href={CALENDLY_URL} target="_blank" rel="noreferrer" className="hover:text-[#0E1B2A]">Book a demo</a>
+          <Link href="/signup" className="hover:text-[#0E1B2A]">Start trial</Link>
           <a href="mailto:hello@fopsapp.com" className="hover:text-[#0E1B2A]">Contact</a>
         </nav>
         <p className="text-xs text-[#0E1B2A]/40">© {new Date().getFullYear()} FOPS · Queensland, Australia</p>
