@@ -75,7 +75,22 @@ export async function POST(request) {
       status: 'active',
       first_login: true,
       is_demo: false,
+      is_demo_source: false,
     };
+
+    // Hard-guard: a signup MUST NEVER land on the demo source tenant.
+    // This is belt-and-braces — uuidv4() can't produce the seed id like
+    // 'owner-001' in practice, but if someone ever bypasses or seeds
+    // manually we still refuse.
+    try {
+      const { assertSignupNotDemoSource } = await import('@/lib/demo-source');
+      await assertSignupNotDemoSource(newUser);
+    } catch (guardErr) {
+      console.error('[signup] demo-source guard:', guardErr.message);
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return NextResponse.json({ error: 'Signup blocked', detail: guardErr.message }, { status: 409 });
+    }
+
     const { data: user, error: dbError } = await supabaseAdmin
       .from('users').insert([newUser]).select().single();
     if (dbError) {
