@@ -26,6 +26,20 @@ import { toast } from 'sonner';
  */
 export default function WetstockTier1Daily({ sites }) {
   const today = new Date().toISOString().slice(0, 10);
+  // Bug #12: cap the date input to a plausible window so a stray "year
+  // 9999" or "0001" doesn't pass validation. 2 years back ≈ historical
+  // reconciliation depth we care about; 1 day forward covers timezone
+  // edge cases around midnight.
+  const MIN_DATE = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 2);
+    return d.toISOString().slice(0, 10);
+  })();
+  const MAX_DATE = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
   const [siteId, setSiteId] = useState((sites && sites[0]?.id) || '');
   const [date, setDate] = useState(today);
   const [loading, setLoading] = useState(false);
@@ -65,7 +79,7 @@ export default function WetstockTier1Daily({ sites }) {
         </div>
         <div>
           <Label className="text-xs">Date</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} min={MIN_DATE} max={MAX_DATE} className="w-44" />
         </div>
         <Button variant="outline" onClick={load} className="gap-2"><RefreshCw className="h-4 w-4" /> Refresh</Button>
       </div>

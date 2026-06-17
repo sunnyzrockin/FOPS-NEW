@@ -161,6 +161,39 @@ export async function POST(request) {
       );
     }
 
+    // Bug #11: range-check the price. The system accepts price in EITHER
+    // dollars/L (e.g. 1.85) OR cents/L (e.g. 185), normalised on read via
+    // the lib/financials.js <10 → ×100 heuristic. Plausible bands:
+    //   dollars: 0.50 ≤ x ≤ 5.00
+    //   cents  : 50   ≤ x ≤ 500
+    // Anything else (the implausible middle zone 5–50, near-zero, or
+    // huge numbers) is almost certainly a units mix-up — reject it
+    // explicitly so we never store nonsense like 1.85¢/L.
+    const inPlausibleBand = (n) =>
+      Number.isFinite(n) && ((n >= 0.5 && n <= 5) || (n >= 50 && n <= 500));
+    const newPriceNum = Number(newPrice);
+    const oldPriceNum = oldPrice == null || oldPrice === '' ? null : Number(oldPrice);
+    if (!inPlausibleBand(newPriceNum)) {
+      return NextResponse.json(
+        {
+          error: 'newPrice out of range',
+          detail: `Expected price either as dollars/L (0.50–5.00) or cents/L (50–500); got ${newPrice}.`,
+          hint: 'Enter the dollar value (e.g. 1.85 for $1.85/L) or the cents value (e.g. 185 for 185¢/L).',
+        },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+    if (oldPriceNum != null && !inPlausibleBand(oldPriceNum)) {
+      return NextResponse.json(
+        {
+          error: 'oldPrice out of range',
+          detail: `Expected price either as dollars/L (0.50–5.00) or cents/L (50–500); got ${oldPrice}.`,
+          hint: 'Enter the dollar value (e.g. 1.85 for $1.85/L) or the cents value (e.g. 185 for 185¢/L).',
+        },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
     // Verify user is owner
     const { data: user } = await supabase
       .from('users')

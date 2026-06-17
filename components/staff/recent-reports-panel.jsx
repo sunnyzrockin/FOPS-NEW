@@ -59,6 +59,10 @@ export default function RecentReportsPanel({ reports = [], sites = [], onSelect,
         <div className="divide-y divide-border/60">
           {head.map((r) => {
             const site = sitesById.get(r.site_id);
+            // Bug #7: never expose a raw UUID to the user. Prefer site.name,
+            // then site.code, then a humane "Site" fallback. The raw site_id
+            // string would only be useful for debugging.
+            const siteLabel = site?.name || site?.code || 'Site';
             return (
               <button
                 key={r.id}
@@ -68,7 +72,7 @@ export default function RecentReportsPanel({ reports = [], sites = [], onSelect,
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">
-                    {r.shift_type} · {site?.name || r.site_id}
+                    {r.shift_type} · {siteLabel}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {r.date} · Total {formatCurrency(r.total_revenue ?? r.total_sales ?? 0)}

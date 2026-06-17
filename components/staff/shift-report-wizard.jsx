@@ -37,6 +37,13 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
 
   const [salesFields, setSalesFields] = useState([]);
   const [dipFields, setDipFields] = useState([]);
+  // Bug #2 follow-up: track whether the field-config fetch has settled.
+  // Without this flag, a fast click-through Step 1 → Step 3 renders
+  // StepDips before the fetch returns, and the empty `dipFields` triggers
+  // the legacy ULP/Diesel/Premium fallback — even for sites that DO have
+  // custom dip fields configured. Once `fieldsLoaded === true`, we trust
+  // the data: `dipFields.length === 0` then truly means "legacy site".
+  const [fieldsLoaded, setFieldsLoaded] = useState(false);
 
   const [form, setForm] = useState({
     site_id: sites[0]?.id || '',
@@ -56,10 +63,14 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
   // Load field configs whenever site changes
   useEffect(() => {
     if (!form.site_id) return;
+    let cancelled = false;
     (async () => {
+      if (cancelled) return;
+      setFieldsLoaded(false);
       try {
         const res = await authedFetch(`/api/field-configs?siteId=${form.site_id}`);
         const data = await res.json();
+        if (cancelled) return;
         const all = (Array.isArray(data) ? data : [])
           .filter((f) => f.is_enabled)
           .filter((f) => {
@@ -71,8 +82,11 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
         setDipFields(all.filter((f) => f.category === 'dip'));
       } catch (err) {
         console.error('Wizard field-config load failed', err);
+      } finally {
+        if (!cancelled) setFieldsLoaded(true);
       }
     })();
+    return () => { cancelled = true; };
   }, [form.site_id]);
 
   const handle = (k, v) => {
@@ -287,7 +301,7 @@ export default function ShiftReportWizard({ user, sites, onSuccess, onSwitchToCl
         <CardContent className="pt-6 space-y-5">
           {step === 0 && <StepBasics sites={sites} form={form} handle={handle} errors={errors} />}
           {step === 1 && <StepSales fields={salesFields} form={form} handle={handle} errors={errors} onBlur={onNumericBlur} />}
-          {step === 2 && <StepDips dipFields={dipFields} form={form} handle={handle} onBlur={onNumericBlur} />}
+          {step === 2 && <StepDips dipFields={dipFields} fieldsLoaded={fieldsLoaded} form={form} handle={handle} onBlur={onNumericBlur} />}
           {step === 3 && <StepReview form={form} siteName={siteName} salesFields={salesFields} dipFields={dipFields} />}
         </CardContent>
       </Card>
@@ -413,7 +427,7 @@ function StepSales({ fields, form, handle, errors, onBlur }) {
   );
 }
 
-function StepDips({ dipFields, form, handle, onBlur }) {
+function StepDips({ dipFields, fieldsLoaded, form, handle, onBlur }) {
   // FIX 3: render ONE list of dip fields.
   //   - If the site has custom dip fields configured in site_field_configs
   //     (passed in as dipFields), show only those — they ARE the grades.
@@ -421,10 +435,30 @@ function StepDips({ dipFields, form, handle, onBlur }) {
   //     trio so existing sites keep working without any config.
   //   - No section labels — just the fields with their configured names.
   //
+  // Bug #2 follow-up: only fall back to the legacy triplet once the
+  // field-config fetch has SETTLED. Before that, render a small loading
+  // skeleton — otherwise a fast click-through Step 1 → 3 catches us with
+  // dipFields=[] (still in-flight) and shows ULP/Diesel/Premium even for
+  // sites with real custom grades.
+  //
   // WET-STOCK TIER 1: each row now also captures `Litres sold (POS)` so
   // the reconciliation engine has the sales side of the equation. Sales
   // is stored in custom_dip_values[<key>].sales_litres (via the form key
   // `custom_dip__<key>__sales`).
+  if (!fieldsLoaded) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="grid grid-cols-1 sm:grid-cols-3 gap-2 animate-pulse">
+            <div className="h-11 bg-slate-100 rounded" />
+            <div className="h-11 bg-slate-100 rounded" />
+            <div className="h-11 bg-slate-100 rounded" />
+          </div>
+        ))}
+        <p className="text-xs text-muted-foreground text-center">Loading dip field configuration…</p>
+      </div>
+    );
+  }
   const hasCustom = Array.isArray(dipFields) && dipFields.length > 0;
   const rows = hasCustom
     ? dipFields.map((f) => ({

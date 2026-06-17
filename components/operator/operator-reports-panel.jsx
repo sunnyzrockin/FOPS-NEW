@@ -41,6 +41,10 @@ export default function OperatorReportsPanel({
   user,
   initialDate = new Date().toISOString().split('T')[0],
   canChangeStatus = true,
+  // Bug #13: parent can supply this callback to refresh its KPI stats
+  // (pending/reviewed counters) the moment a row is approved/rejected
+  // here. Without it, the counters stay stale until the parent reloads.
+  onStatusChange,
 }) {
   const allowedSiteIds = useMemo(() => sites.map((s) => s.id), [sites]);
 
@@ -134,6 +138,10 @@ export default function OperatorReportsPanel({
       toast.success(`Report ${status}`);
       setRejectingId(null);
       setRejectReason('');
+      // Bug #13: let the parent dashboard refresh its KPI counters
+      // (pending/reviewed) so the user sees the change without a full
+      // reload. Falls back silently if no callback was provided.
+      try { onStatusChange?.(reportId, status); } catch (_) { /* non-fatal */ }
     } catch (e) {
       toast.error(`Failed: ${e?.message || 'unknown error'}`);
     } finally {

@@ -38,6 +38,18 @@ export default function WetstockReconciliation({ sites }) {
   const ago = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
   const fmtISO = (d) => d.toISOString().slice(0, 10);
 
+  // Bug #12: cap date inputs to a plausible historical window.
+  const MIN_DATE = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 2);
+    return fmtISO(d);
+  })();
+  const MAX_DATE = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return fmtISO(d);
+  })();
+
   const [startDate, setStartDate] = useState(fmtISO(ago));
   const [endDate, setEndDate] = useState(fmtISO(today));
 
@@ -111,11 +123,11 @@ export default function WetstockReconciliation({ sites }) {
         <CardContent className="p-4 flex flex-wrap items-end gap-3">
           <div>
             <Label htmlFor="ws-start" className="text-xs">Start date</Label>
-            <Input id="ws-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-44" />
+            <Input id="ws-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} min={MIN_DATE} max={MAX_DATE} className="w-44" />
           </div>
           <div>
             <Label htmlFor="ws-end" className="text-xs">End date</Label>
-            <Input id="ws-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-44" />
+            <Input id="ws-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} min={MIN_DATE} max={MAX_DATE} className="w-44" />
           </div>
           <Button onClick={load}>Apply</Button>
         </CardContent>

@@ -105,6 +105,18 @@
 user_problem_statement: Build FOPS - a multi-site reporting tool for fuel station operators with 3 user roles (Owner, Operator, Staff). Staff submit shift reports, Operators review, Owners view dashboards.
 
 backend:
+  - task: "Phase 3: Polish — UUID labels, sort, fuel price validation, date input bounds, junk-data hygiene scripts, inline-approve refresh"
+    implemented: true
+    working: true
+    file: "/app/components/staff/recent-reports-panel.jsx, /app/lib/api/handlers/dashboard.js, /app/app/api/fuel-prices/route.js, /app/components/shared/wetstock-tier1-daily.jsx, /app/components/shared/wetstock-reconciliation.jsx, /app/components/operator/operator-reports-panel.jsx, /app/components/operator/operator-dashboard.jsx, /app/scripts/cleanup-future-seed.js, /app/scripts/cleanup-junk-data.js"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "#7 staff Recent Reports row label: never expose a raw site_id UUID to the user — show site.name → site.code → 'Site' fallback. #9 Daily Summaries response now sorts by date desc, then site_name asc. Owner + Operator views inherit the order from the server. #11 /api/fuel-prices POST now range-checks newPrice/oldPrice. The system accepts BOTH dollars/L (0.50–5.00) and cents/L (50–500) since lib/financials.js has a <10→×100 normalise-on-read heuristic; anything in the middle implausible band (5–50) or outside both is rejected with a hint suggesting the correct shape. #12 date inputs on wetstock tier-1 daily + period summary now have min/max attrs (2 years back ↔ tomorrow) so a stray year-9999 or year-0001 can't pass HTML5 validation. #13 inline-approve now bubbles an onStatusChange callback up to the operator dashboard, which re-fetches /api/dashboard/stats so the pending/reviewed KPI counters update immediately. #8 + #10 are DATA operations, not code changes — wrote two idempotent scripts in /app/scripts (cleanup-future-seed.js for #8, cleanup-junk-data.js for #10). Both default to DRY RUN. cleanup-junk-data.js has a PROTECTED_EMAILS allowlist that explicitly excludes vinamaytraders@gmail.com (Sumanth — real customer) plus all seed accounts; an end-of-run sanity check re-queries Sumanth and prints OK present. Scripts are NOT executed on prod — they wait for the owner's explicit go. Bug #2 follow-up (race condition): frontend agent caught that the wizard's StepDips was falling back to legacy ULP/Diesel/Premium when the user clicked through Step 1 → 3 faster than the /api/field-configs fetch could settle. Added a `fieldsLoaded` state flag, render a 3-row pulsing skeleton in StepDips until the fetch resolves, only then trust dipFields.length === 0 to mean 'legacy site'."
+
   - task: "Phase 2: Operator Daily Summary 'Individual Shifts' empty + duplicate wet-stock grade rows + price-change timezone + KINGSTHORPE leak signal seed"
     implemented: true
     working: true

@@ -264,6 +264,7 @@ export default function OperatorDashboard({ user, sites, activeTab }) {
               sites={sites}
               user={user}
               initialDate={dateRange.end}
+              onStatusChange={loadData}
             />
           )}
         </CardContent>
