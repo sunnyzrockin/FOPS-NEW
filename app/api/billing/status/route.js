@@ -27,7 +27,13 @@ export async function GET(request) {
 
   let daysRemaining = null;
   let phase = 'unknown';
-  if (sub?.status === 'trialing' && sub.trial_end) {
+  // Demo bypass (matches getSubscriptionForUser short-circuit): demo
+  // tenants are exempt from billing and present as 'demo' phase. The
+  // BillingGate renders only a small read-only banner — no checkout
+  // wall, no pricing.
+  if (result.demo === true || user?.is_demo) {
+    phase = 'demo';
+  } else if (sub?.status === 'trialing' && sub.trial_end) {
     daysRemaining = Math.max(0, Math.ceil((new Date(sub.trial_end).getTime() - Date.now()) / 86_400_000));
     phase = 'trial';
   } else if (sub?.status === 'active') {
