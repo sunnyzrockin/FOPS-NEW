@@ -491,11 +491,37 @@ function StepDips({ dipFields, form, handle, onBlur }) {
 
 function StepReview({ form, siteName, salesFields, dipFields }) {
   const filledSales = salesFields.filter((f) => form[f.key] !== '' && form[f.key] != null);
-  const filledDips = [
-    ['ULP 91', form.dip_ulp_litres, form.delivery_ulp_litres],
-    ['Diesel', form.dip_diesel_litres, form.delivery_diesel_litres],
-    ['Premium', form.dip_premium_litres, form.delivery_premium_litres],
-  ].filter(([_, lvl, del]) => (lvl !== '' && lvl != null) || (del !== '' && del != null && del !== '0'));
+
+  // Bug #2 fix: mirror the StepDips field-source logic. If the site has
+  // custom dip fields configured (passed in via dipFields), those ARE the
+  // grades; read `custom_dip__<key>__level` / `__delivery`. Otherwise fall
+  // back to the legacy ULP/Diesel/Premium triplet. Previously this
+  // hardcoded the legacy keys and showed "No dip readings entered" on
+  // every custom-grade site even when staff had typed values in.
+  const hasCustom = Array.isArray(dipFields) && dipFields.length > 0;
+  const dipRowSpecs = hasCustom
+    ? dipFields.map((f) => ({
+        name: f.label || f.key,
+        levelKey: `custom_dip__${f.key}__level`,
+        deliveryKey: `custom_dip__${f.key}__delivery`,
+      }))
+    : [
+        { name: 'ULP 91',  levelKey: 'dip_ulp_litres',     deliveryKey: 'delivery_ulp_litres' },
+        { name: 'Diesel',  levelKey: 'dip_diesel_litres',  deliveryKey: 'delivery_diesel_litres' },
+        { name: 'Premium', levelKey: 'dip_premium_litres', deliveryKey: 'delivery_premium_litres' },
+      ];
+
+  const filledDips = dipRowSpecs
+    .map((spec) => ({
+      name: spec.name,
+      level: form[spec.levelKey],
+      delivery: form[spec.deliveryKey],
+    }))
+    .filter(({ level, delivery }) =>
+      (level !== '' && level != null) ||
+      (delivery !== '' && delivery != null && delivery !== '0')
+    );
+
   return (
     <div className="space-y-4 text-sm">
       <ReviewRow label="Site" value={siteName} />
@@ -522,10 +548,10 @@ function StepReview({ form, siteName, salesFields, dipFields }) {
           <p className="text-xs text-muted-foreground">No dip readings entered.</p>
         ) : (
           <div className="space-y-1">
-            {filledDips.map(([name, lvl, del]) => (
+            {filledDips.map(({ name, level, delivery }) => (
               <div key={name} className="flex justify-between text-sm">
                 <span className="text-slate-600">{name}</span>
-                <span className="font-medium">Level: {lvl || '—'} · Delivery: {del || '0'}</span>
+                <span className="font-medium">Level: {level !== '' && level != null ? level : '—'} &middot; Delivery: {delivery !== '' && delivery != null ? delivery : '0'}</span>
               </div>
             ))}
           </div>

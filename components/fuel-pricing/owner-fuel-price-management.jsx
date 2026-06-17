@@ -50,7 +50,15 @@ export default function OwnerFuelPriceManagement({ user, sites }) {
     setLoading(true);
 
     try {
-      const effectiveDatetime = `${effectiveDate}T${effectiveTime}:00`;
+      // Bug #5: the user picks date + time in their LOCAL timezone (typically
+      // AEST/Australia-Brisbane). The previous code naively concatenated
+      // `${date}T${time}:00` which has no TZ suffix; Postgres timestamptz
+      // then interpreted that as UTC, and when displayed via
+      // `toLocaleString('en-AU')` the browser shifted it forward by
+      // +10h, landing on the wrong day. Constructing a JS Date first
+      // (interpreted as local time) and then `.toISOString()` produces a
+      // proper UTC ISO string that round-trips correctly.
+      const effectiveDatetime = new Date(`${effectiveDate}T${effectiveTime}:00`).toISOString();
 
       const res = await authedFetch('/api/fuel-prices', {
         method: 'POST',
