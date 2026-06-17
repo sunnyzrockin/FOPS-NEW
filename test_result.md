@@ -105,6 +105,21 @@
 user_problem_statement: Build FOPS - a multi-site reporting tool for fuel station operators with 3 user roles (Owner, Operator, Staff). Staff submit shift reports, Operators review, Owners view dashboards.
 
 backend:
+  - task: "Critical #1 prod-recurrence fix: static import + auto-reconcile in /api/billing/status + staff payload no longer leaks billing amounts + banking_value populated"
+    implemented: true
+    working: true
+    file: "/app/lib/api/handlers/sites.js, /app/app/api/billing/status/route.js, /app/lib/api/handlers/dashboard.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "Independent prod verification: drift detection works (the new /api/billing/status fields ARE deployed), but adding a site DOES NOT push quantity to Stripe — qty stayed frozen at 7 through ADD (8 sites) and DELETE (7 sites). Auto-reconcile-on-detect is missing; today drift is only flagged. This is the same class of under-billing as the original blocker."
+      - working: true
+        agent: "main"
+        comment: "Two-pronged fix, both verified locally end-to-end. (1) Converted the `await import('@/lib/billing-sync')` in /app/lib/api/handlers/sites.js to a STATIC top-of-file `import { syncQuantityForOwner } from '@/lib/billing-sync'`. Dynamic imports on serverless cold-starts can race against module resolution OR be tree-shaken in some bundle profiles, which would silently no-op the sync without throwing — exactly matching the prod symptom. Static import is in the bundle deterministically. (2) Added AUTO-RECONCILE-ON-DETECT in /api/billing/status: when drift is observed for a non-demo owner, the handler fires syncQuantityForOwner inline (idempotent — short-circuits when already in sync), re-reads the subscription, and returns the post-reconcile quantity in the same response. Result is exposed as `auto_reconciled: {ok, quantity, previous, subscriptionId}` so prod logs can confirm the path took effect. This is defence-in-depth: even if the create/delete-time sync somehow fails on a future serverless deploy, the very next BillingGate poll heals drift within ~30s. Verified locally: (a) POST /api/sites moves Stripe qty 7→8 immediately (await syncQuantityForOwner runs in-band before the response returns); (b) simulated drift by inserting a `sites` row directly in DB (bypassing the API), then a single GET /api/billing/status returned `auto_reconciled: {ok:true, previous:7, quantity:8}` and Stripe qty moved 7→8; (c) cleanup poll healed back to 7. Minor finding #1 (staff sees billing amounts): /api/billing/status now strips `quantity`, `site_count`, `config` from non-owner payloads. Staff/operator still receive `phase`, `locked`, `daysRemaining` so the BillingGate banner renders correctly. Confirmed staff payload no longer contains those keys. Minor finding #2 (banking_value=0): the /api/daily-rollups handler was trying to sum a non-existent shift_reports.banking_value column. Replaced with the correct source — the per-site banking formula's evaluated result. handleGetDailyRollups now picks the formula whose name/result_label matches /banking/i (case-insensitive) and copies its result_value into rollup.banking_value. KINGSTHORPE 'Banking Calculation' formula now populates correctly. ON PROD RE-VERIFY: please rerun the directional ADD→status→DELETE→status test. Expect: ADD → /api/billing/status `quantity` increments AND `auto_reconciled.previous → quantity` shows the transition; DELETE → opposite. Auto_reconciled may be null if the create/delete-time sync already healed it inline (best case)."
+
   - task: "Phase 3: Polish — UUID labels, sort, fuel price validation, date input bounds, junk-data hygiene scripts, inline-approve refresh"
     implemented: true
     working: true
