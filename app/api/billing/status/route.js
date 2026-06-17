@@ -12,7 +12,8 @@
  */
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth-helpers';
-import { getSubscriptionForUser, BILLING_CONFIG } from '@/lib/billing';
+import { getSubscriptionForUser, resolveOwnerUserId, BILLING_CONFIG } from '@/lib/billing';
+import { activeSiteCountForOwner } from '@/lib/billing-sync';
 import { optionsHandler } from '@/lib/api/cors';
 
 export const runtime = 'nodejs';
@@ -24,6 +25,25 @@ export async function GET(request) {
   const user = auth.user;
   const result = await getSubscriptionForUser(user);
   const sub = result.subscription;
+
+  // Compute the live owner site_count and drift vs Stripe quantity, so
+  // the UI can surface "Billing for X sites, you have Y" and offer a
+  // one-click resync. Demo users skip this (no real billing).
+  let siteCount = null;
+  let quantityDrift = false;
+  if (!user.is_demo) {
+    try {
+      const ownerId = await resolveOwnerUserId(user);
+      if (ownerId) {
+        siteCount = await activeSiteCountForOwner(ownerId);
+        if (sub?.quantity != null && siteCount != null) {
+          quantityDrift = Number(sub.quantity) !== Number(siteCount);
+        }
+      }
+    } catch (e) {
+      console.warn('[billing/status] site count probe failed:', e?.message);
+    }
+  }
 
   let daysRemaining = null;
   let phase = 'unknown';
@@ -56,6 +76,8 @@ export async function GET(request) {
     phase,
     daysRemaining,
     quantity: sub?.quantity || null,
+    site_count: siteCount,
+    quantity_drift: quantityDrift,
     trial_end: sub?.trial_end || null,
     grace_ends_at: sub?.grace_ends_at || null,
     config: {

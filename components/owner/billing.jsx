@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ExternalLink, CreditCard, Check, Info, Clock, AlertTriangle } from 'lucide-react';
+import { Loader2, ExternalLink, CreditCard, Check, Info, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 import { authedFetch } from '@/lib/authed-fetch';
 import { toast } from 'sonner';
 
@@ -25,6 +25,7 @@ export default function Billing() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [portalBusy, setPortalBusy] = useState(false);
+  const [resyncBusy, setResyncBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,6 +72,27 @@ export default function Billing() {
     }
   };
 
+  const handleResync = async () => {
+    setResyncBusy(true);
+    try {
+      const res = await authedFetch('/api/billing/sync-quantity', { method: 'POST' });
+      const j = await res.json();
+      if (!res.ok || j?.ok === false) {
+        throw new Error(j.error || j.reason || `HTTP ${res.status}`);
+      }
+      if (j.unchanged) {
+        toast.success(`Already in sync — billing ${j.quantity} site${j.quantity === 1 ? '' : 's'}`);
+      } else {
+        toast.success(`Synced — billing updated from ${j.previous} to ${j.quantity} site${j.quantity === 1 ? '' : 's'}`);
+      }
+      await load();
+    } catch (e) {
+      toast.error('Resync failed', { description: e.message });
+    } finally {
+      setResyncBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-12 flex items-center justify-center">
@@ -82,6 +104,8 @@ export default function Billing() {
   const cfg = data?.config || {};
   const currency = (cfg.currency || 'aud').toUpperCase();
   const qty = Math.max(1, Number(data?.quantity) || 1);
+  const siteCount = data?.site_count != null ? Number(data.site_count) : null;
+  const quantityDrift = !!data?.quantity_drift;
   const baseAUD = (cfg.base_amount_cents || 0) / 100;
   const perSiteAUD = (cfg.per_site_amount_cents || 0) / 100;
   const totalAUD = baseAUD + perSiteAUD * qty;
@@ -123,6 +147,35 @@ export default function Billing() {
         </p>
       </div>
 
+      {/* Drift banner — billed qty != live site count. Surfaces silent
+          quantity-sync failures so the owner can self-heal. */}
+      {quantityDrift && siteCount != null && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="pt-4 pb-4 flex items-start gap-3 flex-wrap">
+            <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-[260px]">
+              <div className="text-sm font-medium text-amber-900">
+                Billing quantity is out of sync with your active sites.
+              </div>
+              <div className="text-xs text-amber-800 mt-1">
+                Stripe is billing for <span className="font-semibold">{qty} site{qty === 1 ? '' : 's'}</span>,
+                but you have <span className="font-semibold">{siteCount} active site{siteCount === 1 ? '' : 's'}</span>.
+                Click resync to update Stripe — proration is applied to your next invoice.
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleResync}
+              disabled={resyncBusy}
+              className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+            >
+              {resyncBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Resync now
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Current plan card — replaces the old tier UI */}
       <Card className="border-teal-200/60 bg-teal-50/30">
         <CardHeader>
@@ -132,7 +185,10 @@ export default function Billing() {
                 Current Plan {phaseBadge}
               </CardTitle>
               <CardDescription>
-                Per-site pricing &middot; {qty} active site{qty === 1 ? '' : 's'}
+                Per-site pricing &middot; billed for {qty} active site{qty === 1 ? '' : 's'}
+                {siteCount != null && siteCount !== qty && (
+                  <span className="text-amber-700 font-medium"> &middot; {siteCount} live</span>
+                )}
               </CardDescription>
             </div>
             {data?.subscription || phase !== 'no_subscription' ? (

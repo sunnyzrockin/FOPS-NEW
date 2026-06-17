@@ -105,6 +105,21 @@
 user_problem_statement: Build FOPS - a multi-site reporting tool for fuel station operators with 3 user roles (Owner, Operator, Staff). Staff submit shift reports, Operators review, Owners view dashboards.
 
 backend:
+  - task: "Phase 1: Stripe quantity sync (launch blocker)"
+    implemented: true
+    working: true
+    file: "/app/lib/api/handlers/sites.js, /app/lib/billing-sync.js, /app/app/api/billing/status/route.js, /app/components/owner/billing.jsx, /app/scripts/migrate-sub-to-v2.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reported: adding a site doesn't increment subscription quantity (8 sites → billed for 1). Launch-blocking."
+      - working: true
+        agent: "main"
+        comment: "Root cause #1 was the fire-and-forget pattern `syncQuantityForOwner(...).catch(...)` in handleCreateSite + handleDeleteSite — on serverless prod the function context terminates before Stripe receives the update. Fixed by awaiting the call inline with try/catch. Root cause #2 (specific to the existing test-mode tenant): the legacy Stripe subscription still has the v1 Growth-tier line item (price_1Tgazp…) at qty=1 and never had the v2 base+per-site items added — so syncQuantityForOwner kept returning `per_site_item_missing` silently. Built scripts/migrate-sub-to-v2.js which in one atomic stripe.subscriptions.update call deletes the legacy item and adds the v2 base ($29 qty 1) + per-site ($29 × site_count) items with proration_behavior:'none'. Applied for owner@fopsapp.com; live Stripe qty now tracks the 7 active sites. End-to-end verified via scripts/test-sync-on-site-add.js: synthetic insert pushed Stripe per-site qty 7→8, delete brought it back to 7. Additionally fixed an empty `if (currentUser.role === 'owner') {}` branch in handleGetSites that left owners unscoped (latent tenancy leak). Surfaced drift to the owner: /api/billing/status now returns site_count + quantity_drift; owner Billing UI shows an amber drift banner + 'Resync now' button when quantity != site_count. Re-test required: (a) Owner adds a real site via /api/sites POST → /api/billing/status returns updated quantity matching new site count and quantity_drift:false. (b) Owner deletes a site → same chain in reverse. (c) Verify the drift banner appears immediately if a mismatch is introduced and the Resync button heals it."
+
   - task: "Phase 3: QLD Live Fuel Prices — endpoints + mock provider + cache"
     implemented: true
     working: true
