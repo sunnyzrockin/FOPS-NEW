@@ -50,9 +50,14 @@ export async function POST(request) {
     const { data: userRow } = await supabaseAdmin
       .from('users').select('*').eq('email', email).maybeSingle();
 
-    // The demo user's sites (they own them) — used to populate the dashboard.
+    // Demo bridge (Defect 5): the seeded sites are owned by the canonical
+    // seed owner, not the demo user. Surface those sites in the login
+    // response so the dashboard renders populated immediately. The
+    // /api/sites GET endpoint applies the same bridge for subsequent
+    // navigation. Writes are still rejected (verifyAuth demo guard).
+    const demoSourceOwnerId = process.env.BILLING_DEMO_SOURCE_OWNER_ID || 'owner-001';
     const { data: sites } = await supabaseAdmin
-      .from('sites').select('*').eq('owner_id', userRow?.id || '');
+      .from('sites').select('*').eq('owner_id', demoSourceOwnerId);
 
     return NextResponse.json({
       user: userRow,
