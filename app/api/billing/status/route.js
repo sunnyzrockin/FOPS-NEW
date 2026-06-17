@@ -125,6 +125,12 @@ export async function GET(request) {
     payload.site_count = siteCount;
     payload.quantity_drift = quantityDrift;
     payload.auto_reconciled = autoReconciled;
+    // When auto-reconcile fails because Stripe env vars are missing in
+    // the deployed runtime, surface that diagnostic so prod verification
+    // doesn't need to grep server logs.
+    if (autoReconciled && autoReconciled.ok === false && autoReconciled.env) {
+      payload.billing_env = autoReconciled.env;
+    }
     payload.config = {
       base_amount_cents: BILLING_CONFIG.baseAmountCents,
       per_site_amount_cents: BILLING_CONFIG.perSiteAmountCents,
