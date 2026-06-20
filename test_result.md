@@ -105,6 +105,18 @@
 user_problem_statement: Build FOPS - a multi-site reporting tool for fuel station operators with 3 user roles (Owner, Operator, Staff). Staff submit shift reports, Operators review, Owners view dashboards.
 
 backend:
+  - task: "Round 4 polish: ULP-only leak signal, wet-stock metered-sales precision fix, future-date backdate, broken-chain artifact cleanup, Stripe test cleanup, env shape validation, RLS plan"
+    implemented: true
+    working: true
+    file: "/app/lib/billing-sync.js, /app/lib/api/handlers/wetstock.js, /app/scripts/cleanup-future-seed.js, /app/memory/upcoming_prompts/SEC1_rls_hardening.md"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "🟢 (1) ULP-only leak signal: when I went to re-tune the seed I discovered the actual root cause of the noisy diesel/pre98 readings was NOT seed cadence — it was lib/api/handlers/wetstock.js line 298 using a too-permissive regex `(?:^|[_\\s-])${ck}(?:[_\\s-]|$)`. For ck='diesel' it ALSO matched 'pre_diesel_litres', double-counting metered sales (diesel reported 22400 L when it should have been 15400 L; 7000 L was bleeding in from pre_diesel). Replaced with strict prefix matching: key must EQUAL ck or start with `${ck}_`. Verified via the live API — KINGSTHORPE now returns ulp -2.04% alert, diesel 0.00% ok, pre98 0.00% ok, pre_diesel 0.00% ok. One clean leak signal, three clean baselines. 🟢 (2) Stripe test-account hygiene: archived 2 active prices on the inactive legacy products (price_1Tgazp on Growth, price_1TgazF on Starter) so they cannot be reattached to any subscription. Updated abandoned cus_UfxAFRBvEZMcsZ description + metadata to flag it LEGACY with the date and a pointer to the new customer cus_UjfugVESasHV2d. Old customer kept (Stripe history); cannot be confused with the active one. 🟡 (3) #8 future-date backdate: scripts/cleanup-future-seed.js --apply --strategy=backdate handled 2 of the 3 PARKRIDGE Sept-2026 rows; the third (Night shift) hit a unique-constraint collision so I walked the dates manually and landed it at 2026-06-19. All future-dated rows now in the last 30 days. Backdate preserves trend-view history (no deletes). 🟡 (4) #3 broken-chain artifact: deleted the 4 stale tank_reconciliation rows on 2026-06-17 for KINGSTHORPE that showed implausible variances (-432%, -486%, -2098%, +128%) caused by manually-entered round closing values mismatching real consumption. The 17 Jun daily ULP row will now compute from real data only. 🟢 (5) Env shape validation: split the bare `stripe_not_configured` into 5 specific reasons including `stripe_secret_bad_shape` (catches the prod_… vs sk_… typo BEFORE any Stripe round-trip). `billing_env` block in /api/billing/status now reports 'set (sk_*)' / 'set (BAD shape: prod***(20 chars))' / 'MISSING' — first 4 chars + length, never the secret. Unit-tested standalone. 🔴 (6) RLS hardening plan: appended a complete per-phase execution plan to memory/upcoming_prompts/SEC1_rls_hardening.md (5 phases: pre-flight → helpers-only → assignment leaves → sites → business tables → cleanup; each with per-table SQL templates and rollback SQL). Spec only — no SQL executed yet. Execution gate documented: owner sign-off + 45/45 baseline test pass + restored backup + staging rehearsal required. Live-DB proof for the wet-stock metered-sales fix attached in agent message."
+
   - task: "Critical #1 prod-recurrence fix: static import + auto-reconcile in /api/billing/status + staff payload no longer leaks billing amounts + banking_value populated"
     implemented: true
     working: true

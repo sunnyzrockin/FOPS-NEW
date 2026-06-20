@@ -183,3 +183,249 @@ role-based clause that also reads from `auth.jwt() ->> 'role'`.
 - Cron / webhook tables that are service-role-only by design — they may
   remain RLS-off as long as no JWT path can ever reach them.
 - New tenant-isolation features (multi-org, etc.) — those are a follow-up.
+
+---
+
+## Per-table execution plan (added 2026-06-20)
+
+Migrations land in **5 phases**. Each phase has its own rollback. Stop
+between phases. The first 4 are reversible by a single `ALTER TABLE …
+DISABLE ROW LEVEL SECURITY;` — keep that escape hatch ready.
+
+### Phase 0 — Pre-flight (no code change, ~10 min)
+
+1. Capture the current state:
+   ```sql
+   SELECT relname, relrowsecurity FROM pg_class
+   WHERE relnamespace = 'public'::regnamespace
+     AND relkind = 'r'
+   ORDER BY 1;
+   ```
+2. Confirm pg_policies inventory is empty for the business tables:
+   ```sql
+   SELECT tablename, policyname FROM pg_policies WHERE schemaname='public';
+   ```
+3. Snapshot prod backend test pass rate (target ≥ 45/45 passing).
+4. Take a Supabase point-in-time backup. Tag it `pre-sec1-<date>`.
+
+### Phase 1 — Helper functions only (no RLS toggled yet)
+
+Apply `lib/supabase-sec1-helpers.sql`:
+```sql
+-- 1. The recursion-killer: SECURITY DEFINER fan-in over the three
+--    site-access tables. Read-only, STABLE, indexed paths only.
+CREATE OR REPLACE FUNCTION public.user_site_ids(uid UUID)
+RETURNS SETOF UUID
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT id FROM sites WHERE owner_id = uid
+  UNION
+  SELECT site_id FROM operator_site_assignments WHERE operator_user_id = uid
+  UNION
+  SELECT site_id FROM staff_site_assignments WHERE staff_user_id = uid;
+$$;
+
+-- 2. Role-of-current-user helper (avoids reading users in every policy).
+CREATE OR REPLACE FUNCTION public.user_role(uid UUID)
+RETURNS TEXT
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT role FROM users WHERE id = uid;
+$$;
+
+-- 3. Owner-of-site helper.
+CREATE OR REPLACE FUNCTION public.user_is_owner_of(uid UUID, sid UUID)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM sites WHERE id = sid AND owner_id = uid);
+$$;
+```
+Smoke test: call each as service-role, anon (should be allowed — they're
+DEFINER), authenticated (allowed). Cost: < 1ms per call.
+
+**Rollback:** `DROP FUNCTION user_site_ids, user_role, user_is_owner_of;`
+
+### Phase 2 — Leaf tables (assignment tables FIRST — they cannot recurse)
+
+Order matters: enable RLS on the assignment tables BEFORE the parents so
+that, in the rare window where a policy references them, the predicate
+already evaluates correctly.
+
+| # | Table | Pattern |
+|---|---|---|
+| 2.1 | `operator_site_assignments` | own-row only |
+| 2.2 | `staff_site_assignments` | own-row only |
+
+Template (assignment-table):
+```sql
+ALTER TABLE public.operator_site_assignments ENABLE ROW LEVEL SECURITY;
+
+-- Operators read only THEIR OWN assignment rows.
+CREATE POLICY operator_assignments_select_own
+  ON public.operator_site_assignments FOR SELECT
+  USING (operator_user_id = auth.uid());
+
+-- Owners write/delete assignments on sites they own.
+CREATE POLICY operator_assignments_owner_write
+  ON public.operator_site_assignments FOR ALL
+  USING (public.user_is_owner_of(auth.uid(), site_id))
+  WITH CHECK (public.user_is_owner_of(auth.uid(), site_id));
+```
+
+**Per-phase rollback:**
+```sql
+ALTER TABLE public.operator_site_assignments DISABLE ROW LEVEL SECURITY;
+DROP POLICY operator_assignments_select_own ON public.operator_site_assignments;
+DROP POLICY operator_assignments_owner_write ON public.operator_site_assignments;
+-- repeat for staff_site_assignments
+```
+
+**Acceptance per table:**
+- Operator JWT: `SELECT * FROM operator_site_assignments` returns only own rows.
+- Other operator JWT: zero rows visible.
+- Service-role: all rows visible (untouched).
+- Anon JWT: zero rows.
+
+### Phase 3 — Sites (the canonical parent)
+
+```sql
+ALTER TABLE public.sites ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY sites_select_member
+  ON public.sites FOR SELECT
+  USING (id IN (SELECT public.user_site_ids(auth.uid())));
+
+CREATE POLICY sites_owner_write
+  ON public.sites FOR ALL
+  USING (owner_id = auth.uid())
+  WITH CHECK (owner_id = auth.uid());
+```
+
+**Rollback:** `DISABLE ROW LEVEL SECURITY` + `DROP POLICY` x2.
+
+**Acceptance:** Owner sees own sites only. Operator sees sites in their
+assignments. Staff sees sites in their assignments. Anon sees nothing.
+
+### Phase 4 — Business data tables (the bulk of the migration)
+
+Order alphabetically — they're all leaves now (no policy references
+another business table):
+
+| Table | Read | Write |
+|---|---|---|
+| `competitor_fuel_prices` | site-member | owner/operator |
+| `daily_site_rollups` | site-member | service-only |
+| `dip_readings` | site-member | site-member (staff write own) |
+| `fuel_price_entries` | site-member | owner/operator |
+| `shift_formula_results` | via parent `shift_reports.site_id` | service-only |
+| `shift_reports` | site-member | submitter or owner/operator |
+| `site_banking_formulas` | site-member | owner/operator |
+| `site_competitors` | site-member | owner/operator |
+| `site_field_configs` | site-member | owner/operator |
+| `tanks` | site-member | owner/operator |
+| `tank_reconciliation` | owner/operator only | owner/operator |
+
+Template (most tables):
+```sql
+ALTER TABLE public.shift_reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY shift_reports_select_member
+  ON public.shift_reports FOR SELECT
+  USING (site_id IN (SELECT public.user_site_ids(auth.uid())));
+
+CREATE POLICY shift_reports_insert_submitter
+  ON public.shift_reports FOR INSERT
+  WITH CHECK (
+    site_id IN (SELECT public.user_site_ids(auth.uid()))
+    AND submitted_by_user_id = auth.uid()
+  );
+
+CREATE POLICY shift_reports_update_owner_op
+  ON public.shift_reports FOR UPDATE
+  USING (
+    site_id IN (SELECT public.user_site_ids(auth.uid()))
+    AND public.user_role(auth.uid()) IN ('owner', 'operator')
+  );
+
+CREATE POLICY shift_reports_delete_owner
+  ON public.shift_reports FOR DELETE
+  USING (
+    site_id IN (SELECT public.user_site_ids(auth.uid()))
+    AND public.user_role(auth.uid()) = 'owner'
+  );
+
+-- Drop the leftover dev policy
+DROP POLICY IF EXISTS "Allow all for development" ON public.shift_reports;
+```
+
+For `shift_formula_results` (joined to parent):
+```sql
+ALTER TABLE public.shift_formula_results ENABLE ROW LEVEL SECURITY;
+CREATE POLICY shift_formula_results_select_member
+  ON public.shift_formula_results FOR SELECT
+  USING (
+    shift_report_id IN (
+      SELECT id FROM public.shift_reports
+      WHERE site_id IN (SELECT public.user_site_ids(auth.uid()))
+    )
+  );
+-- No write policy → service-role-only, intentional.
+```
+
+For `tank_reconciliation` (owner/operator only):
+```sql
+ALTER TABLE public.tank_reconciliation ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tank_reconciliation_owner_op_select
+  ON public.tank_reconciliation FOR SELECT
+  USING (
+    tank_id IN (
+      SELECT id FROM public.tanks
+      WHERE site_id IN (SELECT public.user_site_ids(auth.uid()))
+    )
+    AND public.user_role(auth.uid()) IN ('owner', 'operator')
+  );
+```
+
+**Roll forward in 11 separate `ALTER TABLE` statements + ~30 `CREATE
+POLICY` blocks** so each table can be tested independently. Don't batch.
+
+**Rollback:** per-table `DISABLE ROW LEVEL SECURITY` + `DROP POLICY` for
+every policy created. Should match the order in reverse.
+
+### Phase 5 — Cleanup + verification
+
+- Re-run backend test suite (target 45/45 PASS).
+- Anon-key smoke test: `select count(*) from shift_reports;` via the
+  Supabase REST API with only the anon key → 0 rows (or 403, depending on
+  policy stack).
+- Service-role smoke test: same query via service key → expected count.
+- Owner / operator / staff JWT smoke tests via /api/sites and
+  /api/reports → identical responses to pre-migration.
+- Stamp `lib/supabase-disable-rls-emergency.sql` with a
+  `DEPRECATED — see lib/supabase-sec1-rls-hardening-migration.sql`
+  header.
+- Open a P0 PagerDuty incident template: "if a customer reports a
+  permission error post-RLS, run the rollback for that one table; do
+  NOT bring down the schema."
+
+### Files to deliver (no SQL executed yet — spec phase)
+
+- `lib/supabase-sec1-helpers.sql` (Phase 1)
+- `lib/supabase-sec1-rls-hardening-migration.sql` (Phases 2–5,
+  concatenated for the final apply)
+- `lib/supabase-sec1-rls-hardening-rollback.sql` (per-phase rollbacks
+  in reverse order)
+- `scripts/verify-sec1-rls.js` — read-only verifier that connects with
+  each of (anon, authenticated owner/operator/staff, service-role) and
+  asserts the expected row counts on a representative table per phase.
+- `memory/SEC1_runbook.md` — short ops doc on how to roll back a
+  single table during an incident.
+
+### Execution gate
+
+Do NOT begin Phase 2 until:
+- the owner has signed off this plan in writing
+- the backend test pass rate baseline is captured (target 45/45)
+- the Supabase backup tagged `pre-sec1-<date>` is verified restorable
+- a staging clone exists where Phases 1–5 have been rehearsed at least
+  once (and the rollback proven)
+
+
