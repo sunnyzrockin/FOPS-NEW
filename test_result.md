@@ -119,6 +119,28 @@ backend:
       - working: true
         agent: "main"
         comment: "Two-pronged fix, both verified locally end-to-end. (1) Converted the `await import('@/lib/billing-sync')` in /app/lib/api/handlers/sites.js to a STATIC top-of-file `import { syncQuantityForOwner } from '@/lib/billing-sync'`. Dynamic imports on serverless cold-starts can race against module resolution OR be tree-shaken in some bundle profiles, which would silently no-op the sync without throwing — exactly matching the prod symptom. Static import is in the bundle deterministically. (2) Added AUTO-RECONCILE-ON-DETECT in /api/billing/status: when drift is observed for a non-demo owner, the handler fires syncQuantityForOwner inline (idempotent — short-circuits when already in sync), re-reads the subscription, and returns the post-reconcile quantity in the same response. Result is exposed as `auto_reconciled: {ok, quantity, previous, subscriptionId}` so prod logs can confirm the path took effect. This is defence-in-depth: even if the create/delete-time sync somehow fails on a future serverless deploy, the very next BillingGate poll heals drift within ~30s. Verified locally: (a) POST /api/sites moves Stripe qty 7→8 immediately (await syncQuantityForOwner runs in-band before the response returns); (b) simulated drift by inserting a `sites` row directly in DB (bypassing the API), then a single GET /api/billing/status returned `auto_reconciled: {ok:true, previous:7, quantity:8}` and Stripe qty moved 7→8; (c) cleanup poll healed back to 7. Minor finding #1 (staff sees billing amounts): /api/billing/status now strips `quantity`, `site_count`, `config` from non-owner payloads. Staff/operator still receive `phase`, `locked`, `daysRemaining` so the BillingGate banner renders correctly. Confirmed staff payload no longer contains those keys. Minor finding #2 (banking_value=0): the /api/daily-rollups handler was trying to sum a non-existent shift_reports.banking_value column. Replaced with the correct source — the per-site banking formula's evaluated result. handleGetDailyRollups now picks the formula whose name/result_label matches /banking/i (case-insensitive) and copies its result_value into rollup.banking_value. KINGSTHORPE 'Banking Calculation' formula now populates correctly. ON PROD RE-VERIFY: please rerun the directional ADD→status→DELETE→status test. Expect: ADD → /api/billing/status `quantity` increments AND `auto_reconciled.previous → quantity` shows the transition; DELETE → opposite. Auto_reconciled may be null if the create/delete-time sync already healed it inline (best case)."
+      - working: false
+        agent: "user"
+        comment: "Round 2 prod verification: drift detection works, both fixes are live, but quantity still frozen. New auto_reconciled.reason field returned 'stripe_not_configured' — pointing to env config gap on prod, not code."
+      - working: false
+        agent: "user"
+        comment: "Round 3: ENV had STRIPE_SECRET_KEY set to a Stripe PRODUCT id (prod_…) instead of the sk_test_… secret. Caught only because auto_reconciled.detail surfaced 'Invalid API Key provided: prod_Ujf*******gSQR'. billing_env reported all-'set' because the check verifies presence, not shape."
+      - working: true
+        agent: "user"
+        comment: "Round 3 (final, SIGNED OFF on prod): after correcting STRIPE_SECRET_KEY in Vercel Production + redeploy, all three paths verified end-to-end on www.fopsapp.com against fresh AUD subscription sub_1TkCZ7Q2SFUp5oYGy9ege8HY: (a) in-band create — quantity 7→8 on add, auto_reconciled null; (b) in-band delete — quantity 8→7 on delete, auto_reconciled null; (c) auto-reconcile fallback — healed pre-existing drift {ok:true, previous:7, quantity:8}. Baseline restored to 7/7/drift-false. Staff billing-amount stripping holds. banking_value populates (KINGSTHORPE 15-Jun = 10000). LAUNCH GATE FOR TEST MODE: PASS. Live-mode capstone is a separate, owner-driven step."
+
+  - task: "Re-provision owner Stripe linkage from scratch (test mode)"
+    implemented: true
+    working: true
+    file: "/app/scripts/reprovision-owner-stripe.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Re-provisioned owner-001 / owner@fopsapp.com Stripe linkage from scratch. Cancelled both legacy subscriptions on cus_UfxAFRBvEZMcsZ (sub_1Tgh3h... starter, sub_1Tgh5G... migrated growth) and deleted their DB rows. Created fresh customer cus_UjfugVESasHV2d with pm_card_visa attached as default. Created one subscription sub_1TkCZ7Q2SFUp5oYGy9ege8HY with two items: Base $29 qty 1 + Per Site $29 qty 7, paid the first invoice via the attached test PM so status went straight to active. Inserted single matching subscriptions row in DB. Discovered the v2 products (prod_UiJGJT3PhiyFL5 Base, prod_UiJG68ivuqY0gT Per Site) had been marked inactive at some earlier point — reactivated both via stripe.products.update. Webhook briefly re-wrote the canceled row during cancellation; cleaned up. Final state: 1 Stripe customer for the email, 1 active sub, 1 DB row. /api/billing/status returns quantity:7 site_count:7 drift:false. Owner verified this on prod (Round 3 sign-off above)."
+
 
   - task: "Phase 3: Polish — UUID labels, sort, fuel price validation, date input bounds, junk-data hygiene scripts, inline-approve refresh"
     implemented: true
