@@ -99,47 +99,106 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Failed to create user record', detail: dbError.message }, { status: 500 });
     }
 
-    // 3) Create Stripe Customer
-    const customer = await stripe.customers.create({
-      email, name,
-      metadata: { user_id: user.id, role },
-    });
-    await supabaseAdmin.from('stripe_customers').upsert({
-      user_id: user.id,
-      stripe_customer_id: customer.id,
-      email,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' });
+    // 3) Create Stripe Customer (rollback-tracked).
+    //
+    // From here onward, if ANYTHING throws we must roll back the
+    // auth.users + public.users + (possibly) stripe_customers rows,
+    // otherwise the email is "stuck taken" (users.email is UNIQUE) and
+    // the user can't retry. The old code returned the generic 500
+    // catch-all without any rollback and left orphaned half-accounts —
+    // confirmed by the prior signup failures on prod.
+    let customer = null;
+    let stripeCustomerRowInserted = false;
+    try {
+      customer = await stripe.customers.create({
+        email, name,
+        metadata: { user_id: user.id, role },
+      });
+      await supabaseAdmin.from('stripe_customers').upsert({
+        user_id: user.id,
+        stripe_customer_id: customer.id,
+        email,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      stripeCustomerRowInserted = true;
 
-    // 4) Mint Checkout Session
-    const origin = request.headers.get('origin')
-      || process.env.NEXT_PUBLIC_BASE_URL
-      || 'http://localhost:3000';
+      // 4) Mint Checkout Session
+      const origin = request.headers.get('origin')
+        || process.env.NEXT_PUBLIC_BASE_URL
+        || 'http://localhost:3000';
 
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: customer.id,
-      line_items: buildLineItems({ siteQuantity: 1 }),
-      // CARD UPFRONT during trial — this is the entire atomic-gate point.
-      payment_method_collection: 'always',
-      subscription_data: {
-        trial_period_days: BILLING_CONFIG.trialDays,
-        metadata: { user_id: user.id },
-        // Apply intro discount if configured.
-        ...(BILLING_CONFIG.introDiscountCoupon ? { discount: [{ coupon: BILLING_CONFIG.introDiscountCoupon }] } : {}),
-      },
-      allow_promotion_codes: true,
-      success_url: `${origin}/app?signup=complete&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${origin}/signup?cancelled=1`,
-      metadata: { user_id: user.id, flow: 'signup_trial_v2' },
-    });
+      // STRIPE RULE: a Checkout Session cannot have BOTH
+      // `allow_promotion_codes: true` AND a `discounts`/coupon on the
+      // session — Stripe rejects the API call with "You cannot specify
+      // both allow_promotion_codes and discounts on the same session."
+      // When an intro coupon is configured (env BILLING_INTRO_DISCOUNT_COUPON)
+      // we MUST send the discount on `session.discounts` and suppress
+      // allow_promotion_codes; otherwise we enable promo codes so users
+      // can self-apply Stripe-issued ones.
+      //
+      // Note: the coupon is attached at the SESSION level (`discounts`),
+      // not under `subscription_data` (the latter is not a valid param
+      // — the prior code's `subscription_data.discount` would have
+      // 400-ed every signup attempt that had a coupon set in env).
+      const hasIntroCoupon = !!BILLING_CONFIG.introDiscountCoupon;
+      const sessionParams = {
+        mode: 'subscription',
+        customer: customer.id,
+        line_items: buildLineItems({ siteQuantity: 1 }),
+        // CARD UPFRONT during trial — this is the entire atomic-gate point.
+        payment_method_collection: 'always',
+        subscription_data: {
+          trial_period_days: BILLING_CONFIG.trialDays,
+          metadata: { user_id: user.id },
+        },
+        success_url: `${origin}/app?signup=complete&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url:  `${origin}/signup?cancelled=1`,
+        metadata: { user_id: user.id, flow: 'signup_trial_v2' },
+      };
+      if (hasIntroCoupon) {
+        sessionParams.discounts = [{ coupon: BILLING_CONFIG.introDiscountCoupon }];
+      } else {
+        sessionParams.allow_promotion_codes = true;
+      }
+      const session = await stripe.checkout.sessions.create(sessionParams);
 
-    return NextResponse.json({
-      user,
-      checkoutUrl: session.url,
-      sessionId: session.id,
-      message: 'Account created. Redirect the user to checkoutUrl to start the 14-day trial.',
-    });
+      return NextResponse.json({
+        user,
+        checkoutUrl: session.url,
+        sessionId: session.id,
+        message: 'Account created. Redirect the user to checkoutUrl to start the 14-day trial.',
+      });
+    } catch (stripeErr) {
+      // ROLLBACK: undo everything we just created so the email isn't
+      // stuck "taken". Each delete is best-effort — we always return
+      // the original error to the caller so they see why signup failed.
+      console.error('[signup] stripe phase failed, rolling back:', stripeErr?.message);
+      try {
+        if (stripeCustomerRowInserted) {
+          await supabaseAdmin.from('stripe_customers').delete().eq('user_id', user.id);
+        }
+        if (customer?.id) {
+          // Detach the stripe customer too (test mode safe). Delete > archive
+          // because the auth.users id is what indexes everything; we want a
+          // clean slate.
+          try { await stripe.customers.del(customer.id); } catch (_) { /* non-fatal */ }
+        }
+        await supabaseAdmin.from('users').delete().eq('id', user.id);
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        console.log('[signup] rollback complete for', email);
+      } catch (rollbackErr) {
+        console.error('[signup] rollback ALSO failed (manual cleanup needed):', rollbackErr?.message);
+      }
+      // Surface the real Stripe error so the user sees what to fix.
+      return NextResponse.json(
+        {
+          error: 'Stripe checkout setup failed',
+          detail: stripeErr?.message,
+          rolled_back: true,
+        },
+        { status: 502 }
+      );
+    }
   } catch (error) {
     console.error('[signup] unexpected:', error);
     return NextResponse.json(

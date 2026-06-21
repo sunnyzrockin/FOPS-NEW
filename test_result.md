@@ -105,6 +105,21 @@
 user_problem_statement: Build FOPS - a multi-site reporting tool for fuel station operators with 3 user roles (Owner, Operator, Staff). Staff submit shift reports, Operators review, Owners view dashboards.
 
 backend:
+  - task: "Signup blocker: stale staff-role note + checkout allow_promotion_codes×discount conflict + missing rollback + orphan-cleanup script"
+    implemented: true
+    working: true
+    file: "/app/app/api/auth/signup/route.js, /app/app/signup/page.js, /app/scripts/cleanup-orphan-signups.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "Live signup at https://www.fopsapp.com/signup failing with 'An unexpected error occurred'. Three real defects identified by code review: (1) signup page still shows stale 'New accounts are created with Staff role by default. Contact your administrator to upgrade your role.' note even though the server hard-codes role='owner'; (2) the page only shows `data.error` and DROPS `data.detail`, so the real Stripe error is hidden; (3) the checkout session sets both `allow_promotion_codes: true` AND (when env BILLING_INTRO_DISCOUNT_COUPON is set) a coupon discount — Stripe rejects sessions with both. Plus the handler has no rollback: a Stripe throw leaves an auth.users + public.users row behind, the email becomes 'stuck taken' and the user can't retry."
+      - working: true
+        agent: "main"
+        comment: "Three code fixes + one cleanup script. (1) Stale UI: replaced the staff-role note with 'You'll be the owner. New accounts start with a 14-day free trial. Your card is captured up-front but won't be charged until the trial ends. AUD $58/mo while billing for 1 site (Base $29 + Per Site $29).' (2) Detail surfacing: signup page now displays `${data.error}: ${data.detail}` when the API returns a detail field — no more black-box 500s. (3) allow_promotion_codes × discount mutual exclusion: rewrote the checkout-session params so they're either-or. When BILLING_INTRO_DISCOUNT_COUPON is set we send `session.discounts = [{ coupon }]` (the correct top-level location — the original code used the non-existent `subscription_data.discount` which would 400 every signup with a coupon set in env) and omit `allow_promotion_codes`. When no coupon is set we keep `allow_promotion_codes: true` so users can self-apply Stripe-issued ones. (4) Atomic rollback: wrapped the Stripe phase (customer create + stripe_customers row + checkout session create) in a try/catch. On any throw we delete the stripe_customers row, delete the Stripe customer, delete the public.users row, and delete the auth.users row, then return 502 with `error` + the real Stripe `detail` + `rolled_back: true`. End-to-end verified: (a) happy path with no coupon → 200, role='owner', valid checkoutUrl; (b) deliberately injected a bad coupon → 502 with detail='No such coupon: ...', rolled_back: true; (c) retried the same email → SAME 502 (not 'already registered'), proving the rollback fired. (5) scripts/cleanup-orphan-signups.js — finds owner users with NO subscription row, NOT in PROTECTED_EMAILS allowlist (which protects vinamaytraders@gmail.com and all @fopsapp.com seeds, enforced TWICE), and NOT seed accounts. Dry-run by default, --apply required. Skips delete if the user owns any sites (safety: a site with no owner is recoverable; a wrongly-deleted site is not). Post-run sanity check re-queries vinamaytraders to prove it survived. Current live-DB dry-run shows exactly ONE orphan: seelam.sumanth@gmail.com (the user's failed signup attempt). Owner authorization required to --apply on prod. PROD VERIFY AFTER REDEPLOY: (a) fresh signup with a +tag email → users.role='owner' + checkoutUrl returned; (b) inject a bad coupon → rollback fires, retry doesn't say 'already registered'; (c) confirm BILLING_INTRO_DISCOUNT_COUPON final state in Vercel Production env."
+
   - task: "Round 4 polish: ULP-only leak signal, wet-stock metered-sales precision fix, future-date backdate, broken-chain artifact cleanup, Stripe test cleanup, env shape validation, RLS plan"
     implemented: true
     working: true
