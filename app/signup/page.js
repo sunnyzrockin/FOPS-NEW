@@ -52,7 +52,14 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Failed to create account');
+        // Surface the detail message when the server provides it (e.g.
+        // Stripe misconfiguration, Supabase auth conflict). Without
+        // this, every 4xx/5xx degenerates into a generic "Failed to
+        // create account" and we can't tell users what went wrong.
+        const msg = data.detail
+          ? `${data.error || 'Signup failed'}: ${data.detail}`
+          : (data.error || 'Failed to create account');
+        setError(msg);
         setLoading(false);
         return;
       }
@@ -177,9 +184,12 @@ export default function SignupPage() {
                 />
               </div>
 
-              <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 space-y-1">
                 <p className="text-xs text-teal-800">
-                  <strong>Note:</strong> New accounts are created with Staff role by default. Contact your administrator to upgrade your role.
+                  <strong>You&apos;ll be the owner.</strong> New accounts start with a 14-day free trial. Your card is captured up-front but won&apos;t be charged until the trial ends.
+                </p>
+                <p className="text-xs text-teal-700">
+                  AUD $58/mo while billing for 1 site (Base $29 + Per Site $29). Add more sites to scale up automatically.
                 </p>
               </div>
 
