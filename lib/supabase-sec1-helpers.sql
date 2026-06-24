@@ -17,19 +17,21 @@
 -- to the app TEXT id by current_user_app_id() or by the helpers below.
 -- =============================================================================
 
--- ─── 1. Drop legacy helpers (defensive — they may not exist on a clean DB) ────
--- These were introduced by earlier RLS attempts and are superseded.
-DROP FUNCTION IF EXISTS public.get_user_id_from_auth()                       CASCADE;
-DROP FUNCTION IF EXISTS public.get_operator_site_ids()                       CASCADE;
-DROP FUNCTION IF EXISTS public.get_staff_site_ids()                          CASCADE;
-DROP FUNCTION IF EXISTS public.get_user_role_and_id()                        CASCADE;
-DROP FUNCTION IF EXISTS public.get_operator_assigned_sites(text)             CASCADE;
-DROP FUNCTION IF EXISTS public.get_staff_assigned_sites(text)                CASCADE;
-DROP FUNCTION IF EXISTS public.auth_user_uuid()                              CASCADE;
-DROP FUNCTION IF EXISTS public.auth_user_role()                              CASCADE;
-DROP FUNCTION IF EXISTS public.auth_user_site_ids()                          CASCADE;
-
--- Old SEC1-draft signatures (in case a prior attempt left them around)
+-- ─── 1. Drop OLD SEC1-draft signatures only (safe — no live policies depend) ─
+-- IMPORTANT: legacy app helpers (get_user_id_from_auth, auth_user_role,
+-- auth_user_site_ids, get_*_site_ids, etc.) are NOT dropped in this file.
+-- They are referenced by live RLS policies (e.g. users_self_read on
+-- public.users uses auth_user_role(); legacy sites policies use
+-- get_user_id_from_auth()). Dropping with CASCADE here would SILENTLY
+-- remove those policies, weakening security mid-migration.
+--
+-- Instead the migration file drops the legacy POLICIES first (Phase A),
+-- then drops the legacy FUNCTIONS with RESTRICT (so any unexpected
+-- remaining dependency aborts the transaction loudly).
+--
+-- The drops below clear only previous-attempt SEC1 helpers — none of which
+-- can have RLS policy dependencies because the SEC1 migration was never
+-- applied.
 DROP FUNCTION IF EXISTS public.user_site_ids(uuid)                           CASCADE;
 DROP FUNCTION IF EXISTS public.user_role(uuid)                               CASCADE;
 DROP FUNCTION IF EXISTS public.user_is_owner_of(uuid, uuid)                  CASCADE;
@@ -110,12 +112,21 @@ $$;
 COMMENT ON FUNCTION public.user_is_owner_of(uuid, text) IS
   'SEC1: true when auth_uid is the owner of the site with the given TEXT id.';
 
--- ─── 3. Grants ───────────────────────────────────────────────────────────────
--- service_role bypasses RLS so does not need EXECUTE; authenticated must.
-GRANT EXECUTE ON FUNCTION public.current_user_app_id()              TO authenticated;
-GRANT EXECUTE ON FUNCTION public.user_site_ids(uuid)                TO authenticated;
-GRANT EXECUTE ON FUNCTION public.user_role(uuid)                    TO authenticated;
-GRANT EXECUTE ON FUNCTION public.user_is_owner_of(uuid, text)       TO authenticated;
+-- ─── 3. Grants — REVOKE PUBLIC/anon first, then GRANT to authenticated ──────
+-- PostgreSQL grants EXECUTE on functions to PUBLIC by default. Anon clients
+-- inherit from PUBLIC and could call these SECURITY DEFINER helpers via
+-- PostgREST RPC, defeating the SECURITY DEFINER's purpose. REVOKE explicitly
+-- before GRANT. service_role bypasses RLS and never calls these helpers,
+-- so no grant for service_role is required.
+REVOKE EXECUTE ON FUNCTION public.current_user_app_id()         FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.user_site_ids(uuid)           FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.user_role(uuid)               FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.user_is_owner_of(uuid, text)  FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.current_user_app_id()          TO authenticated;
+GRANT EXECUTE ON FUNCTION public.user_site_ids(uuid)            TO authenticated;
+GRANT EXECUTE ON FUNCTION public.user_role(uuid)                TO authenticated;
+GRANT EXECUTE ON FUNCTION public.user_is_owner_of(uuid, text)   TO authenticated;
 
 -- ─── 4. Smoke test (informational; safe to copy/paste) ───────────────────────
 -- Run as service_role:
@@ -126,6 +137,18 @@ GRANT EXECUTE ON FUNCTION public.user_is_owner_of(uuid, text)       TO authentic
 --   SELECT public.user_role(auth.uid());        -- 'owner'
 --   SELECT * FROM public.user_site_ids(auth.uid()); -- 5 rows for the demo owner
 
+-- ─── 5. Harden pre-existing trigger functions (pin search_path) ─────────────
+-- Supabase advisor flags these existing `RETURNS trigger` functions as
+-- "Function Search Path Mutable". Pinning search_path prevents schema-
+-- shadowing attacks. Signatures verified against:
+--   lib/supabase-p2b-fuel-margin.sql        → set_fuel_deliveries_updated_at()
+--   lib/supabase-wetstock-tier1-migration.sql → tanks_set_updated_at()
+--   lib/supabase-phase3-dips.sql            → set_dip_readings_updated_at()
+-- All zero-arg trigger functions in the public schema.
+ALTER FUNCTION public.set_fuel_deliveries_updated_at() SET search_path = public;
+ALTER FUNCTION public.tanks_set_updated_at()           SET search_path = public;
+ALTER FUNCTION public.set_dip_readings_updated_at()    SET search_path = public;
+
 DO $$
 BEGIN
   RAISE NOTICE 'SEC1 helpers created:';
@@ -133,5 +156,8 @@ BEGIN
   RAISE NOTICE '  user_site_ids(auth_uid UUID)          -> SETOF TEXT';
   RAISE NOTICE '  user_role(auth_uid UUID)              -> TEXT';
   RAISE NOTICE '  user_is_owner_of(auth_uid UUID, sid TEXT) -> BOOLEAN';
+  RAISE NOTICE 'Trigger functions pinned to search_path = public:';
+  RAISE NOTICE '  set_fuel_deliveries_updated_at, tanks_set_updated_at,';
+  RAISE NOTICE '  set_dip_readings_updated_at';
   RAISE NOTICE 'No RLS toggled yet. Next: supabase-sec1-rls-hardening-migration.sql.';
 END $$;

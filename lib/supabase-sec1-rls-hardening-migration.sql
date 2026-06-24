@@ -126,6 +126,32 @@ BEGIN
 END $$;
 
 -- =============================================================================
+-- PHASE A.3 — Drop legacy SECURITY DEFINER helpers (RESTRICT — fail loud)
+-- =============================================================================
+-- These helpers were referenced by the legacy policies we just dropped in
+-- Phase A.1/A.2. RESTRICT (the default, stated explicitly here for clarity)
+-- means the DROP aborts loudly if anything still depends on them — much
+-- safer than CASCADE, which would silently remove unknown dependents.
+--
+-- If any of these aborts the transaction, investigate: a policy survived
+-- Phase A and was using the helper. Add it to PHASE A.1, re-run.
+--
+-- WHY HERE and not in lib/supabase-sec1-helpers.sql? The helpers file runs
+-- in Phase 1 BEFORE policy drops. CASCADE-dropping these helpers in Phase 1
+-- would silently remove the policies that depend on them, weakening
+-- security mid-migration. Drop AFTER the policies are gone, with RESTRICT.
+
+DROP FUNCTION IF EXISTS public.get_user_id_from_auth()           RESTRICT;
+DROP FUNCTION IF EXISTS public.get_operator_site_ids()           RESTRICT;
+DROP FUNCTION IF EXISTS public.get_staff_site_ids()              RESTRICT;
+DROP FUNCTION IF EXISTS public.get_user_role_and_id()            RESTRICT;
+DROP FUNCTION IF EXISTS public.get_operator_assigned_sites(text) RESTRICT;
+DROP FUNCTION IF EXISTS public.get_staff_assigned_sites(text)    RESTRICT;
+DROP FUNCTION IF EXISTS public.auth_user_uuid()                  RESTRICT;
+DROP FUNCTION IF EXISTS public.auth_user_role()                  RESTRICT;
+DROP FUNCTION IF EXISTS public.auth_user_site_ids()              RESTRICT;
+
+-- =============================================================================
 -- PHASE B — Enable RLS on all in-scope tables (idempotent)
 -- =============================================================================
 ALTER TABLE public.users                      ENABLE ROW LEVEL SECURITY;
