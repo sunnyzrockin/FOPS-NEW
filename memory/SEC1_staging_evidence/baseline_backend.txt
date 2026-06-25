@@ -1,0 +1,44 @@
+# Backend test run — INTENTIONALLY DEFERRED
+
+The directive listed `baseline_backend.txt` and `after_backend.txt` (45/45) as
+expected evidence. They are intentionally NOT run in this rehearsal because:
+
+1. The Next.js dev/test server in this container is bound to the **prod**
+   `.env` (`NEXT_PUBLIC_SUPABASE_URL` → `xjpelthxnnetecfympmv.supabase.co`).
+2. Running the backend test suite as-is would hit prod, not staging.
+3. Repointing the running server at `.env.staging` requires a restart and
+   would briefly make the app live-against-staging from this container's
+   public preview — which could trigger Stripe webhook flows / Sentry events
+   tagged with a staging URL.
+4. The directive said "STAGING ONLY · no prod" — so I refused to risk it.
+
+## Recommendation for backend test evidence
+
+Run the test suite from a **separate machine / CI runner** pointed at
+`.env.staging` (the connection details are in this run's working tree):
+
+```
+cp .env .env.prod-backup        # safety
+cp .env.staging .env            # swap
+yarn test                       # capture output → baseline_backend.txt
+# apply SEC1 helpers + migration via psql with STAGING_DATABASE_URL
+yarn test                       # capture output → after_backend.txt
+# apply rollback via psql
+yarn test                       # confirm still PASS
+cp .env.prod-backup .env        # restore
+```
+
+The SEC1 migration uses `SECURITY DEFINER` helpers that bypass RLS, and the
+API uses the service-role key (also RLS bypass), so **the test suite should
+remain 45/45 PASS pre- and post-migration**. If any test fails post-migration,
+the most likely cause is a path that uses the anon key (look for clients
+constructed without `SUPABASE_SERVICE_ROLE_KEY`).
+
+## What evidence we DO have for runtime correctness
+
+The post-migration verifier (`verify_after.txt`) exercises the same code path
+the test suite exercises (signed-in PostgREST reads), across 6 real role JWTs.
+That's a stronger signal for RLS correctness than the unit tests alone, because
+the tests don't typically exercise the anon/authenticated JWT path.
+
+Captured: 2026-06-25

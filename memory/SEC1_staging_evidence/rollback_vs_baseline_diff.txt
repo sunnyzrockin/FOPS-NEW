@@ -1,0 +1,3 @@
+# RLS state diff: baseline vs post-rollback
+
+  (no drift — perfect match)

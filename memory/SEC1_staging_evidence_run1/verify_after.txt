@@ -1,0 +1,78 @@
+# SEC1 staging — Post-migration verifier (RLS on)
+Captured: 2026-06-25T01:27:02.544Z
+
+## Identities established
+  anon: anon
+  owner_001: signed in (auth.uid=7240df91-880c-4965-aa24-e930f71fe381)
+  operator_001: signed in (auth.uid=9a05c352-13dc-4e8a-b5ca-cc9873d9b622)
+  staff_001: signed in (auth.uid=709360ed-6cc5-405a-9ef6-ec4750adb118)
+  staging_owner_002: signed in (auth.uid=24ecb76b-fbd0-40a2-8e12-49541e1806cf)
+  staging_operator_002: signed in (auth.uid=e53c6772-ed25-40e6-af82-866ee6e047c7)
+  staging_staff_002: signed in (auth.uid=d986f3db-9348-46c2-b24f-b4d8bdede0fe)
+  service_role: service
+
+## Isolation matrix (row count visible per role; ERR = PostgREST returned error)
+table                       | anon  | owner_001 | operator_001 | staff_001 | staging_owner_002 | staging_operator_002 | staging_staff_002 | service_role
+----------------------------+-------+-----------+--------------+-----------+-------------------+----------------------+-------------------+-------------
+users                       | ERR:X | 20        | 1            | 1         | 20                | 1                    | 1                 | 20          
+sites                       | ERR:X | 7         | 6            | 1         | 2                 | 1                    | 1                 | 9           
+operator_site_assignments   | ERR:X | 8         | 6            | 0         | 1                 | 1                    | 0                 | 9           
+staff_site_assignments      | ERR:X | 8         | 6            | 1         | 1                 | 1                    | 1                 | 9           
+shift_reports               | ERR:X | 67        | 67           | 20        | 0                 | 0                    | 0                 | 67          
+shift_formula_results       | ERR:X | 32        | 32           | 2         | 0                 | 0                    | 0                 | 32          
+dip_readings                | ERR:X | 23        | 23           | 15        | 0                 | 0                    | 0                 | 23          
+site_field_configs          | ERR:X | 68        | 57           | 13        | 0                 | 0                    | 0                 | 68          
+site_banking_formulas       | ERR:X | 18        | 15           | 1         | 0                 | 0                    | 0                 | 18          
+fuel_price_entries          | ERR:X | 92        | 74           | 0         | 0                 | 0                    | 0                 | 92          
+fuel_price_acknowledgements | ERR:X | 3         | 3            | 0         | 0                 | 0                    | 0                 | 3           
+fuel_price_changes          | ERR:X | 4         | 4            | 2         | 0                 | 0                    | 0                 | 4           
+fuel_price_escalations      | ERR:X | 407       | 407          | 0         | 0                 | 0                    | 0                 | 407         
+fuel_price_notifications    | ERR:X | 4         | 4            | 2         | 0                 | 0                    | 0                 | 4           
+fuel_deliveries             | ERR:X | 0         | 0            | 0         | 0                 | 0                    | 0                 | 0           
+fuel_grades                 | 0     | 7         | 7            | 7         | 7                 | 7                    | 7                 | 7           
+tanks                       | ERR:X | 4         | 4            | 4         | 0                 | 0                    | 0                 | 4           
+tank_reconciliation         | ERR:X | 28        | 28           | 0         | 0                 | 0                    | 0                 | 28          
+site_competitors            | ERR:X | 150       | 120          | 0         | 0                 | 0                    | 0                 | 150         
+competitor_fuel_prices      | ERR:X | 1350      | 1080         | 0         | 0                 | 0                    | 0                 | 1350        
+subscriptions               | ERR:X | 1         | 0            | 0         | 0                 | 0                    | 0                 | 2           
+stripe_customers            | ERR:X | 1         | 0            | 0         | 0                 | 0                    | 0                 | 2           
+stripe_webhook_events       | 0     | 0         | 0            | 0         | 0                 | 0                    | 0                 | 93          
+user_invites                | ERR:X | 2         | 2            | 0         | 0                 | 0                    | 0                 | 2           
+audit_log                   | ERR:X | 127       | 127          | 0         | 0                 | 0                    | 0                 | 938         
+notifications               | ERR:X | 0         | 20           | 17        | 0                 | 0                    | 0                 | 37          
+fuel_prices_live            | 0     | 5190      | 5190         | 5190      | 5190              | 5190                 | 5190              | 5190        
+fuel_stations               | 0     | 1886      | 1886         | 1886      | 1886              | 1886                 | 1886              | 1886        
+fuel_price_sync_meta        | 0     | 0         | 0            | 0         | 0                 | 0                    | 0                 | 1           
+
+## Headline assertions
+  ✓ anon users: ERR:X
+  ✓ anon sites: ERR:X
+  ✓ anon operator_site_assignments: ERR:X
+  ✓ anon staff_site_assignments: ERR:X
+  ✓ anon shift_reports: ERR:X
+  ✓ anon shift_formula_results: ERR:X
+  ✓ anon dip_readings: ERR:X
+  ✓ anon site_field_configs: ERR:X
+  ✓ anon site_banking_formulas: ERR:X
+  ✓ anon fuel_price_entries: ERR:X
+  ✓ anon fuel_price_acknowledgements: ERR:X
+  ✓ anon fuel_price_changes: ERR:X
+  ✓ anon fuel_price_escalations: ERR:X
+  ✓ anon fuel_price_notifications: ERR:X
+  ✓ anon fuel_deliveries: ERR:X
+  ✓ anon fuel_grades: 0
+  ✓ anon tanks: ERR:X
+  ✓ anon tank_reconciliation: ERR:X
+  ✓ anon site_competitors: ERR:X
+  ✓ anon competitor_fuel_prices: ERR:X
+  ✓ anon subscriptions: ERR:X
+  ✓ anon stripe_customers: ERR:X
+  ✓ anon stripe_webhook_events: 0
+  ✓ anon user_invites: ERR:X
+  ✓ anon audit_log: ERR:X
+  ✓ anon notifications: ERR:X
+  ✓ anon fuel_price_sync_meta: 0
+  owner_001 sees 7 sites; staging_owner_002 sees 2 sites; service 9
+  ✓ owner isolation: 7+2 = 9 sites accounted for (partition holds)
+  staff_001 tank_reconciliation: 0 (expected 0)
+  ✓ staff blocked from tank_reconciliation

@@ -68,6 +68,7 @@ const PROBES = [
   { table: 'stripe_webhook_events',       scope: 'deny-all'    },
   { table: 'user_invites',                scope: 'inviter-or-site' },
   { table: 'audit_log',                   scope: 'site-scoped-or-deny' },
+  { table: 'notifications',               scope: 'self-only' },
   { table: 'fuel_prices_live',            scope: 'authed-or-owner' },
   { table: 'fuel_stations',               scope: 'authed-or-owner' },
   { table: 'fuel_price_sync_meta',        scope: 'deny-all'    },

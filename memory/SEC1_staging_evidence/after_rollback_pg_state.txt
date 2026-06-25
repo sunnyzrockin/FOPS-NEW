@@ -1,0 +1,49 @@
+# SEC1 staging — Post-rollback (back to pre-SEC1 state)
+Captured: 2026-06-25T01:38:09.790Z
+
+## pg_class — RLS state per in-scope table
+table_name                  | rls_enabled
+----------------------------+------------
+audit_log                   | true       
+competitor_fuel_prices      | true       
+dip_readings                | true       
+fuel_deliveries             | true       
+fuel_grades                 | true       
+fuel_price_acknowledgements | true       
+fuel_price_changes          | true       
+fuel_price_entries          | true       
+fuel_price_escalations      | true       
+fuel_price_notifications    | true       
+fuel_price_sync_meta        | true       
+fuel_prices_live            | true       
+fuel_stations               | true       
+notifications               | true       
+operator_site_assignments   | true       
+shift_formula_results       | true       
+shift_reports               | true       
+site_banking_formulas       | true       
+site_competitors            | true       
+site_field_configs          | true       
+sites                       | true       
+staff_site_assignments      | true       
+stripe_customers            | true       
+stripe_webhook_events       | true       
+subscriptions               | true       
+tank_reconciliation         | true       
+tanks                       | true       
+user_invites                | true       
+users                       | true       
+
+Total: 29 tables · RLS enabled: 29 · RLS disabled: 0
+
+## pg_policies — policy inventory
+(no rows)
+
+Total policies: 0
+
+## Relevant functions in public schema
+proname                        | args
+-------------------------------+-----
+set_dip_readings_updated_at    |     
+set_fuel_deliveries_updated_at |     
+tanks_set_updated_at           |     

@@ -74,6 +74,9 @@ DROP POLICY IF EXISTS op_assign_read                 ON public.operator_site_ass
 DROP POLICY IF EXISTS staff_assign_read              ON public.staff_site_assignments;
 DROP POLICY IF EXISTS field_configs_read             ON public.site_field_configs;
 DROP POLICY IF EXISTS shift_reports_read             ON public.shift_reports;
+DROP POLICY IF EXISTS shift_reports_insert           ON public.shift_reports;
+DROP POLICY IF EXISTS shift_reports_update           ON public.shift_reports;
+DROP POLICY IF EXISTS shift_reports_delete           ON public.shift_reports;
 DROP POLICY IF EXISTS banking_formulas_read          ON public.site_banking_formulas;
 DROP POLICY IF EXISTS shift_formula_results_read     ON public.shift_formula_results;
 DROP POLICY IF EXISTS fuel_price_entries_read        ON public.fuel_price_entries;
@@ -83,6 +86,10 @@ DROP POLICY IF EXISTS dip_readings_read              ON public.dip_readings;
 DROP POLICY IF EXISTS fuel_stations_owner_read       ON public.fuel_stations;
 DROP POLICY IF EXISTS fuel_prices_live_owner_read    ON public.fuel_prices_live;
 DROP POLICY IF EXISTS fuel_price_sync_meta_owner_read ON public.fuel_price_sync_meta;
+DROP POLICY IF EXISTS audit_log_support_select       ON public.audit_log;
+DROP POLICY IF EXISTS owners_see_own_invites         ON public.user_invites;
+DROP POLICY IF EXISTS invitee_reads_own_invite       ON public.user_invites;
+DROP POLICY IF EXISTS users_own_notifications        ON public.notifications;
 
 -- Source: lib/supabase-p2b-fuel-margin-rls.sql (we replace under unified names)
 DROP POLICY IF EXISTS fd_owner_select        ON public.fuel_deliveries;
@@ -110,7 +117,7 @@ DECLARE r RECORD;
     'tanks','tank_reconciliation',
     'site_competitors','competitor_fuel_prices',
     'subscriptions','stripe_customers','stripe_webhook_events',
-    'user_invites','audit_log',
+    'user_invites','audit_log','notifications',
     'fuel_prices_live','fuel_stations','fuel_price_sync_meta'
   ];
 BEGIN
@@ -179,6 +186,7 @@ ALTER TABLE public.stripe_customers           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stripe_webhook_events      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_invites               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_log                  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fuel_prices_live           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fuel_stations              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fuel_price_sync_meta       ENABLE ROW LEVEL SECURITY;
@@ -613,6 +621,19 @@ CREATE POLICY audit_log_select_site_scoped
   );
 -- writes service-only
 
+-- ── notifications (user-self read + mark-as-read; service writes) ───────────
+-- Each user sees only their own notifications (user_id TEXT → users.id).
+-- Mark-as-read (UPDATE) allowed self; INSERT/DELETE service-only.
+CREATE POLICY notifications_select_self
+  ON public.notifications FOR SELECT
+  USING (user_id = public.current_user_app_id());
+
+CREATE POLICY notifications_update_self
+  ON public.notifications FOR UPDATE
+  USING (user_id = public.current_user_app_id())
+  WITH CHECK (user_id = public.current_user_app_id());
+-- INSERT / DELETE: service-only (the API generates and prunes notifications)
+
 -- ── fuel_prices_live  /  fuel_stations  (🟡 OWNER DECISION) ─────────────────
 -- The migration ships Option A (any-authenticated read) by default — this
 -- matches the pilot UX where operators/staff see live QLD prices in the UI.
@@ -663,12 +684,12 @@ BEGIN
        'tanks','tank_reconciliation',
        'site_competitors','competitor_fuel_prices',
        'subscriptions','stripe_customers','stripe_webhook_events',
-       'user_invites','audit_log',
+       'user_invites','audit_log','notifications',
        'fuel_prices_live','fuel_stations','fuel_price_sync_meta'
      )
      AND NOT relrowsecurity;
   IF missing_rls IS NULL THEN
-    RAISE NOTICE 'SEC1 verification: RLS enabled on all 28 in-scope tables ✓';
+    RAISE NOTICE 'SEC1 verification: RLS enabled on all 29 in-scope tables ✓';
   ELSE
     RAISE WARNING 'SEC1 verification FAILED — RLS missing on: %', missing_rls;
   END IF;

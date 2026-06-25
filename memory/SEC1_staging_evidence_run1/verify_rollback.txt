@@ -1,0 +1,48 @@
+# SEC1 staging — Post-rollback verifier
+Captured: 2026-06-25T01:32:12.348Z
+
+## Isolation matrix (post-rollback — RLS back to pre-SEC1 state)
+table                       | anon | owner_001 | operator_001 | staff_001 | staging_owner_002 | staging_operator_002 | staging_staff_002 | service_role
+----------------------------+------+-----------+--------------+-----------+-------------------+----------------------+-------------------+-------------
+users                       | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 20          
+sites                       | 9    | 9         | 9            | 9         | 9                 | 9                    | 9                 | 9           
+operator_site_assignments   | 9    | 9         | 9            | 9         | 9                 | 9                    | 9                 | 9           
+staff_site_assignments      | 9    | 9         | 9            | 9         | 9                 | 9                    | 9                 | 9           
+shift_reports               | 67   | 67        | 67           | 67        | 67                | 67                   | 67                | 67          
+shift_formula_results       | 32   | 32        | 32           | 32        | 32                | 32                   | 32                | 32          
+dip_readings                | 23   | 23        | 23           | 23        | 23                | 23                   | 23                | 23          
+site_field_configs          | 68   | 68        | 68           | 68        | 68                | 68                   | 68                | 68          
+site_banking_formulas       | 18   | 18        | 18           | 18        | 18                | 18                   | 18                | 18          
+fuel_price_entries          | 92   | 92        | 92           | 92        | 92                | 92                   | 92                | 92          
+fuel_price_acknowledgements | 3    | 3         | 3            | 3         | 3                 | 3                    | 3                 | 3           
+fuel_price_changes          | 4    | 4         | 4            | 4         | 4                 | 4                    | 4                 | 4           
+fuel_price_escalations      | 407  | 407       | 407          | 407       | 407               | 407                  | 407               | 407         
+fuel_price_notifications    | 4    | 4         | 4            | 4         | 4                 | 4                    | 4                 | 4           
+fuel_deliveries             | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 0           
+fuel_grades                 | 7    | 7         | 7            | 7         | 7                 | 7                    | 7                 | 7           
+tanks                       | 4    | 4         | 4            | 4         | 4                 | 4                    | 4                 | 4           
+tank_reconciliation         | 28   | 28        | 28           | 28        | 28                | 28                   | 28                | 28          
+site_competitors            | 150  | 150       | 150          | 150       | 150               | 150                  | 150               | 150         
+competitor_fuel_prices      | 1350 | 1350      | 1350         | 1350      | 1350              | 1350                 | 1350              | 1350        
+subscriptions               | 2    | 2         | 2            | 2         | 2                 | 2                    | 2                 | 2           
+stripe_customers            | 2    | 2         | 2            | 2         | 2                 | 2                    | 2                 | 2           
+stripe_webhook_events       | 93   | 93        | 93           | 93        | 93                | 93                   | 93                | 93          
+user_invites                | 2    | 2         | 2            | 2         | 2                 | 2                    | 2                 | 2           
+audit_log                   | 938  | 938       | 938          | 938       | 938               | 938                  | 938               | 938         
+notifications               | 37   | 37        | 37           | 37        | 37                | 37                   | 37                | 37          
+fuel_prices_live            | 5190 | 5190      | 5190         | 5190      | 5190              | 5190                 | 5190              | 5190        
+fuel_stations               | 1886 | 1886      | 1886         | 1886      | 1886              | 1886                 | 1886              | 1886        
+fuel_price_sync_meta        | 1    | 1         | 1            | 1         | 1                 | 1                    | 1                 | 1           
+
+## Expectation
+  After rollback the new SEC1 policies are gone; the LEGACY policies have
+  also been dropped (Phase A.1/A.2 of the migration that ran before the
+  rollback). So tables with RLS still ON but NO policies → deny-all for JWT.
+  Service-role bypasses RLS → service_role column should match its pre-migration values.
+  This is the expected "RLS on but unpoliciied → deny" state for staging tests.
+
+## Note
+  For a TRUE return-to-baseline the legacy policies would need to be recreated.
+  In production we will NEVER want that (legacy policies were broken/recursive).
+  The rollback intentionally leaves the schema in a "RLS on, no policies, deny-all
+  for JWT, service-role still works" state — which is safer than the original.

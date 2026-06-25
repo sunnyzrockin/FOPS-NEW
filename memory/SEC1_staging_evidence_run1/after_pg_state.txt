@@ -1,0 +1,112 @@
+# SEC1 staging — Post-migration (RLS on, new policies applied)
+Captured: 2026-06-25T01:27:01.905Z
+
+## pg_class — RLS state per in-scope table
+table_name                  | rls_enabled
+----------------------------+------------
+audit_log                   | true       
+competitor_fuel_prices      | true       
+dip_readings                | true       
+fuel_deliveries             | true       
+fuel_grades                 | true       
+fuel_price_acknowledgements | true       
+fuel_price_changes          | true       
+fuel_price_entries          | true       
+fuel_price_escalations      | true       
+fuel_price_notifications    | true       
+fuel_price_sync_meta        | true       
+fuel_prices_live            | true       
+fuel_stations               | true       
+notifications               | true       
+operator_site_assignments   | true       
+shift_formula_results       | true       
+shift_reports               | true       
+site_banking_formulas       | true       
+site_competitors            | true       
+site_field_configs          | true       
+sites                       | true       
+staff_site_assignments      | true       
+stripe_customers            | true       
+stripe_webhook_events       | true       
+subscriptions               | true       
+tank_reconciliation         | true       
+tanks                       | true       
+user_invites                | true       
+users                       | true       
+
+Total: 29 tables · RLS enabled: 29 · RLS disabled: 0
+
+## pg_policies — policy inventory
+tablename                   | policyname                             | cmd    | roles   
+----------------------------+----------------------------------------+--------+---------
+audit_log                   | audit_log_select_site_scoped           | SELECT | {public}
+competitor_fuel_prices      | competitor_fuel_prices_owner_op_write  | ALL    | {public}
+competitor_fuel_prices      | competitor_fuel_prices_select_member   | SELECT | {public}
+dip_readings                | dip_readings_delete_owner              | DELETE | {public}
+dip_readings                | dip_readings_insert_member             | INSERT | {public}
+dip_readings                | dip_readings_select_member             | SELECT | {public}
+dip_readings                | dip_readings_update_owner_op           | UPDATE | {public}
+fuel_deliveries             | fuel_deliveries_owner_delete           | DELETE | {public}
+fuel_deliveries             | fuel_deliveries_owner_op_insert        | INSERT | {public}
+fuel_deliveries             | fuel_deliveries_owner_update           | UPDATE | {public}
+fuel_deliveries             | fuel_deliveries_select_member          | SELECT | {public}
+fuel_grades                 | fuel_grades_owner_delete               | DELETE | {public}
+fuel_grades                 | fuel_grades_owner_insert               | INSERT | {public}
+fuel_grades                 | fuel_grades_owner_update               | UPDATE | {public}
+fuel_grades                 | fuel_grades_select_authed              | SELECT | {public}
+fuel_price_acknowledgements | fuel_price_acks_insert_self            | INSERT | {public}
+fuel_price_acknowledgements | fuel_price_acks_select_member          | SELECT | {public}
+fuel_price_changes          | fuel_price_changes_owner_op_write      | ALL    | {public}
+fuel_price_changes          | fuel_price_changes_select_member       | SELECT | {public}
+fuel_price_entries          | fuel_price_entries_owner_op_write      | ALL    | {public}
+fuel_price_entries          | fuel_price_entries_select_member       | SELECT | {public}
+fuel_price_escalations      | fuel_price_escalations_select_member   | SELECT | {public}
+fuel_price_notifications    | fuel_price_notifications_select_member | SELECT | {public}
+fuel_prices_live            | fuel_prices_live_select_authed         | SELECT | {public}
+fuel_stations               | fuel_stations_select_authed            | SELECT | {public}
+notifications               | notifications_select_self              | SELECT | {public}
+notifications               | notifications_update_self              | UPDATE | {public}
+operator_site_assignments   | operator_assignments_owner_delete      | DELETE | {public}
+operator_site_assignments   | operator_assignments_owner_insert      | INSERT | {public}
+operator_site_assignments   | operator_assignments_owner_update      | UPDATE | {public}
+operator_site_assignments   | operator_assignments_select            | SELECT | {public}
+shift_formula_results       | shift_formula_results_select_member    | SELECT | {public}
+shift_reports               | shift_reports_delete_owner             | DELETE | {public}
+shift_reports               | shift_reports_insert_submitter         | INSERT | {public}
+shift_reports               | shift_reports_select_member            | SELECT | {public}
+shift_reports               | shift_reports_update_owner_op          | UPDATE | {public}
+site_banking_formulas       | site_banking_formulas_owner_op_write   | ALL    | {public}
+site_banking_formulas       | site_banking_formulas_select_member    | SELECT | {public}
+site_competitors            | site_competitors_owner_op_write        | ALL    | {public}
+site_competitors            | site_competitors_select_member         | SELECT | {public}
+site_field_configs          | site_field_configs_owner_op_write      | ALL    | {public}
+site_field_configs          | site_field_configs_select_member       | SELECT | {public}
+sites                       | sites_owner_delete                     | DELETE | {public}
+sites                       | sites_owner_insert                     | INSERT | {public}
+sites                       | sites_owner_update                     | UPDATE | {public}
+sites                       | sites_select_member                    | SELECT | {public}
+staff_site_assignments      | staff_assignments_op_owner_delete      | DELETE | {public}
+staff_site_assignments      | staff_assignments_op_owner_insert      | INSERT | {public}
+staff_site_assignments      | staff_assignments_op_owner_update      | UPDATE | {public}
+staff_site_assignments      | staff_assignments_select               | SELECT | {public}
+stripe_customers            | stripe_customers_self_select           | SELECT | {public}
+subscriptions               | subscriptions_self_select              | SELECT | {public}
+tank_reconciliation         | tank_reconciliation_owner_op_write     | ALL    | {public}
+tank_reconciliation         | tank_reconciliation_select_owner_op    | SELECT | {public}
+tanks                       | tanks_owner_op_write                   | ALL    | {public}
+tanks                       | tanks_select_member                    | SELECT | {public}
+user_invites                | user_invites_select_scoped             | SELECT | {public}
+users                       | users_self_read                        | SELECT | {public}
+
+Total policies: 58
+
+## Relevant functions in public schema
+proname                        | args                   
+-------------------------------+------------------------
+current_user_app_id            |                        
+set_dip_readings_updated_at    |                        
+set_fuel_deliveries_updated_at |                        
+tanks_set_updated_at           |                        
+user_is_owner_of               | auth_uid uuid, sid text
+user_role                      | auth_uid uuid          
+user_site_ids                  | auth_uid uuid          

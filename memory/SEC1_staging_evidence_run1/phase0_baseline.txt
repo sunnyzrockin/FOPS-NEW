@@ -1,0 +1,96 @@
+# SEC1 staging — Phase 0 baseline (pre-migration)
+Captured: 2026-06-25T01:25:45.567Z
+
+## pg_class — RLS state per in-scope table
+table_name                  | rls_enabled
+----------------------------+------------
+audit_log                   | true       
+competitor_fuel_prices      | true       
+dip_readings                | true       
+fuel_deliveries             | true       
+fuel_grades                 | true       
+fuel_price_acknowledgements | true       
+fuel_price_changes          | true       
+fuel_price_entries          | true       
+fuel_price_escalations      | true       
+fuel_price_notifications    | true       
+fuel_price_sync_meta        | true       
+fuel_prices_live            | true       
+fuel_stations               | true       
+notifications               | true       
+operator_site_assignments   | true       
+shift_formula_results       | true       
+shift_reports               | true       
+site_banking_formulas       | true       
+site_competitors            | true       
+site_field_configs          | true       
+sites                       | true       
+staff_site_assignments      | true       
+stripe_customers            | true       
+stripe_webhook_events       | true       
+subscriptions               | true       
+tank_reconciliation         | true       
+tanks                       | true       
+user_invites                | true       
+users                       | true       
+
+Total: 29 tables · RLS enabled: 29 · RLS disabled: 0
+
+## pg_policies — policy inventory
+tablename                 | policyname                       | cmd    | roles          
+--------------------------+----------------------------------+--------+----------------
+audit_log                 | audit_log_support_select         | SELECT | {public}       
+competitor_fuel_prices    | competitor_fuel_prices_read      | SELECT | {authenticated}
+dip_readings              | dip_readings_read                | SELECT | {authenticated}
+fuel_deliveries           | fd_operator_insert               | INSERT | {public}       
+fuel_deliveries           | fd_operator_select               | SELECT | {public}       
+fuel_deliveries           | fd_owner_delete                  | DELETE | {public}       
+fuel_deliveries           | fd_owner_insert                  | INSERT | {public}       
+fuel_deliveries           | fd_owner_select                  | SELECT | {public}       
+fuel_deliveries           | fd_owner_update                  | UPDATE | {public}       
+fuel_grades               | fg_owner_write_insert            | INSERT | {public}       
+fuel_grades               | fg_owner_write_update            | UPDATE | {public}       
+fuel_grades               | fg_read_authed                   | SELECT | {public}       
+fuel_price_entries        | fuel_price_entries_read          | SELECT | {authenticated}
+fuel_price_sync_meta      | fuel_price_sync_meta_owner_read  | SELECT | {authenticated}
+fuel_prices_live          | fuel_prices_live_owner_read      | SELECT | {authenticated}
+fuel_stations             | fuel_stations_owner_read         | SELECT | {authenticated}
+notifications             | users_own_notifications          | ALL    | {public}       
+operator_site_assignments | op_assign_read                   | SELECT | {authenticated}
+shift_formula_results     | shift_formula_results_read       | SELECT | {authenticated}
+shift_reports             | shift_reports_delete             | DELETE | {public}       
+shift_reports             | shift_reports_insert             | INSERT | {public}       
+shift_reports             | shift_reports_read               | SELECT | {authenticated}
+shift_reports             | shift_reports_update             | UPDATE | {public}       
+site_banking_formulas     | banking_formulas_read            | SELECT | {authenticated}
+site_competitors          | site_competitors_read            | SELECT | {authenticated}
+site_field_configs        | field_configs_read               | SELECT | {authenticated}
+sites                     | sites_read                       | SELECT | {authenticated}
+staff_site_assignments    | staff_assign_read                | SELECT | {authenticated}
+stripe_customers          | stripe_customers_owner_read      | SELECT | {public}       
+stripe_webhook_events     | stripe_webhook_events_no_read    | SELECT | {public}       
+subscriptions             | subscriptions_owner_read         | SELECT | {public}       
+user_invites              | Users can create invites         | INSERT | {public}       
+user_invites              | Users can view invites they sent | SELECT | {public}       
+user_invites              | invitee_reads_own_invite         | SELECT | {public}       
+user_invites              | owners_see_own_invites           | ALL    | {public}       
+users                     | users_self_read                  | SELECT | {authenticated}
+
+Total policies: 36
+
+## Relevant functions in public schema
+proname                        | args                   
+-------------------------------+------------------------
+auth_user_role                 |                        
+auth_user_site_ids             |                        
+auth_user_uuid                 |                        
+current_user_app_id            |                        
+get_operator_site_ids          |                        
+get_staff_site_ids             |                        
+get_user_id_from_auth          |                        
+set_dip_readings_updated_at    |                        
+set_fuel_deliveries_updated_at |                        
+tanks_set_updated_at           |                        
+user_is_owner_of               | auth_uid uuid, sid text
+user_role                      | auth_uid uuid          
+user_site_ids                  | auth_uid uuid          

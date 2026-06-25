@@ -1,0 +1,78 @@
+# SEC1 staging — Pre-migration verifier (RLS off baseline)
+Captured: 2026-06-25T01:34:59.349Z
+
+## Identities established
+  anon: anon
+  owner_001: signed in (auth.uid=7240df91-880c-4965-aa24-e930f71fe381)
+  operator_001: signed in (auth.uid=9a05c352-13dc-4e8a-b5ca-cc9873d9b622)
+  staff_001: signed in (auth.uid=709360ed-6cc5-405a-9ef6-ec4750adb118)
+  staging_owner_002: signed in (auth.uid=24ecb76b-fbd0-40a2-8e12-49541e1806cf)
+  staging_operator_002: signed in (auth.uid=e53c6772-ed25-40e6-af82-866ee6e047c7)
+  staging_staff_002: signed in (auth.uid=d986f3db-9348-46c2-b24f-b4d8bdede0fe)
+  service_role: service
+
+## Isolation matrix (row count visible per role; ERR = PostgREST returned error)
+table                       | anon | owner_001 | operator_001 | staff_001 | staging_owner_002 | staging_operator_002 | staging_staff_002 | service_role
+----------------------------+------+-----------+--------------+-----------+-------------------+----------------------+-------------------+-------------
+users                       | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 20          
+sites                       | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 9           
+operator_site_assignments   | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 9           
+staff_site_assignments      | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 9           
+shift_reports               | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 67          
+shift_formula_results       | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 32          
+dip_readings                | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 23          
+site_field_configs          | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 68          
+site_banking_formulas       | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 18          
+fuel_price_entries          | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 92          
+fuel_price_acknowledgements | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 3           
+fuel_price_changes          | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 4           
+fuel_price_escalations      | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 407         
+fuel_price_notifications    | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 4           
+fuel_deliveries             | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 0           
+fuel_grades                 | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 7           
+tanks                       | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 4           
+tank_reconciliation         | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 28          
+site_competitors            | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 150         
+competitor_fuel_prices      | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 1350        
+subscriptions               | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 2           
+stripe_customers            | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 2           
+stripe_webhook_events       | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 93          
+user_invites                | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 2           
+audit_log                   | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 938         
+notifications               | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 37          
+fuel_prices_live            | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 5190        
+fuel_stations               | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 1886        
+fuel_price_sync_meta        | 0    | 0         | 0            | 0         | 0                 | 0                    | 0                 | 1           
+
+## Headline assertions
+  ✓ anon users: 0
+  ✓ anon sites: 0
+  ✓ anon operator_site_assignments: 0
+  ✓ anon staff_site_assignments: 0
+  ✓ anon shift_reports: 0
+  ✓ anon shift_formula_results: 0
+  ✓ anon dip_readings: 0
+  ✓ anon site_field_configs: 0
+  ✓ anon site_banking_formulas: 0
+  ✓ anon fuel_price_entries: 0
+  ✓ anon fuel_price_acknowledgements: 0
+  ✓ anon fuel_price_changes: 0
+  ✓ anon fuel_price_escalations: 0
+  ✓ anon fuel_price_notifications: 0
+  ✓ anon fuel_deliveries: 0
+  ✓ anon fuel_grades: 0
+  ✓ anon tanks: 0
+  ✓ anon tank_reconciliation: 0
+  ✓ anon site_competitors: 0
+  ✓ anon competitor_fuel_prices: 0
+  ✓ anon subscriptions: 0
+  ✓ anon stripe_customers: 0
+  ✓ anon stripe_webhook_events: 0
+  ✓ anon user_invites: 0
+  ✓ anon audit_log: 0
+  ✓ anon notifications: 0
+  ✓ anon fuel_price_sync_meta: 0
+  owner_001 sees 0 sites; staging_owner_002 sees 0 sites; service 9
+  ⚠ owner isolation: counts do not partition cleanly (likely overlap or leak)
+  staff_001 tank_reconciliation: 0 (expected 0)
+  ✓ staff blocked from tank_reconciliation

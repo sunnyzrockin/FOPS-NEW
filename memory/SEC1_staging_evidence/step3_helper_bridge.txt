@@ -1,0 +1,8 @@
+# Helper bridge sanity
+
+owner                                | email                            | auth_user_id                         | user_role | site_count | sample_sites                                           | user_is_owner_of_first
+-------------------------------------+----------------------------------+--------------------------------------+-----------+------------+--------------------------------------------------------+-----------------------
+505ea4d9-18bd-46f7-bf20-04a168282327 | demo@fopsapp.com                 | 623d7a24-b399-4ccd-a03d-2bb01ab4bb11 | owner     | 0          |                                                        | false                 
+d7f9cb02-dc2d-44fd-984c-4466674447f0 | seelam.sumanth+real1@gmail.com   | 19e0e07e-084a-4b70-8877-f0453af4de60 | owner     | 0          |                                                        | false                 
+owner-001                            | owner@fopsapp.com                | 7240df91-880c-4965-aa24-e930f71fe381 | owner     | 7          | 88d9d2f8-fd66-4c1d-85c5-3cd21de7c4b0,site-002,site-005 | true                  
+staging-owner-002                    | staging-owner-002@sec1test.local | 24ecb76b-fbd0-40a2-8e12-49541e1806cf | owner     | 2          | staging-site-002,staging-site-003                      | true                  

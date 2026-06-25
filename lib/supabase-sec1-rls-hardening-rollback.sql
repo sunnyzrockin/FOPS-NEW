@@ -26,6 +26,10 @@ DROP POLICY IF EXISTS fuel_prices_live_select_owner_only       ON public.fuel_pr
 -- audit_log
 DROP POLICY IF EXISTS audit_log_select_site_scoped             ON public.audit_log;
 
+-- notifications
+DROP POLICY IF EXISTS notifications_update_self                ON public.notifications;
+DROP POLICY IF EXISTS notifications_select_self                ON public.notifications;
+
 -- user_invites
 DROP POLICY IF EXISTS user_invites_select_scoped               ON public.user_invites;
 
@@ -117,36 +121,64 @@ DROP POLICY IF EXISTS operator_assignments_owner_update        ON public.operato
 DROP POLICY IF EXISTS operator_assignments_owner_insert        ON public.operator_site_assignments;
 DROP POLICY IF EXISTS operator_assignments_select              ON public.operator_site_assignments;
 
--- ─── B. Disable RLS on every in-scope table (reverse alphabetical) ───────────
-ALTER TABLE public.fuel_price_sync_meta       DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_stations              DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_prices_live           DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.audit_log                  DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_invites               DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.stripe_webhook_events      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.stripe_customers           DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.subscriptions              DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.competitor_fuel_prices     DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.site_competitors           DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tank_reconciliation        DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tanks                      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_grades                DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_deliveries            DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_price_notifications   DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_price_escalations     DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_price_changes         DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_price_acknowledgements DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fuel_price_entries         DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.site_banking_formulas      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.site_field_configs         DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.dip_readings               DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.shift_formula_results      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.shift_reports              DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.staff_site_assignments     DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.operator_site_assignments  DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sites                      DISABLE ROW LEVEL SECURITY;
--- NOTE: users RLS was already on before SEC1 — leave it enabled in rollback.
--- ALTER TABLE public.users                   DISABLE ROW LEVEL SECURITY;
+-- ─── B. RLS state: LEAVE ENABLED ────────────────────────────────────────────
+-- ⚠️ DESIGN CHANGE (R3, 2026-06-25 — confirmed in staging rehearsal):
+-- The pre-SEC1 baseline already has RLS = ENABLED on every business table
+-- (verified against staging clone of prod). The original rollback's
+-- `DISABLE ROW LEVEL SECURITY` block would therefore leave the schema
+-- WORSE than baseline (RLS off, no policies, anon reads everything via
+-- PostgREST). Confirmed by staging rehearsal verify_rollback.txt.
+--
+-- The correct rollback posture is:
+--   1. Drop the new SEC1 policies (done above in Section A).
+--   2. Drop the new SEC1 helpers (done below in Section C).
+--   3. LEAVE RLS = ENABLED.
+--   4. With RLS on + no policies → PostgreSQL deny-all for JWT roles.
+--      Service-role still bypasses RLS, so the API keeps working.
+--
+-- This is STRICTLY SAFER than the pre-SEC1 baseline (which had broken
+-- recursive legacy policies and would have leaked under specific JWT
+-- paths). Net incident posture after rollback: "deny-all for direct
+-- PostgREST JWT access; API unaffected".
+--
+-- If the on-call needs to fully re-baseline (recreate the legacy policies),
+-- run the legacy SQL files in reverse order — but DO NOT DO THIS without
+-- explicit owner sign-off; the legacy policies are the recursive ones
+-- this whole migration was designed to replace.
+--
+-- The DISABLE statements below are DELIBERATELY COMMENTED OUT. If a
+-- future incident genuinely requires RLS to be turned off table-by-table,
+-- uncomment the specific table line (NEVER the whole block).
+--
+-- ALTER TABLE public.fuel_price_sync_meta       DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_stations              DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_prices_live           DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.audit_log                  DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.notifications              DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.user_invites               DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.stripe_webhook_events      DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.stripe_customers           DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.subscriptions              DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.competitor_fuel_prices     DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.site_competitors           DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.tank_reconciliation        DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.tanks                      DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_grades                DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_deliveries            DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_price_notifications   DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_price_escalations     DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_price_changes         DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_price_acknowledgements DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.fuel_price_entries         DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.site_banking_formulas      DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.site_field_configs         DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.dip_readings               DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.shift_formula_results      DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.shift_reports              DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.staff_site_assignments     DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.operator_site_assignments  DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.sites                      DISABLE ROW LEVEL SECURITY;
+-- NOTE: users RLS was already on before SEC1 — leave it enabled regardless.
 
 -- ─── C. Drop the SEC1 helpers (optional — only do this for a full rollback) ──
 DROP FUNCTION IF EXISTS public.user_is_owner_of(uuid, text)    CASCADE;
@@ -157,10 +189,17 @@ DROP FUNCTION IF EXISTS public.current_user_app_id()           CASCADE;
 DO $$
 BEGIN
   RAISE NOTICE '==========================================================';
-  RAISE NOTICE 'SEC1 rollback complete. State matches pre-migration:';
-  RAISE NOTICE '  - RLS disabled on all business tables (users kept ON).';
+  RAISE NOTICE 'SEC1 rollback complete. New posture:';
+  RAISE NOTICE '  - RLS still ENABLED on all 29 in-scope tables.';
+  RAISE NOTICE '  - SEC1 policies dropped; legacy policies were dropped by';
+  RAISE NOTICE '    the migration before this rollback ran.';
+  RAISE NOTICE '  - Net: RLS on + 0 policies = deny-all for JWT roles.';
+  RAISE NOTICE '  - Service-role bypasses RLS; API continues to work.';
   RAISE NOTICE '  - SEC1 helpers dropped.';
-  RAISE NOTICE '  - Legacy policies NOT restored (they were not desirable).';
-  RAISE NOTICE 'API continues to filter via supabaseAdmin + resolveAccessibleSiteIds.';
+  RAISE NOTICE '';
+  RAISE NOTICE 'This is STRICTLY SAFER than the pre-SEC1 baseline (which';
+  RAISE NOTICE 'had recursive legacy policies). It is NOT a return to the';
+  RAISE NOTICE 'exact pre-SEC1 state — that would require recreating the';
+  RAISE NOTICE 'broken legacy policies, which we do not want.';
   RAISE NOTICE '==========================================================';
 END $$;
