@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { logAudit } from '@/lib/api/audit';
 import { optionsHandler } from '@/lib/api/cors';
+import { rateLimit, clientIp } from '@/lib/auth-helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,30 @@ const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export async function POST(request) {
   try {
-    const { email, password } = await request.json();
+    // ── Rate limit (B2, defence in depth on top of Supabase platform limits) ──
+    // Keyed by IP+email so a single attacker can't fan out across many
+    // emails from one IP, and can't easily bypass via a botnet against
+    // one email. 8 attempts / 60s is generous for genuine fat-fingers;
+    // Supabase enforces a tighter platform-wide limit underneath.
+    // In-memory limiter is best-effort across serverless instances;
+    // primary defence is the Supabase platform rate limit set in Part A3.
+    const ip = clientIp(request);
+    let emailLower = '';
+    let bodyJson = null;
+    try {
+      bodyJson = await request.json();
+      emailLower = (bodyJson?.email || '').toLowerCase().trim();
+    } catch {
+      // bodyless POST — fall through; the missing-email check below
+      // returns a 400 anyway.
+    }
+    const rl = rateLimit(
+      { key: `login:${ip}:${emailLower}`, limit: 8, windowMs: 60_000 },
+      request,
+    );
+    if (!rl.ok) return rl.response;
+
+    const { email, password } = bodyJson || {};
     
     if (!email || !password) {
       return NextResponse.json(

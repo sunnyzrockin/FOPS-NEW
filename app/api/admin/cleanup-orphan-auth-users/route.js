@@ -18,8 +18,11 @@ export const maxDuration = 60;
  *
  * SAFETY
  * ------
- *  - **Owner-only.** Sends back 401 without a valid owner Bearer JWT,
- *    or 403 for non-owners.
+ *  - **Support / founder only.** Sends back 401 without a valid Bearer
+ *    JWT, or 403 for any non-support role. The previous gate was
+ *    `role === 'owner'` which allowed ANY tenant owner to trigger a
+ *    platform-wide cleanup (B3 of EMERGENT_auth_hardening.md). Now
+ *    strictly `role === 'support'` to match the founder-tier endpoints.
  *  - **Dry-run by default.** Lists the orphans and what would happen.
  *  - To actually delete, pass `?confirm=true` AND a JSON body
  *    `{ acknowledge: 'I understand this is permanent' }` on a POST.
@@ -41,7 +44,7 @@ const NEVER_DELETE_EMAILS = new Set([
   'staff@fopsapp.com',
 ]);
 
-async function _requireOwner(request) {
+async function _requireSupport(request) {
   const auth = request.headers.get('authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return { error: 'Missing Bearer token', status: 401 };
@@ -61,7 +64,12 @@ async function _requireOwner(request) {
     .single();
 
   if (!user) return { error: 'No FOPS user mapped to this token', status: 403 };
-  if (user.role !== 'owner') return { error: 'Owner role required', status: 403 };
+  // B3: previously `role === 'owner'` which allowed any tenant owner to
+  // run a platform-wide cleanup. Now strictly `support` — same gate as
+  // /api/founder/* endpoints.
+  if (user.role !== 'support') {
+    return { error: 'Support role required', status: 403 };
+  }
   return { user };
 }
 
@@ -121,7 +129,7 @@ async function _findOrphans() {
 // ── GET: dry-run only ───────────────────────────────────────────────────
 export async function GET(request) {
   const status = supabaseStatus();
-  const auth = await _requireOwner(request);
+  const auth = await _requireSupport(request);
   if (auth.error) {
     return NextResponse.json({ error: auth.error, supabaseStatus: status }, { status: auth.status });
   }
@@ -146,11 +154,11 @@ export async function GET(request) {
 export async function POST(request) {
   const url = new URL(request.url);
   const confirm = url.searchParams.get('confirm') === 'true';
-  const auth = await _requireOwner(request);
+  const auth = await _requireSupport(request);
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   let body = {};
-  try { body = await request.json(); } catch {}
+  try { body = await request.json(); } catch (_) { /* body is optional — proceed with {} */ }
   const ack = body?.acknowledge === 'I understand this is permanent';
 
   if (!confirm || !ack) {

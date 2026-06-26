@@ -9,7 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle2, Check, X } from 'lucide-react';
+import {
+  validatePasswordPolicy,
+  describePasswordPolicy,
+  PASSWORD_MIN_LENGTH,
+} from '@/lib/auth-password-policy';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -34,8 +39,15 @@ export default function SignupPage() {
       return;
     }
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+      setLoading(false);
+      return;
+    }
+
+    const pwCheck = validatePasswordPolicy(password);
+    if (!pwCheck.ok) {
+      setError(pwCheck.message);
       setLoading(false);
       return;
     }
@@ -166,9 +178,25 @@ export default function SignupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={loading}
-                  minLength={8}
+                  minLength={PASSWORD_MIN_LENGTH}
+                  aria-describedby="password-policy"
                 />
-                <p className="text-xs text-slate-500">At least 8 characters</p>
+                <ul id="password-policy" className="text-xs space-y-0.5 mt-1">
+                  {describePasswordPolicy(password).map((item) => (
+                    <li
+                      key={item.rule}
+                      className={`flex items-center gap-1.5 ${item.ok ? 'text-teal-700' : 'text-slate-500'}`}
+                    >
+                      {item.ok
+                        ? <Check className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        : <X className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />}
+                      <span>{item.rule}</span>
+                    </li>
+                  ))}
+                  <li className="text-[10px] text-slate-400 pt-1">
+                    Must satisfy ≥3 of: lowercase, uppercase, digit, symbol.
+                  </li>
+                </ul>
               </div>
 
               <div className="space-y-2">

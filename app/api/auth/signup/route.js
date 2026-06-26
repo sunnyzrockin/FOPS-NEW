@@ -27,6 +27,8 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { optionsHandler } from '@/lib/api/cors';
 import { stripe, BILLING_CONFIG, buildLineItems, billingConfigured } from '@/lib/stripe';
+import { rateLimit, clientIp } from '@/lib/auth-helpers';
+import { validatePasswordPolicy } from '@/lib/auth-password-policy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,11 +41,38 @@ const supabaseAdmin = createClient(
 
 export async function POST(request) {
   try {
+    // ── Rate limit FIRST (before parsing body) ──────────────────────────
+    // Best-effort: per-instance in-memory. Primary protection is the
+    // Supabase platform sign-up rate limit (Part A3). See
+    // memory/auth-hardening-followups.md for the strategy decision.
+    const ip = clientIp(request);
+    const rl = rateLimit(
+      { key: `signup:${ip}`, limit: 5, windowMs: 60_000 },
+      request,
+    );
+    if (!rl.ok) return rl.response;
+
     const { name, email, password } = await request.json();
 
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: 'Name, email, and password are required' },
+        { status: 400 },
+      );
+    }
+
+    // ── Server-side password policy (B1) ─────────────────────────────────
+    // The client form does its own check but a JSON client could bypass
+    // it. This is the authoritative gate. Defence in depth on top of the
+    // Supabase dashboard policy from Part A.
+    const pwCheck = validatePasswordPolicy(password);
+    if (!pwCheck.ok) {
+      return NextResponse.json(
+        {
+          error: 'Password does not meet policy',
+          detail: pwCheck.message,
+          errors: pwCheck.errors,
+        },
         { status: 400 },
       );
     }
