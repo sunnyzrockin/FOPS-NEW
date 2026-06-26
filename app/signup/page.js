@@ -178,9 +178,20 @@ export default function SignupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={loading}
-                  minLength={PASSWORD_MIN_LENGTH}
                   aria-describedby="password-policy"
                 />
+                {/*
+                  Note: intentionally NO `minLength` attribute. HTML5's
+                  built-in tooltip would otherwise preempt the React
+                  submit handler for the "too short" case and show a
+                  browser-native tooltip instead of the consistent red
+                  Alert we use for the other two failure modes
+                  (single-class, whitespace padding). The React handler
+                  + the live policy hint below it are the single source
+                  of truth for password validation; the server enforces
+                  the same policy via validatePasswordPolicy() as the
+                  ultimate gate.
+                */}
                 <ul id="password-policy" className="text-xs space-y-0.5 mt-1">
                   {describePasswordPolicy(password).map((item) => (
                     <li
