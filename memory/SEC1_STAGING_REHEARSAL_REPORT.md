@@ -1,5 +1,21 @@
 # SEC1 Staging Rehearsal — Evidence Packet Summary
 
+> 🪦 **STAGING CLONE RETIRED 2026-06-26.**
+> Project `wzflghadfvvgjvoaigxp` has been deleted and its keys retired.
+> The DB password, service-role JWT, and anon JWT that were used during
+> the rehearsal are no longer valid against any live project. All
+> credentials previously in `.env.staging` (now deleted) and the
+> hardcoded `SEC1Staging2026!` test password in
+> `scripts/sec1-staging-seed-second-tenant.js` have been replaced with
+> a `SEC1_STAGING_USER_PASSWORD` env var that must be set in a fresh
+> `.env.staging` for any future rehearsal.
+>
+> The evidence in this packet (matrices, helper-bridge output, pg_class
+> + pg_policies snapshots) is retained as the audit trail for the R2/R3
+> deliverable sign-off; nothing in it can be used to access prod.
+>
+> ---
+
 > **Status**: TECHNICAL GATE PASSED with one **R3 finding** that has been
 > implemented in the rollback SQL and re-verified. **Execution gate to PROD
 > remains CLOSED** pending owner sign-off on this packet + PITR backup +

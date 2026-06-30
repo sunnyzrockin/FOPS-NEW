@@ -34,7 +34,7 @@ try {
   if (prodUrlLine && prodUrlLine.split('=')[1].trim() === URL) {
     console.error('FATAL: staging URL == prod URL. Refusing.'); process.exit(2);
   }
-} catch {}
+} catch (_) { /* prod env file optional in this script context */ }
 
 const supabase = createClient(URL, SVC, { auth: { persistSession: false } });
 
@@ -43,7 +43,13 @@ const NEW_USERS = [
   { app_id: 'staging-operator-002', email: 'staging-operator-002@sec1test.local', role: 'operator', name: 'Staging Operator Two' },
   { app_id: 'staging-staff-002',    email: 'staging-staff-002@sec1test.local',    role: 'staff',    name: 'Staging Staff Two' },
 ];
-const PASSWORD = 'SEC1Staging2026!';
+const PASSWORD = process.env.SEC1_STAGING_USER_PASSWORD || (() => {
+  console.error('FATAL: set SEC1_STAGING_USER_PASSWORD in .env.staging.');
+  console.error('       The previously-hardcoded literal was retired 2026-06-26');
+  console.error('       when the staging clone was deleted; pick a fresh one for');
+  console.error('       any future rehearsal.');
+  process.exit(2);
+})();
 
 const NEW_SITES = [
   { id: 'staging-site-002', owner_id: 'staging-owner-002', name: 'SEC1-STAGING Site Alpha', code: 'STG-002', location: 'Staging Test Address 1', status: 'active', shifts_per_day: 2 },

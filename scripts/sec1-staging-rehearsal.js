@@ -1,6 +1,15 @@
 /**
  * SEC1 staging rehearsal — orchestrator
  * =============================================================================
+ * ⚠️ STAGING CLONE DELETED 2026-06-26 — this script is retained as scaffolding
+ * for a future rehearsal. The `wzflghadfvvgjvoaigxp` project ref and the
+ * `SEC1Staging2026!` literal that previously lived in .env.staging /
+ * sec1-staging-seed-second-tenant.js are both retired. To re-run:
+ *   1. Provision a fresh staging Supabase project (PITR-clone of prod).
+ *   2. Create a NEW .env.staging with the new URL + keys + db url
+ *      + new SEC1_STAGING_USER_PASSWORD.
+ *   3. Re-run the seed script then this orchestrator.
+ *
  * STAGING ONLY. Hard-guarded against prod.
  *
  * Steps (matches SEC1 directive):
@@ -76,9 +85,9 @@ const ROLES = [
   { id: 'owner_001',                  authMode: 'jwt', email: 'owner@fopsapp.com',                    password: 'WorkflowDemo2026!' },
   { id: 'operator_001',               authMode: 'jwt', email: 'operator@fopsapp.com',                 password: 'WorkflowDemo2026!' },
   { id: 'staff_001',                  authMode: 'jwt', email: 'staff@fopsapp.com',                    password: 'WorkflowDemo2026!' },
-  { id: 'staging_owner_002',          authMode: 'jwt', email: 'staging-owner-002@sec1test.local',     password: 'SEC1Staging2026!' },
-  { id: 'staging_operator_002',       authMode: 'jwt', email: 'staging-operator-002@sec1test.local',  password: 'SEC1Staging2026!' },
-  { id: 'staging_staff_002',          authMode: 'jwt', email: 'staging-staff-002@sec1test.local',     password: 'SEC1Staging2026!' },
+  { id: 'staging_owner_002',          authMode: 'jwt', email: 'staging-owner-002@sec1test.local',     password: process.env.SEC1_STAGING_USER_PASSWORD || 'RETIRED' },
+  { id: 'staging_operator_002',       authMode: 'jwt', email: 'staging-operator-002@sec1test.local',  password: process.env.SEC1_STAGING_USER_PASSWORD || 'RETIRED' },
+  { id: 'staging_staff_002',          authMode: 'jwt', email: 'staging-staff-002@sec1test.local',     password: process.env.SEC1_STAGING_USER_PASSWORD || 'RETIRED' },
   { id: 'service_role',               authMode: 'service' },
 ];
 

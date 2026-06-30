@@ -33,9 +33,9 @@ const ROLES = [
   { id: 'owner_001', mode: 'jwt', email: 'owner@fopsapp.com', password: 'WorkflowDemo2026!' },
   { id: 'operator_001', mode: 'jwt', email: 'operator@fopsapp.com', password: 'WorkflowDemo2026!' },
   { id: 'staff_001', mode: 'jwt', email: 'staff@fopsapp.com', password: 'WorkflowDemo2026!' },
-  { id: 'staging_owner_002', mode: 'jwt', email: 'staging-owner-002@sec1test.local', password: 'SEC1Staging2026!' },
-  { id: 'staging_operator_002', mode: 'jwt', email: 'staging-operator-002@sec1test.local', password: 'SEC1Staging2026!' },
-  { id: 'staging_staff_002', mode: 'jwt', email: 'staging-staff-002@sec1test.local', password: 'SEC1Staging2026!' },
+  { id: 'staging_owner_002', mode: 'jwt', email: 'staging-owner-002@sec1test.local', password: process.env.SEC1_STAGING_USER_PASSWORD || 'RETIRED' },
+  { id: 'staging_operator_002', mode: 'jwt', email: 'staging-operator-002@sec1test.local', password: process.env.SEC1_STAGING_USER_PASSWORD || 'RETIRED' },
+  { id: 'staging_staff_002', mode: 'jwt', email: 'staging-staff-002@sec1test.local', password: process.env.SEC1_STAGING_USER_PASSWORD || 'RETIRED' },
   { id: 'service_role', mode: 'service' },
 ];
 
