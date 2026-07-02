@@ -28,6 +28,7 @@ import {
   ClipboardList, Calculator, Building2, Users, ClipboardCheck,
   Sparkles, Mail, MapPin, Smartphone, ShieldCheck, PlayCircle,
   TrendingUp, MessageSquareOff, FileSpreadsheet, Banknote, Quote,
+  Loader2, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -112,8 +113,8 @@ function Header() {
 
         <div className="hidden items-center gap-2 md:flex">
           <Link href="/login" className={SECONDARY_CTA_CLASS}>Log in</Link>
-          <Link href="/signup" className={PRIMARY_CTA_CLASS}>
-            Start 14-day trial <ArrowRight className="h-4 w-4" />
+          <Link href="/#waitlist" className={PRIMARY_CTA_CLASS}>
+            Join the waitlist <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
 
@@ -142,7 +143,7 @@ function Header() {
             ))}
             <div className="flex gap-2 pt-2">
               <Link href="/login" className={`${SECONDARY_CTA_CLASS} flex-1`}>Log in</Link>
-              <Link href="/signup" className={`${PRIMARY_CTA_CLASS} flex-1`}>Start 14-day trial</Link>
+              <Link href="/#waitlist" className={`${PRIMARY_CTA_CLASS} flex-1`}>Join the waitlist</Link>
             </div>
           </div>
         </div>
@@ -179,8 +180,8 @@ function Hero() {
           </p>
 
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link href="/signup" className={`${PRIMARY_CTA_CLASS} text-base px-6 py-3`}>
-              Start 14-day trial <ArrowRight className="h-4 w-4" />
+            <Link href="/#waitlist" className={`${PRIMARY_CTA_CLASS} text-base px-6 py-3`}>
+              Join the waitlist <ArrowRight className="h-4 w-4" />
             </Link>
             <button
               type="button"
@@ -677,35 +678,172 @@ function FAQ() {
 /* ============================================================ */
 /*  FINAL CTA                                                    */
 /* ============================================================ */
-function FinalCTA() {
+/*  WAITLIST SECTION (replaces the old FinalCTA — same anchor)   */
+/* ============================================================ */
+function WaitlistSection() {
+  const [email, setEmail]         = useState('');
+  const [name, setName]           = useState('');
+  const [business, setBusiness]   = useState('');
+  const [numSites, setNumSites]   = useState('');
+  const [status, setStatus]       = useState('idle');   // idle | loading | success | error | already
+  const [message, setMessage]     = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setStatus('loading'); setMessage('');
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          name: name.trim() || null,
+          business: business.trim() || null,
+          num_sites: numSites.trim() || null,
+          source: 'landing',
+          utm: (() => {
+            try {
+              const q = new URLSearchParams(window.location.search);
+              const utm = {};
+              ['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach((k) => {
+                const v = q.get(k); if (v) utm[k] = v;
+              });
+              return Object.keys(utm).length ? utm : null;
+            } catch { return null; }
+          })(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatus('error');
+        setMessage(data?.error || 'Something went wrong — please try again.');
+        return;
+      }
+      if (data.alreadyOnList) {
+        setStatus('already');
+        setMessage(data.message || "You're already on the list — we'll be in touch.");
+      } else {
+        setStatus('success');
+        setMessage(data.message || "You're on the list — we'll be in touch.");
+      }
+    } catch (err) {
+      setStatus('error');
+      setMessage('Network error — please try again.');
+    }
+  };
+
+  const submitted = status === 'success' || status === 'already';
+
   return (
-    <section id="contact" className="relative overflow-hidden bg-[#0E1B2A] py-20 text-white">
+    <section id="waitlist" className="relative overflow-hidden bg-[#0E1B2A] py-20 text-white scroll-mt-16">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(13,148,136,0.18),_transparent_60%)]" />
-      <div className="mx-auto max-w-4xl px-4 text-center sm:px-6">
-        <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Ready to stop running your servos on WhatsApp?
-        </h2>
-        <p className="mx-auto mt-4 max-w-xl text-base text-white/75">
-          Start a 14-day trial on your own sites with your own data. Card on file, charged on day 14 — cancel any time before then with one click.
-        </p>
-        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link
-            href="/signup"
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-500 px-6 py-3 text-base font-semibold text-white shadow-lg transition hover:bg-teal-400"
-          >
-            Start 14-day trial <ArrowRight className="h-4 w-4" />
-          </Link>
-          <a
-            href="mailto:hello@fopsapp.com"
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-white/30 px-6 py-3 text-base font-semibold text-white transition hover:bg-white/10"
-          >
-            <Mail className="h-4 w-4" /> Talk to sales
-          </a>
+      <div className="mx-auto grid max-w-5xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-16">
+        {/* Copy */}
+        <div>
+          <p className="text-sm font-medium uppercase tracking-wider text-teal-300">Early access</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+            Join the waitlist
+          </h2>
+          <p className="mt-4 text-base text-white/75">
+            FOPS is currently invitation-only while we onboard our first cohort of Queensland fuel operators. Drop your email and we&apos;ll be in touch when early-access spots open up.
+          </p>
+          <ul className="mt-6 space-y-2 text-sm text-white/80">
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" /><span>No commitment — just gets you on the list.</span></li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" /><span>We only email you about FOPS early access.</span></li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" /><span>You can ask us to remove your details any time.</span></li>
+          </ul>
+          <div className="mt-8 text-sm text-white/60">
+            Prefer email? <a href="mailto:hello@fopsapp.com" className="text-teal-300 underline underline-offset-2 hover:text-teal-200">hello@fopsapp.com</a>
+          </div>
         </div>
-        <p className="mt-6 text-xs text-white/50">
-          Queensland-based · built for Australian fuel operators · ABN coming soon
-        </p>
+
+        {/* Form */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm sm:p-8">
+          {submitted ? (
+            <div className="flex flex-col items-center text-center py-8">
+              <CheckCircle2 className="h-12 w-12 text-teal-300" />
+              <h3 className="mt-4 text-xl font-semibold">{status === 'already' ? 'Already on the list' : "You're on the list"}</h3>
+              <p className="mt-2 text-sm text-white/75">{message}</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <div>
+                <label htmlFor="waitlist-email" className="block text-sm font-medium text-white/90">Email <span className="text-teal-300">*</span></label>
+                <input
+                  id="waitlist-email" type="email" required autoComplete="email"
+                  value={email} onChange={(e) => setEmail(e.target.value)}
+                  disabled={status === 'loading'}
+                  placeholder="you@yourbusiness.com.au"
+                  className="mt-1 w-full rounded-md border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                />
+              </div>
+              <div>
+                <label htmlFor="waitlist-name" className="block text-sm font-medium text-white/90">Name <span className="text-white/40 text-xs">(optional)</span></label>
+                <input
+                  id="waitlist-name" type="text" autoComplete="name"
+                  value={name} onChange={(e) => setName(e.target.value)}
+                  disabled={status === 'loading'}
+                  placeholder="Alex Owner"
+                  className="mt-1 w-full rounded-md border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="waitlist-business" className="block text-sm font-medium text-white/90">Business <span className="text-white/40 text-xs">(optional)</span></label>
+                  <input
+                    id="waitlist-business" type="text" autoComplete="organization"
+                    value={business} onChange={(e) => setBusiness(e.target.value)}
+                    disabled={status === 'loading'}
+                    placeholder="Kingsthorpe Fuel Co."
+                    className="mt-1 w-full rounded-md border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="waitlist-sites" className="block text-sm font-medium text-white/90">Sites <span className="text-white/40 text-xs">(optional)</span></label>
+                  <select
+                    id="waitlist-sites"
+                    value={numSites} onChange={(e) => setNumSites(e.target.value)}
+                    disabled={status === 'loading'}
+                    className="mt-1 w-full rounded-md border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  >
+                    <option value="" className="bg-[#0E1B2A]">Select…</option>
+                    <option value="1"    className="bg-[#0E1B2A]">1</option>
+                    <option value="2-5"  className="bg-[#0E1B2A]">2–5</option>
+                    <option value="6-10" className="bg-[#0E1B2A]">6–10</option>
+                    <option value="10+"  className="bg-[#0E1B2A]">10+</option>
+                  </select>
+                </div>
+              </div>
+
+              {status === 'error' && (
+                <div role="alert" className="flex items-start gap-2 rounded-md border border-red-400/30 bg-red-400/10 px-3 py-2.5 text-sm text-red-200">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{message}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={status === 'loading' || !email.trim()}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-teal-500 px-5 py-3 text-base font-semibold text-white shadow-lg transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {status === 'loading'
+                  ? (<><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</>)
+                  : (<>Join the waitlist <ArrowRight className="h-4 w-4" /></>)}
+              </button>
+
+              <p className="text-[11px] leading-relaxed text-white/55">
+                We collect your email (and optionally your name and business details) so <span className="text-white/70">New Elite Ventures Pty Ltd</span> can contact you about FOPS early access. We store it securely, won&apos;t share it for anything else, and you can ask us to remove it any time at{' '}
+                <a href="mailto:privacy@arcera.com.au" className="text-teal-300 underline underline-offset-2 hover:text-teal-200">privacy@arcera.com.au</a>. See our{' '}
+                <Link href="/privacy" className="text-teal-300 underline underline-offset-2 hover:text-teal-200">Privacy Policy</Link>.
+              </p>
+            </form>
+          )}
+        </div>
       </div>
+      <p className="mt-16 text-center text-xs text-white/50 px-4">
+        Queensland-based · built for Australian fuel operators · New Elite Ventures Pty Ltd, ABN 96 678 447 384
+      </p>
     </section>
   );
 }
@@ -729,7 +867,8 @@ function Footer() {
           <a href="#how" className="hover:text-[#0E1B2A]">How it works</a>
           <a href="#faq" className="hover:text-[#0E1B2A]">FAQ</a>
           <Link href="/login" className="hover:text-[#0E1B2A]">Log in</Link>
-          <Link href="/signup" className="hover:text-[#0E1B2A]">Start trial</Link>
+          <Link href="/#waitlist" className="hover:text-[#0E1B2A]">Waitlist</Link>
+          <Link href="/privacy" className="hover:text-[#0E1B2A]">Privacy</Link>
           <a href="mailto:hello@fopsapp.com" className="hover:text-[#0E1B2A]">Contact</a>
         </nav>
         <p className="text-xs text-[#0E1B2A]/40">© {new Date().getFullYear()} FOPS · Queensland, Australia</p>
@@ -754,7 +893,7 @@ export default function LandingPage() {
         <DemoVideo />
         <SocialProof />
         <FAQ />
-        <FinalCTA />
+        <WaitlistSection />
       </main>
       <Footer />
     </div>

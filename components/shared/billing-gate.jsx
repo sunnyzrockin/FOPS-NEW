@@ -94,7 +94,7 @@ export default function BillingGate({ user, children }) {
       {banner}
       {state.is_demo && (
         <Banner tone="slate" icon={<CheckCircle2 className="h-4 w-4" />}>
-          Demo mode — read-only. Sign up to make changes.
+          Demo mode — read-only. FOPS is currently invite-only; join the waitlist at fopsapp.com to become a customer.
         </Banner>
       )}
       {children}

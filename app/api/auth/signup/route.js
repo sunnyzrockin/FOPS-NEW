@@ -40,6 +40,38 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST(request) {
+  // ── PUBLIC SIGNUP CLOSED — waitlist launch 2026-06-26 ─────────────────
+  // FOPS is in waitlist-only mode. Self-service owner signup is disabled.
+  // Existing users log in as normal (POST /api/auth/login), invited users
+  // accept their invite (POST /api/invites/accept) which creates their
+  // account through the invite-chain flow — that path is INTENTIONALLY
+  // independent of this route and remains fully functional.
+  //
+  // Also fires an audit log so we can see if anything is still hitting
+  // this endpoint after the UI cutover.
+  try {
+    const ip = clientIp(request);
+    console.warn('[signup-closed] Public signup attempt blocked', {
+      ip,
+      referer: request.headers.get('referer') || null,
+      userAgent: request.headers.get('user-agent') || null,
+    });
+  } catch (_) { /* logging must never break the response */ }
+
+  return NextResponse.json(
+    {
+      error: 'Registration is closed — join the waitlist at fopsapp.com',
+      code: 'signup_closed',
+    },
+    { status: 403 },
+  );
+}
+
+// ─── Old signup logic kept below for reference only — never executed. ────
+// When we re-open signup, restore `export async function POST` above to
+// call this instead. Leaves the atomic-rollback logic + policy checks
+// intact so we can re-enable in one edit.
+async function _POST_REFERENCE_ONLY_DISABLED(request) {
   try {
     // ── Rate limit FIRST (before parsing body) ──────────────────────────
     // Best-effort: per-instance in-memory. Primary protection is the

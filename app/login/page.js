@@ -256,12 +256,12 @@ export default function LoginPage() {
                 Role-based access for owners, operators, and staff
               </p>
               
-              {/* Signup Link - Subtle but accessible */}
+              {/* Waitlist link — FOPS is invite-only during waitlist launch */}
               <div className="pt-3 border-t border-slate-100">
                 <p className="text-sm text-slate-600 text-center">
-                  Don't have an account?{' '}
-                  <Link href="/signup" className="text-teal-600 hover:text-teal-700 font-medium transition-colors">
-                    Sign up
+                  Don&apos;t have an account?{' '}
+                  <Link href="/#waitlist" className="text-teal-600 hover:text-teal-700 font-medium transition-colors">
+                    Join the waitlist
                   </Link>
                 </p>
               </div>
